@@ -5,8 +5,8 @@ ZipFile::ZipFile(): directory_offset(0), _dirty(false) {}
 unique_ptr<ZipFile> ZipFile::NewZipFile(
     unique_ptr<AFF4Stream> backing_store) {
 
-  unique_ptr<ZipFile> result(new ZipFile());
-  ZipFile *self = result.get();
+  ZipFile *self = new ZipFile();
+  unique_ptr<ZipFile> result(self);
 
   self->backing_store.swap(backing_store);
 
@@ -58,8 +58,8 @@ void ZipFile::write_zip64_CD() {
 
 };
 
-unique_ptr<ZipFileSegment> ZipFile::CreateMember(string filename) {
-  unique_ptr<ZipFileSegment>result(new ZipFileSegment(filename, this));
+unique_ptr<AFF4Stream> ZipFile::CreateMember(string filename) {
+  unique_ptr<AFF4Stream>result(new ZipFileSegment(filename, this));
 
   return result;
 };

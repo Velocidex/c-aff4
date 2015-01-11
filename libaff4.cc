@@ -10,14 +10,6 @@
 
 #define O_BINARY 0
 
-void MemoryDataStore::Set(URN urn, URN attribute, const RDFValue &value) {
-  store[urn.value][attribute.value] = value.Serialize();
-};
-
-
-DataStoreObject MemoryDataStore::Get(URN urn, URN attribute) {
-  return store[urn.value][attribute.value];
-};
 
 bool AFF4Object::finish() {
   return true;
@@ -115,9 +107,8 @@ int StringIO::Size() {
 unique_ptr<FileBackedObject> FileBackedObject::NewFileBackedObject(
     string filename, string mode) {
 
-  unique_ptr<FileBackedObject> result(new FileBackedObject());
-  FileBackedObject *self = result.get();
-
+  FileBackedObject *self = new FileBackedObject();
+  unique_ptr<FileBackedObject> result(self);
   int flags = O_RDONLY | O_BINARY;
 
   if(mode == "w") {

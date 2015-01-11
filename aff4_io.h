@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <fstream>
+#include "data_store.h"
 
 using std::string;
 using std::unique_ptr;
@@ -12,103 +13,76 @@ using std::unordered_map;
 using std::ofstream;
 using std::ifstream;
 
-enum DataStoreObjectWireType {
-  STRING,
-  INTEGER
+
+template<typename T>
+RDFValue *fCreate() {
+  return new T();
 };
 
-/* These are the objects which are stored in the data store */
-class DataStoreObject {
- public:
-  // The data store can only store the following primitive types.
-  int int_data = 0;
-  string string_data;
-  DataStoreObjectWireType wire_type = STRING;
-
-  DataStoreObject(string data): string_data(data), wire_type(STRING) {};
-  DataStoreObject(int data): int_data(data), wire_type(INTEGER) {};
-  DataStoreObject(){};
-
+struct AFF4Schema {
+  string classname;
+  RDFValue* (*constructor)();
 };
 
 
-// Base class for all RDF Values.
-class RDFValue {
- protected:
-  virtual ~RDFValue(){};
+/**
+    All AFF4 objects extend this basic object.
 
- public:
-  // RDFValues must provide methods for serializing and unserializing.
-  virtual DataStoreObject Serialize() const = 0;
-  virtual int UnSerialize(DataStoreObject data) = 0;
-};
+    AFF4Objects present an external API for users. There are two main ways to
+    instantiate an AFF4Object:
 
+    1) To create a new object, one uses the static Factory function defined in
+       the AFF4 public interface. For example:
 
-/* These are the objects which are stored in the data store */
-class RDFBytes: public RDFValue {
- public:
-  string value;
+       static unique_ptr<ZipFile> NewZipFile(unique_ptr<AFF4Stream> stream);
 
-  RDFBytes(string data): value(data) {};
-  RDFBytes(const char * data): value(data) {};
-  RDFBytes(const DataStoreObject& data): value(data.string_data) {};
-  RDFBytes(){};
+       This will return a new instance of the AFF4Object. When the object is
+       deleted, it will be flushed to the AFF4 resolver.
 
-  DataStoreObject Serialize() const {
-    return DataStoreObject(value);
-  };
+    2) Similarly, to open an existing object, the static factory function can be
+       used. e.g.:
 
-  int UnSerialize(DataStoreObject data) {
-    value = data.string_data;
+       static unique_ptr<ZipFile> OpenZipFile(URN urn);
 
-    return true;
-  };
-};
+       Typically only the URN is required as a parameter. Note that if the
+       object stored at the specified URN is not of the required type, this
+       method will fail and return NULL.
 
-class URN: public RDFBytes {
- public:
-  URN(string data): RDFBytes(data) {};
-  URN(const char * data): RDFBytes(data) {};
-  URN(const DataStoreObject &data): RDFBytes(data.string_data) {};
-  URN(){};
+    Internally all AFF4 objects must be able to be recreated exactly from the
+    AFF4 resolver.  Therefore the following common pattern is followed:
 
-};
+       static unique_ptr<XXXX> NewXXXX(arg1, arg2, arg3) {
+           this->Set(predicate1, arg1);
+           this->Set(predicate2, arg2);
+           this->Set(predicate3, arg2);
 
-// AFF4_Attributes are a collection of data store objects, keyed by attributes.
-typedef unordered_map<string, DataStoreObject> AFF4_Attributes;
+           // instantiate the object.
+           XXXX(arg1, arg2, arg3);
 
+           // Now, when the object is destroyed the predicates set above will
+           // be flushed to storage.
+       };
 
-/** The abstract data store. */
-class DataStore {
- public:
-  virtual void Set(URN urn, URN attribute, const RDFValue &value) = 0;
-  virtual DataStoreObject Get(URN urn, URN attribute) = 0;
-};
+       static unique_ptr<XXXX> OpenXXXX(URN urn) {
+          InitAFF4Attributes();  // Load all attributes from the resolver.
 
-/** A purely in memory data store. */
-class MemoryDataStore: public DataStore {
+          arg1 = this->Get(predicate1);
+          arg2 = this->Get(predicate2);
+          arg3 = this->Get(predicate3);
 
- private:
-  // Store a collection of AFF4_Attributes at each URN.
-  unordered_map<string, AFF4_Attributes> store;
+          return unique_ptr<XXXX>(new XXX(arg1, arg2, arg3));
+       };
 
- public:
-  void Set(URN urn, URN attribute, const RDFValue &value);
-  DataStoreObject Get(URN urn, URN attribute);
-
-};
-
-
-/** All AFF4 objects extend this basic object. **/
+ **/
 class AFF4Object {
 
  protected:
   // AFF4 objects store attributes.
   AFF4_Attributes synced_attributes;
 
-  // By defining a virtual destructor this allows the destructor of derived
-  // objects to be called when deleting a pointer to a base object.
-  virtual ~AFF4Object(){};
+  AFF4Schema schema[1] = {
+    {"URN", &fCreate<URN>}
+  };
 
  public:
   URN urn;
@@ -121,6 +95,10 @@ class AFF4Object {
   //     Failed to create object.
   // }
   AFF4Object() {}; // Used by the factory for generic instantiation.
+
+  // By defining a virtual destructor this allows the destructor of derived
+  // objects to be called when deleting a pointer to a base object.
+  virtual ~AFF4Object(){};
 
   virtual bool finish();
 };
@@ -187,9 +165,27 @@ class FileBackedObject: public AFF4Stream {
 
 };
 
+/**
+   Volumes allow for other objects to be stored within them.
 
+   This means that to create an object within a volume, one must create the
+   volume first, then call CreateMember() to add the object to the volume. The
+   new object will be flushed to the volume when it is destroyed.
+
+   To open an existing object one needs to:
+
+   1) Open the volume - this will populate the resolver with the information
+      within the volume.
+
+   2) Directly open the required URN. The AFF4 resolver will know which volume
+      (or volumes) the required object lives in by itself.
+
+   Note that when using a persistent resolver step 1 might be skipped if the
+   location of the volume has not changed.
+*/
 class AFF4Volume: public AFF4Object {
-
+ public:
+  virtual unique_ptr<AFF4Stream> CreateMember(string filename) = 0;
 };
 
 

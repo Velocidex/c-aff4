@@ -2,6 +2,7 @@
 #define     AFF4_ZIP_H_
 
 #include "aff4_io.h"
+#include "data_store.h"
 #include <string.h>
 
 #include <zlib.h>
@@ -187,7 +188,9 @@ class ZipFile: public AFF4Volume {
 
   static unique_ptr<ZipFile> NewZipFile(unique_ptr<AFF4Stream> stream);
 
-  unique_ptr<ZipFileSegment> CreateMember(string filename);
+  static unique_ptr<ZipFile> OpenZipFile(URN urn);
+
+  virtual unique_ptr<AFF4Stream> CreateMember(string filename);
 
 };
 

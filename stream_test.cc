@@ -5,13 +5,21 @@
 using std::cout;
 
 void test_MemoryDataStore() {
-  MemoryDataStore store;
+  unique_ptr<MemoryDataStore> store(new MemoryDataStore());
+  unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
 
-  store.Set(URN("hello"), URN("World"), RDFBytes("foo"));
+  store->Set(URN("hello"), URN("World"), RDFBytes("foo"));
 
-  RDFBytes result(store.Get(URN("hello"), URN("World")));
+  RDFBytes result;
 
+  store->Get(URN("hello"), URN("World"), result);
   cout << result.value << "\n";
+
+  store->DumpToYaml(*output.get());
+
+  cout << output->Tell() << "\n";
+  output->Seek(0, 0);
+  cout << output->Read(1000) << "\n";
 }
 
 void test_AFF4Stream(AFF4Stream *string) {
@@ -51,21 +59,22 @@ void test_AFF4Stream(AFF4Stream *string) {
 };
 
 void test_ZipFile() {
-  unique_ptr<FileBackedObject> file = FileBackedObject::NewFileBackedObject(
+  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
       "test.zip", "rw");
 
   // The backing file is given to the zip.
-  unique_ptr<ZipFile> zip = ZipFile::NewZipFile(std::move(file));
+  unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
 
-  unique_ptr<ZipFileSegment> segment = zip->CreateMember("Foobar.txt");
+  unique_ptr<AFF4Stream> segment = zip->CreateMember("Foobar.txt");
   segment->Write("I am a segment!");
 };
 
 
 void runTests() {
-  test_ZipFile();
-
   test_MemoryDataStore();
+
+  return;
+  test_ZipFile();
   test_AFF4Stream(StringIO::NewStringIO().get());
 
   unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(

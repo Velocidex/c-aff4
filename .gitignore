@@ -30,3 +30,4 @@
 .depend
 test_filename.bin
 *_test
+*.zip
