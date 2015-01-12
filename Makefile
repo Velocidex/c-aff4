@@ -4,7 +4,8 @@ CXXFLAGS = -std=c++11 -g -Wall -O0
 LDFLAGS = -L/usr/lib/x86_64-linux-gnu/
 LDLIBS = -lz -lyaml-cpp
 
-SRCS = libaff4.cc zip.cc data_store.cc
+SRCS = libaff4.cc zip.cc data_store.cc aff4_image.cc
+OBJS = libaff4.o  zip.o  data_store.o aff4_image.o
 
 all: tests
 
@@ -18,8 +19,9 @@ include .depend
 
 tests: stream_test
 
-stream_test: libaff4.o stream_test.cc zip.o data_store.o
+stream_test: stream_test.cc $(OBJS)
 
 libaff4.o: depend
 
-zip.o: zip.cc zip.h
+clean:
+	rm -f *.o .depend

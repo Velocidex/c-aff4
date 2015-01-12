@@ -10,6 +10,9 @@ unique_ptr<ZipFile> ZipFile::NewZipFile(
 
   self->backing_store.swap(backing_store);
 
+  // Position ourselves at the end of the file.
+  self->backing_store->Seek(0, SEEK_END);
+
   return result;
 };
 
@@ -74,17 +77,19 @@ ZipFileSegment::ZipFileSegment(string filename, ZipFile *owner):
   // from this list automatically.
   owner->outstanding_members.push_front(this);
   iter = owner->outstanding_members.begin();
+
+  DEBUG_OBJECT("Created segment %s", filename.c_str());
 };
 
 #define BUFF_SIZE 4096
 
 // In AFF4 we use smallish buffers, therefore we just do everything in memory.
-unique_ptr<string> CompressBuffer(const string &buffer) {
+unique_ptr<bstring> CompressBuffer(const bstring &buffer) {
   z_stream strm;
 
   memset(&strm, 0, sizeof(strm));
 
-  strm.next_in = (Bytef*)buffer.c_str();
+  strm.next_in = (Bytef*)buffer.data();
   strm.avail_in = buffer.size();
 
   if(deflateInit2(&strm, 9, Z_DEFLATED, -15,
@@ -93,7 +98,7 @@ unique_ptr<string> CompressBuffer(const string &buffer) {
     return NULL;
   };
 
-  int buffer_size = deflateBound(&strm, buffer.length());
+  int buffer_size = deflateBound(&strm, buffer.size());
   Bytef c_buffer[buffer_size];
 
   strm.next_out = c_buffer;
@@ -106,36 +111,49 @@ unique_ptr<string> CompressBuffer(const string &buffer) {
 
   deflateEnd(&strm);
 
-  return unique_ptr<string>(
-      new string((char *)c_buffer, sizeof(c_buffer) - strm.avail_out));
+  auto result = unique_ptr<bstring>(
+      new bstring(sizeof(c_buffer) - strm.avail_out));
+
+  memcpy(result->data(), c_buffer, result->size());
+
+  return result;
 };
 
 
 ZipFileSegment::~ZipFileSegment() {
   if (_dirty) {
-    unique_ptr<string> cdata = CompressBuffer(buffer);
     unique_ptr<ZipInfo> zip_info(new ZipInfo());
 
     // TODO: Lock owner.
-    zip_info->compression_method = ZIP_DEFLATE;
     zip_info->relative_offset_local_header = owner->backing_store->Tell();
     zip_info->filename = filename;
-    zip_info->file_size = buffer.length();
-    zip_info->compress_size = cdata->length();
-    zip_info->crc32 = crc32(0, (Bytef*)buffer.c_str(), buffer.length());
+    zip_info->file_size = buffer.size();
+    zip_info->crc32 = crc32(0, (Bytef*)buffer.data(), buffer.size());
 
-    zip_info->WriteZipFileHeader(*owner->backing_store.get());
+    if (compression_method == ZIP_DEFLATE) {
+      unique_ptr<bstring> cdata = CompressBuffer(buffer);
+      zip_info->compress_size = cdata->size();
+      zip_info->compression_method = ZIP_DEFLATE;
 
-    owner->backing_store->Write(cdata);
+      zip_info->WriteZipFileHeader(*owner->backing_store.get());
+      owner->backing_store->Write(cdata);
 
-    // Remove ourselves from the members list.
-    owner->outstanding_members.erase(iter);
+    } else {
+      zip_info->compress_size = buffer.size();
+
+      zip_info->WriteZipFileHeader(*owner->backing_store.get());
+      owner->backing_store->Write(buffer);
+    };
 
     // Replace ourselves in the members map.
     owner->members[filename] = std::move(zip_info);
 
     owner->_dirty = true;
   };
+
+  // Remove ourselves from the outstanding_members list since we are no longer
+  // outstanding.
+  owner->outstanding_members.erase(iter);
 };
 
 

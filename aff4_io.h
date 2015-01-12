@@ -3,6 +3,7 @@
 
 #include <unordered_map>
 #include <string>
+#include <vector>
 #include <memory>
 #include <fstream>
 #include "data_store.h"
@@ -12,6 +13,12 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::ofstream;
 using std::ifstream;
+using std::vector;
+
+
+// C++ strings stop on null terminations so we can not use them to store binary
+// data. We use vector<char> to represented binary data.
+typedef vector<char> bstring;
 
 
 template<typename T>
@@ -114,14 +121,18 @@ class AFF4Stream: public AFF4Object {
   AFF4Stream(): readptr(0), size(0) {};
 
   // Convenience methods.
-  int Write(const unique_ptr<string> &data);
+  int Write(const unique_ptr<bstring> &data);
+  int Write(const bstring &data);
   int Write(const string &data);
   int Write(const char data[]);
   int sprintf(string fmt, ...);
 
+  // Read a null terminated string.
+  string ReadCString(size_t length);
+
   // The following should be overriden by derived classes.
   virtual void Seek(int offset, int whence);
-  virtual string Read(size_t length);
+  virtual bstring Read(size_t length);
   virtual int Write(const char *data, int length);
   virtual size_t Tell();
   virtual int Size();
@@ -129,10 +140,10 @@ class AFF4Stream: public AFF4Object {
 
 class StringIO: public AFF4Stream {
  protected:
-  string buffer;
+  vector<char> buffer;
 
  public:
-  StringIO(): buffer() {};
+  StringIO() {};
 
   // Convenience constructors.
   static unique_ptr<StringIO> NewStringIO() {
@@ -141,7 +152,7 @@ class StringIO: public AFF4Stream {
     return result;
   };
 
-  virtual string Read(size_t length);
+  virtual bstring Read(size_t length);
   virtual int Write(const char *data, int length);
   virtual int Size();
 
@@ -159,7 +170,7 @@ class FileBackedObject: public AFF4Stream {
   static unique_ptr<FileBackedObject> NewFileBackedObject(
       string filename, string mode);
 
-  virtual string Read(size_t length);
+  virtual bstring Read(size_t length);
   virtual int Write(const char *data, int length);
   virtual int Size();
 

@@ -46,6 +46,8 @@ class RDFValue {
   virtual ~RDFValue(){};
 
  public:
+  string name = "";
+
   // RDFValues must provide methods for serializing and unserializing.
   virtual DataStoreObject Serialize() const = 0;
   virtual int UnSerialize(DataStoreObject &data) = 0;
@@ -54,6 +56,8 @@ class RDFValue {
 /* These are the objects which are stored in the data store */
 class RDFBytes: public RDFValue {
  public:
+  string name = "RDFBytes";
+
   string value;
 
   RDFBytes(string data): value(data) {};
@@ -96,8 +100,8 @@ typedef unordered_map<string, DataStoreObject> AFF4_Attributes;
  */
 class DataStore {
  public:
-  virtual void Set(URN urn, URN attribute, const RDFValue &value) = 0;
-  virtual int Get(URN urn, URN attribute, RDFValue &value) = 0;
+  virtual void Set(const URN &urn, const URN &attribute, const RDFValue &value) = 0;
+  virtual int Get(const URN &urn, const URN &attribute, RDFValue &value) = 0;
 
   // Dump ourselves to a yaml file.
   virtual int DumpToYaml(AFF4Stream &output) = 0;
@@ -115,8 +119,8 @@ class MemoryDataStore: public DataStore {
   unordered_map<string, AFF4_Attributes> store;
 
  public:
-  void Set(URN urn, URN attribute, const RDFValue &value);
-  int Get(URN urn, URN attribute, RDFValue &value);
+  void Set(const URN &urn, const URN &attribute, const RDFValue &value);
+  int Get(const URN &urn, const URN &attribute, RDFValue &value);
 
   virtual int DumpToYaml(AFF4Stream &output);
 };

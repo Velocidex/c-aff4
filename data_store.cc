@@ -28,7 +28,9 @@ int MemoryDataStore::DumpToYaml(AFF4Stream &output) {
           break;
       };
     };
+    out << YAML::EndMap;
   };
+  out << YAML::EndMap;
 
   output.Write(out.c_str());
 
@@ -36,13 +38,15 @@ int MemoryDataStore::DumpToYaml(AFF4Stream &output) {
 };
 
 
-void MemoryDataStore::Set(URN urn, URN attribute, const RDFValue &value) {
+void MemoryDataStore::Set(const URN &urn, const URN &attribute,
+                          const RDFValue &value) {
   // Automatically create needed keys.
   store[urn.value][attribute.value] = value.Serialize();
 };
 
 
-int MemoryDataStore::Get(URN urn, URN attribute, RDFValue &value) {
+int MemoryDataStore::Get(const URN &urn, const URN &attribute,
+                         RDFValue &value) {
   auto urn_it = store.find(urn.value);
 
   if (urn_it == store.end())
@@ -54,3 +58,7 @@ int MemoryDataStore::Get(URN urn, URN attribute, RDFValue &value) {
 
   return value.UnSerialize(attribute_itr->second);
 };
+
+
+// A global resolver.
+MemoryDataStore oracle;

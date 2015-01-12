@@ -4,6 +4,20 @@
 
 using std::cout;
 
+
+void test_AFF4Image() {
+  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
+      "test.zip", "rw");
+
+  // The backing file is given to the zip.
+  unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
+
+  unique_ptr<AFF4Stream> image = AFF4Image::NewAFF4Image(
+      "image.dd", *(zip.get()));
+
+  image->Write("Hello wolrd!");
+};
+
 void test_MemoryDataStore() {
   unique_ptr<MemoryDataStore> store(new MemoryDataStore());
   unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
@@ -19,42 +33,42 @@ void test_MemoryDataStore() {
 
   cout << output->Tell() << "\n";
   output->Seek(0, 0);
-  cout << output->Read(1000) << "\n";
+  cout << output->ReadCString(1000).data() << "\n";
 }
 
-void test_AFF4Stream(AFF4Stream *string) {
+void test_AFF4Stream(AFF4Stream *stream) {
   cout << "Testing\n";
   cout << "*******\n";
 
-  string->Write("hello world");
-  cout << string->Tell() << "\n";
+  stream->Write("hello world");
+  cout << stream->Tell() << "\n";
 
-  string->Seek(0, 0);
-  cout << string->Tell() << "\n";
-  cout << "Data:" << string->Read(1000) << "\n";
-  cout << string->Tell() << "\n";
+  stream->Seek(0, 0);
+  cout << stream->Tell() << "\n";
+  cout << "Data:" << stream->ReadCString(1000).data() << "\n";
+  cout << stream->Tell() << "\n";
 
-  string->Seek(-5, 2);
-  cout << string->Tell() << "\n";
-  cout << "Data:" << string->Read(1000) << "\n";
+  stream->Seek(-5, 2);
+  cout << stream->Tell() << "\n";
+  cout << "Data:" << stream->ReadCString(1000).data() << "\n";
 
-  string->Seek(-5, 2);
-  cout << string->Tell() << "\n";
-  string->Write("Cruel world");
-  string->Seek(0, 0);
-  cout << string->Tell() << "\n";
-  cout << "Data:" << string->Read(1000) << "\n";
-  cout << string->Tell() << "\n";
+  stream->Seek(-5, 2);
+  cout << stream->Tell() << "\n";
+  stream->Write("Cruel world");
+  stream->Seek(0, 0);
+  cout << stream->Tell() << "\n";
+  cout << "Data:" << stream->ReadCString(1000).data() << "\n";
+  cout << stream->Tell() << "\n";
 
-  string->Seek(0, 0);
-  cout << string->Tell() << "\n";
-  cout << "Data:" << string->Read(2) << "\n";
+  stream->Seek(0, 0);
+  cout << stream->Tell() << "\n";
+  cout << "Data:" << stream->ReadCString(2).data() << "\n";
 
-  string->sprintf("I have %d arms and %#x legs.", 2, 1025);
-  cout << string->Tell() << "\n";
+  stream->sprintf("I have %d arms and %#x legs.", 2, 1025);
+  cout << stream->Tell() << "\n";
 
-  string->Seek(0, 0);
-  cout << "Data:" << string->Read(1000) << "\n";
+  stream->Seek(0, 0);
+  cout << "Data:" << stream->ReadCString(1000).data() << "\n";
 
 };
 
@@ -65,17 +79,27 @@ void test_ZipFile() {
   // The backing file is given to the zip.
   unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
 
+  // Files are added in the order of destruction, which in C++ is in reverse
+  // order of creation. Therefore the zipfile directory will only contain "I am
+  // a segment".
   unique_ptr<AFF4Stream> segment = zip->CreateMember("Foobar.txt");
   segment->Write("I am a segment!");
+
+  unique_ptr<AFF4Stream> segment2 = zip->CreateMember("Foobar.txt");
+  segment2->Write("I am another segment!");
 };
 
 
 void runTests() {
+  test_AFF4Stream(StringIO::NewStringIO().get());
+
+  test_AFF4Image();
+
   test_MemoryDataStore();
 
-  return;
   test_ZipFile();
-  test_AFF4Stream(StringIO::NewStringIO().get());
+  return;
+
 
   unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
       "test_filename.bin", "w");

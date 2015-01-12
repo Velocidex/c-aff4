@@ -97,7 +97,7 @@ struct Zip64CDLocator {
 }__attribute__((packed));
 
 
-/** Reresents a single file in the archive. */
+/** Represents a single file in the archive. */
 class ZipSegment: public AFF4Stream {
   struct CDFileHeader cd;
 
@@ -137,6 +137,7 @@ class ZipFileSegment: public StringIO {
                   // outstanding segments.
 
   list<ZipFileSegment *>::iterator iter;
+  int compression_method = ZIP_STORED;
 
  public:
   ZipFileSegment(string filename, ZipFile *owner);

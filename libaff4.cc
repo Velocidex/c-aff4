@@ -26,16 +26,31 @@ void AFF4Stream::Seek(int offset, int whence) {
   }
 };
 
-string AFF4Stream::Read(size_t length) {
-  return "";
+bstring AFF4Stream::Read(size_t length) {
+  return bstring();
+};
+
+string AFF4Stream::ReadCString(size_t length) {
+  bstring result = Read(length);
+
+  // Make a little bit more room for the null char.
+  result.resize(result.size() + 1);
+  result[result.size()] = 0;
+
+  return string(result.data(), result.size());
+};
+
+
+int AFF4Stream::Write(const bstring &data) {
+  return Write(data.data(), data.size());
 };
 
 int AFF4Stream::Write(const string &data) {
   return Write(data.c_str(), data.size());
 };
 
-int AFF4Stream::Write(const unique_ptr<string> &data) {
-  return Write(data->c_str(), data->length());
+int AFF4Stream::Write(const unique_ptr<bstring> &data) {
+  return Write(data->data(), data->size());
 };
 
 int AFF4Stream::Write(const char data[]) {
@@ -87,15 +102,25 @@ int AFF4Stream::sprintf(string fmt, ...) {
 int StringIO::Write(const char *data, int length) {
   _dirty = true;
 
-  buffer.replace(readptr, length, data);
+  // Ensure there is enough room in the vector.
+  if (buffer.size() < readptr + length) {
+    buffer.resize(readptr + length);
+  };
+
+  memcpy(&buffer[readptr], data, length);
   readptr += length;
 
   return length;
 };
 
-string StringIO::Read(size_t length) {
-  string result = buffer.substr(readptr, length);
-  readptr += result.size();
+bstring StringIO::Read(size_t length) {
+  int to_read = std::min(length, buffer.size() - readptr);
+
+  bstring result(to_read);
+
+  memcpy(result.data(), &buffer.at(readptr), to_read);
+
+  readptr += to_read;
 
   return result;
 };
@@ -126,23 +151,22 @@ unique_ptr<FileBackedObject> FileBackedObject::NewFileBackedObject(
   return result;
 };
 
-string FileBackedObject::Read(size_t length) {
-  unique_ptr<char[]> data(new char[length]);
+bstring FileBackedObject::Read(size_t length) {
+  char data[length];
   int res;
 
-  if (!data) {
-    return NULL;
-  };
-
   lseek(fd, readptr, SEEK_SET);
-  res = read(fd, data.get(), length);
+  res = read(fd, data, length);
   if (res < 0) {
-    return "";
+    return bstring();
   };
 
   readptr += res;
 
-  return string(data.get(), res);
+  bstring result(res);
+  memcpy(result.data(), data, res);
+
+  return result;
 };
 
 int FileBackedObject::Write(const char *data, int length) {
