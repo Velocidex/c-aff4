@@ -72,9 +72,9 @@ void test_AFF4Stream(AFF4Stream *stream) {
 
 };
 
-void test_ZipFile() {
+void test_ZipFileCreate() {
   unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
-      "test.zip", "rw");
+      "test.zip", "w");
 
   // The backing file is given to the zip.
   unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
@@ -90,16 +90,35 @@ void test_ZipFile() {
 };
 
 
+void test_ZipFileRead() {
+  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
+      "test.zip", "r");
+
+  // The backing file is given to the zip.
+  unique_ptr<ZipFile> zip = ZipFile::OpenZipFile(std::move(file));
+
+  if (!zip) {
+    cout << "Cant open zip file.\n";
+    return;
+  };
+
+  cout << "Found " << zip->members.size() << " files:\n";
+  for(auto it=zip->members.begin(); it != zip->members.end(); it++) {
+    cout << it->first << "\n";
+  };
+
+  unique_ptr<AFF4Stream> member = zip->OpenMember("Foobar.txt");
+  cout << member->ReadCString(100) << "\n";
+};
+
 void runTests() {
+  test_ZipFileCreate();
+  test_AFF4Image();
+  test_ZipFileRead();
+
   test_AFF4Stream(StringIO::NewStringIO().get());
 
-  test_AFF4Image();
-
   test_MemoryDataStore();
-
-  test_ZipFile();
-  return;
-
 
   unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
       "test_filename.bin", "w");

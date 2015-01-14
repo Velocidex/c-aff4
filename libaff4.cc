@@ -24,6 +24,10 @@ void AFF4Stream::Seek(int offset, int whence) {
   } else if(whence == 2) {
     readptr = offset + Size();
   }
+
+  if(readptr < 0) {
+    readptr = 0;
+  };
 };
 
 bstring AFF4Stream::Read(size_t length) {
@@ -37,7 +41,8 @@ string AFF4Stream::ReadCString(size_t length) {
   result.resize(result.size() + 1);
   result[result.size()] = 0;
 
-  return string(result.data(), result.size());
+  return string(result.data(),
+                std::min(result.size(), strlen(result.data())));
 };
 
 
@@ -61,11 +66,19 @@ int AFF4Stream::Write(const char *data, int length) {
   return 0;
 }
 
+int AFF4Stream::ReadIntoBuffer(void *buffer, size_t length) {
+  bstring result = Read(length);
+
+  memcpy(buffer, result.data(), result.size());
+
+  return result.size();
+};
+
 size_t AFF4Stream::Tell() {
   return readptr;
 }
 
-int AFF4Stream::Size() {
+size_t AFF4Stream::Size() {
   return 0;
 }
 
@@ -74,8 +87,7 @@ int AFF4Stream::sprintf(string fmt, ...) {
   int size = fmt.size() * 2 + 50;
 
   while (1) {
-    unique_ptr<char> buffer_(new char[size + 1]);
-    char *buffer = buffer_.get();
+    char buffer[size + 1];
 
     // Null terminate the buffer (important on MSVC which does not always
     // terminate).
@@ -103,11 +115,11 @@ int StringIO::Write(const char *data, int length) {
   _dirty = true;
 
   // Ensure there is enough room in the vector.
-  if (buffer.size() < readptr + length) {
-    buffer.resize(readptr + length);
+  if (buffer.size() < Tell() + length) {
+    buffer.resize(Tell() + length);
   };
 
-  memcpy(&buffer[readptr], data, length);
+  memcpy(&buffer[Tell()], data, length);
   readptr += length;
 
   return length;
@@ -125,7 +137,7 @@ bstring StringIO::Read(size_t length) {
   return result;
 };
 
-int StringIO::Size() {
+size_t StringIO::Size() {
   return buffer.size();
 }
 
@@ -182,7 +194,7 @@ int FileBackedObject::Write(const char *data, int length) {
   return res;
 };
 
-int FileBackedObject::Size() {
+size_t FileBackedObject::Size() {
   off_t result = lseek(fd, 0, SEEK_END);
 
   return result;

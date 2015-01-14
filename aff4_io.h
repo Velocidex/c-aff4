@@ -113,7 +113,7 @@ class AFF4Object {
 
 class AFF4Stream: public AFF4Object {
  protected:
-  size_t readptr;
+  ssize_t readptr;
   int size;             // How many bytes are used in the stream?
   bool _dirty = false;  // Is this stream modified?
 
@@ -129,13 +129,14 @@ class AFF4Stream: public AFF4Object {
 
   // Read a null terminated string.
   string ReadCString(size_t length);
+  int ReadIntoBuffer(void *buffer, size_t length);
 
   // The following should be overriden by derived classes.
   virtual void Seek(int offset, int whence);
   virtual bstring Read(size_t length);
   virtual int Write(const char *data, int length);
   virtual size_t Tell();
-  virtual int Size();
+  virtual size_t Size();
 };
 
 class StringIO: public AFF4Stream {
@@ -154,7 +155,7 @@ class StringIO: public AFF4Stream {
 
   virtual bstring Read(size_t length);
   virtual int Write(const char *data, int length);
-  virtual int Size();
+  virtual size_t Size();
 
   using AFF4Stream::Write;
 };
@@ -172,7 +173,7 @@ class FileBackedObject: public AFF4Stream {
 
   virtual bstring Read(size_t length);
   virtual int Write(const char *data, int length);
-  virtual int Size();
+  virtual size_t Size();
 
 };
 

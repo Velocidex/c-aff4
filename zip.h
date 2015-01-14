@@ -23,8 +23,8 @@ struct EndCentralDirectory {
   uint16_t disk_with_cd = 0;
   uint16_t total_entries_in_cd_on_disk;
   uint16_t total_entries_in_cd;
-  uint32_t size_of_cd = -1;
-  uint32_t offset_of_cd = -1;
+  int32_t size_of_cd = -1;
+  int32_t offset_of_cd = -1;
   uint16_t comment_len = 0;
 }__attribute__((packed));
 
@@ -39,15 +39,15 @@ struct CDFileHeader {
   uint16_t dostime;             /* aff4volatile:timestamp */
   uint16_t dosdate;
   uint32_t crc32;
-  uint32_t compress_size = -1;       /* aff4volatile:compress_size */
-  uint32_t file_size = -1;           /* aff4volatile:file_size */
+  int32_t compress_size = -1;       /* aff4volatile:compress_size */
+  int32_t file_size = -1;           /* aff4volatile:file_size */
   uint16_t file_name_length;
   uint16_t extra_field_len = 32;
   uint16_t file_comment_length = 0;
   uint16_t disk_number_start = 0;
   uint16_t internal_file_attr = 0;
   uint32_t external_file_attr = 0644 << 16L;
-  uint32_t relative_offset_local_header = -1; /* aff2volatile:header_offset */
+  int32_t relative_offset_local_header = -1; /* aff2volatile:header_offset */
 }__attribute__((packed));
 
 
@@ -141,6 +141,7 @@ class ZipFileSegment: public StringIO {
 
  public:
   ZipFileSegment(string filename, ZipFile *owner);
+  ZipFileSegment(string filename, ZipFile *owner, const bstring data);
 
   // When this object is destroyed it will be flushed to the owner zip file.
   virtual ~ZipFileSegment();
@@ -148,22 +149,19 @@ class ZipFileSegment: public StringIO {
   using AFF4Stream::Write;
 };
 
-
-struct ZipInfo {
+// Stores information about the zip file.
+class ZipInfo {
  public:
+  ZipInfo();
+
   int compression_method = ZIP_STORED;
-  int compress_size = 0;
-  int file_size = 0;
+  uint64_t compress_size = 0;
+  uint64_t file_size = 0;
   string filename;
-  int relative_offset_local_header = 0;
+  ssize_t local_header_offset = 0;
   int crc32;
   int lastmoddate;
   int lastmodtime;
-
-  int WriteCDFileHeader(AFF4Stream &output);
-  int WriteZipFileHeader(AFF4Stream &output);
-
-  ZipInfo();
 };
 
 
@@ -172,16 +170,20 @@ class ZipFile: public AFF4Volume {
 
  private:
   void write_zip64_CD();
+  int WriteCDFileHeader(ZipInfo &zip_info, AFF4Stream &output);
+  int WriteZipFileHeader(ZipInfo &zip_info, AFF4Stream &output);
 
  protected:
-  int directory_offset;
-  int compression_method;
+  ssize_t directory_offset = -1;
+  int directory_number_of_entries = -1;
   unique_ptr<AFF4Stream> backing_store;
   bool _dirty;
 
   // This is a list of outstanding segments.
   std::list<ZipFileSegment *> outstanding_members;
-  unordered_map<string, unique_ptr<ZipInfo>> members;
+
+  // Returns the total number of entries found or -1 on error.
+  int parse_cd();
 
  public:
   ZipFile();
@@ -190,10 +192,14 @@ class ZipFile: public AFF4Volume {
   static unique_ptr<ZipFile> NewZipFile(unique_ptr<AFF4Stream> stream);
 
   static unique_ptr<ZipFile> OpenZipFile(URN urn);
+  static unique_ptr<ZipFile> OpenZipFile(unique_ptr<AFF4Stream> stream);
 
   virtual unique_ptr<AFF4Stream> CreateMember(string filename);
+  virtual unique_ptr<AFF4Stream> OpenMember(const char *filename);
+  virtual unique_ptr<AFF4Stream> OpenMember(const string filename);
+
+  unordered_map<string, unique_ptr<ZipInfo>> members;
 
 };
-
 
 #endif   // AFF4_ZIP_H_
