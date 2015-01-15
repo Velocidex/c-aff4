@@ -1,6 +1,7 @@
 #ifndef     AFF4_ZIP_H_
 #define     AFF4_ZIP_H_
 
+#include "aff4_errors.h"
 #include "aff4_io.h"
 #include "data_store.h"
 #include <string.h>
@@ -141,7 +142,7 @@ class ZipFileSegment: public StringIO {
 
  public:
   ZipFileSegment(string filename, ZipFile *owner);
-  ZipFileSegment(string filename, ZipFile *owner, const bstring data);
+  ZipFileSegment(string filename, ZipFile *owner, const string data);
 
   // When this object is destroyed it will be flushed to the owner zip file.
   virtual ~ZipFileSegment();
@@ -170,8 +171,8 @@ class ZipFile: public AFF4Volume {
 
  private:
   void write_zip64_CD();
-  int WriteCDFileHeader(ZipInfo &zip_info, AFF4Stream &output);
-  int WriteZipFileHeader(ZipInfo &zip_info, AFF4Stream &output);
+  AFF4Status WriteCDFileHeader(ZipInfo &zip_info, AFF4Stream &output);
+  AFF4Status WriteZipFileHeader(ZipInfo &zip_info, AFF4Stream &output);
 
  protected:
   ssize_t directory_offset = -1;
@@ -198,6 +199,7 @@ class ZipFile: public AFF4Volume {
   virtual unique_ptr<AFF4Stream> OpenMember(const char *filename);
   virtual unique_ptr<AFF4Stream> OpenMember(const string filename);
 
+  // All the members of the zip file. Used to reconstruct the central directory.
   unordered_map<string, unique_ptr<ZipInfo>> members;
 
 };

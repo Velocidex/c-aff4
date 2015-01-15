@@ -13,7 +13,7 @@ void test_AFF4Image() {
   unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
 
   unique_ptr<AFF4Stream> image = AFF4Image::NewAFF4Image(
-      "image.dd", *(zip.get()));
+      "image.dd", *zip);
 
   image->Write("Hello wolrd!");
 };
@@ -22,18 +22,20 @@ void test_MemoryDataStore() {
   unique_ptr<MemoryDataStore> store(new MemoryDataStore());
   unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
 
-  store->Set(URN("hello"), URN("World"), RDFBytes("foo"));
+  store->Set(URN("hello"), URN("World"), new XSDString("foo"));
+  store->Set(URN("hello"), URN("World"), new XSDString("bar"));
 
   RDFBytes result;
 
   store->Get(URN("hello"), URN("World"), result);
-  cout << result.value << "\n";
+  cout << result.SerializeToString().data() << "\n";
 
-  store->DumpToYaml(*output.get());
+  store->DumpToYaml(*output);
+  store->DumpToTurtle(*output);
 
   cout << output->Tell() << "\n";
   output->Seek(0, 0);
-  cout << output->ReadCString(1000).data() << "\n";
+  cout << output->Read(1000).c_str() << "\n";
 }
 
 void test_AFF4Stream(AFF4Stream *stream) {
@@ -45,30 +47,30 @@ void test_AFF4Stream(AFF4Stream *stream) {
 
   stream->Seek(0, 0);
   cout << stream->Tell() << "\n";
-  cout << "Data:" << stream->ReadCString(1000).data() << "\n";
+  cout << "Data:" << stream->Read(1000).c_str() << "\n";
   cout << stream->Tell() << "\n";
 
   stream->Seek(-5, 2);
   cout << stream->Tell() << "\n";
-  cout << "Data:" << stream->ReadCString(1000).data() << "\n";
+  cout << "Data:" << stream->Read(1000).c_str() << "\n";
 
   stream->Seek(-5, 2);
   cout << stream->Tell() << "\n";
   stream->Write("Cruel world");
   stream->Seek(0, 0);
   cout << stream->Tell() << "\n";
-  cout << "Data:" << stream->ReadCString(1000).data() << "\n";
+  cout << "Data:" << stream->Read(1000).c_str() << "\n";
   cout << stream->Tell() << "\n";
 
   stream->Seek(0, 0);
   cout << stream->Tell() << "\n";
-  cout << "Data:" << stream->ReadCString(2).data() << "\n";
+  cout << "Data:" << stream->Read(2).c_str() << "\n";
 
   stream->sprintf("I have %d arms and %#x legs.", 2, 1025);
   cout << stream->Tell() << "\n";
 
   stream->Seek(0, 0);
-  cout << "Data:" << stream->ReadCString(1000).data() << "\n";
+  cout << "Data:" << stream->Read(1000).c_str() << "\n";
 
 };
 
@@ -78,6 +80,8 @@ void test_ZipFileCreate() {
 
   // The backing file is given to the zip.
   unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
+
+  cout << "Volume URN:" << zip->urn.SerializeToString().data() << "\n";
 
   // Files are added in the order of destruction, which in C++ is in reverse
   // order of creation. Therefore the zipfile directory will only contain "I am
@@ -108,7 +112,7 @@ void test_ZipFileRead() {
   };
 
   unique_ptr<AFF4Stream> member = zip->OpenMember("Foobar.txt");
-  cout << member->ReadCString(100) << "\n";
+  cout << member->Read(100).c_str() << "\n";
 };
 
 void runTests() {

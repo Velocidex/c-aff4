@@ -6,6 +6,9 @@
 #include <string>
 #include <memory>
 #include <fstream>
+#include "aff4_utils.h"
+#include <string.h>
+#include "rdf.h"
 
 using std::string;
 using std::unique_ptr;
@@ -18,7 +21,6 @@ using std::ifstream;
 class AFF4Object;
 class AFF4Stream;
 class AFF4Volume;
-
 
 enum DataStoreObjectWireType {
   STRING,
@@ -33,60 +35,13 @@ class DataStoreObject {
   string string_data;
   DataStoreObjectWireType wire_type = STRING;
 
-  DataStoreObject(string data): string_data(data), wire_type(STRING) {};
   DataStoreObject(int data): int_data(data), wire_type(INTEGER) {};
+  DataStoreObject(string data): string_data(data), wire_type(STRING) {};
   DataStoreObject(){};
-
-};
-
-// Base class for all RDF Values. An RDFValue is an object which knows how to
-// serialize and unserialize itself from a DataStoreObject.
-class RDFValue {
- protected:
-  virtual ~RDFValue(){};
-
- public:
-  string name = "";
-
-  // RDFValues must provide methods for serializing and unserializing.
-  virtual DataStoreObject Serialize() const = 0;
-  virtual int UnSerialize(DataStoreObject &data) = 0;
-};
-
-/* These are the objects which are stored in the data store */
-class RDFBytes: public RDFValue {
- public:
-  string name = "RDFBytes";
-
-  string value;
-
-  RDFBytes(string data): value(data) {};
-  RDFBytes(const char * data): value(data) {};
-  RDFBytes(const DataStoreObject& data): value(data.string_data) {};
-  RDFBytes(){};
-
-  DataStoreObject Serialize() const {
-    return DataStoreObject(value);
-  };
-
-  int UnSerialize(DataStoreObject &data) {
-    value = data.string_data;
-
-    return true;
-  };
-};
-
-class URN: public RDFBytes {
- public:
-  URN(string data): RDFBytes(data) {};
-  URN(const char * data): RDFBytes(data) {};
-  URN(const DataStoreObject &data): RDFBytes(data.string_data) {};
-  URN(){};
-
 };
 
 // AFF4_Attributes are a collection of data store objects, keyed by attributes.
-typedef unordered_map<string, DataStoreObject> AFF4_Attributes;
+typedef unordered_map<string, unique_ptr<RDFValue> > AFF4_Attributes;
 
 
 /** The abstract data store.
@@ -100,11 +55,14 @@ typedef unordered_map<string, DataStoreObject> AFF4_Attributes;
  */
 class DataStore {
  public:
-  virtual void Set(const URN &urn, const URN &attribute, const RDFValue &value) = 0;
-  virtual int Get(const URN &urn, const URN &attribute, RDFValue &value) = 0;
+  virtual void Set(const URN &urn, const URN &attribute,
+                   RDFValue *value) = 0;
+
+  virtual AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value) = 0;
 
   // Dump ourselves to a yaml file.
-  virtual int DumpToYaml(AFF4Stream &output) = 0;
+  virtual AFF4Status DumpToYaml(AFF4Stream &output) = 0;
+  virtual AFF4Status DumpToTurtle(AFF4Stream &output) = 0;
 };
 
 
@@ -119,10 +77,14 @@ class MemoryDataStore: public DataStore {
   unordered_map<string, AFF4_Attributes> store;
 
  public:
-  void Set(const URN &urn, const URN &attribute, const RDFValue &value);
-  int Get(const URN &urn, const URN &attribute, RDFValue &value);
+  void Set(const URN &urn, const URN &attribute,
+           RDFValue *value);
+  AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value);
 
-  virtual int DumpToYaml(AFF4Stream &output);
+  virtual AFF4Status DumpToYaml(AFF4Stream &output);
+  virtual AFF4Status DumpToTurtle(AFF4Stream &output);
 };
+
+extern MemoryDataStore oracle;
 
 #endif //  _AFF4_DATA_STORE_H_

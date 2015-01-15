@@ -1,4 +1,6 @@
-#include "aff4.h"
+#include "aff4_errors.h"
+#include "libaff4.h"
+#include <uuid/uuid.h>
 #include <fstream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,8 +12,18 @@
 
 #define O_BINARY 0
 
+AFF4Object::AFF4Object(): name("AFF4Object") {
+  uuid_t uuid;
+  vector<char> buffer(100);
+
+  uuid_generate(uuid);
+  uuid_unparse(uuid, buffer.data());
+  urn.Set("aff4:/" + string(buffer.data()));
+};
+
 
 bool AFF4Object::finish() {
+  oracle.Set(urn, AFF4_TYPE, new XSDString(name));
   return true;
 };
 
@@ -30,32 +42,12 @@ void AFF4Stream::Seek(int offset, int whence) {
   };
 };
 
-bstring AFF4Stream::Read(size_t length) {
-  return bstring();
-};
-
-string AFF4Stream::ReadCString(size_t length) {
-  bstring result = Read(length);
-
-  // Make a little bit more room for the null char.
-  result.resize(result.size() + 1);
-  result[result.size()] = 0;
-
-  return string(result.data(),
-                std::min(result.size(), strlen(result.data())));
-};
-
-
-int AFF4Stream::Write(const bstring &data) {
-  return Write(data.data(), data.size());
+string AFF4Stream::Read(size_t length) {
+  return "";
 };
 
 int AFF4Stream::Write(const string &data) {
   return Write(data.c_str(), data.size());
-};
-
-int AFF4Stream::Write(const unique_ptr<bstring> &data) {
-  return Write(data->data(), data->size());
 };
 
 int AFF4Stream::Write(const char data[]) {
@@ -67,7 +59,7 @@ int AFF4Stream::Write(const char *data, int length) {
 }
 
 int AFF4Stream::ReadIntoBuffer(void *buffer, size_t length) {
-  bstring result = Read(length);
+  string result = Read(length);
 
   memcpy(buffer, result.data(), result.size());
 
@@ -114,25 +106,15 @@ int AFF4Stream::sprintf(string fmt, ...) {
 int StringIO::Write(const char *data, int length) {
   _dirty = true;
 
-  // Ensure there is enough room in the vector.
-  if (buffer.size() < Tell() + length) {
-    buffer.resize(Tell() + length);
-  };
-
-  memcpy(&buffer[Tell()], data, length);
+  buffer.replace(readptr, length, data);
   readptr += length;
 
   return length;
 };
 
-bstring StringIO::Read(size_t length) {
-  int to_read = std::min(length, buffer.size() - readptr);
-
-  bstring result(to_read);
-
-  memcpy(result.data(), &buffer.at(readptr), to_read);
-
-  readptr += to_read;
+string StringIO::Read(size_t length) {
+  string result = buffer.substr(readptr, length);
+  readptr += result.size();
 
   return result;
 };
@@ -163,22 +145,19 @@ unique_ptr<FileBackedObject> FileBackedObject::NewFileBackedObject(
   return result;
 };
 
-bstring FileBackedObject::Read(size_t length) {
+string FileBackedObject::Read(size_t length) {
   char data[length];
   int res;
 
   lseek(fd, readptr, SEEK_SET);
   res = read(fd, data, length);
   if (res < 0) {
-    return bstring();
+    return "";
   };
 
   readptr += res;
 
-  bstring result(res);
-  memcpy(result.data(), data, res);
-
-  return result;
+  return string(data, res);
 };
 
 int FileBackedObject::Write(const char *data, int length) {

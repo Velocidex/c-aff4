@@ -5,7 +5,7 @@ unique_ptr<AFF4Image> AFF4Image::NewAFF4Image(
     string filename, AFF4Volume &volume) {
   unique_ptr<AFF4Image> result(new AFF4Image());
 
-  result->bevy_index = volume.CreateMember(filename + ".idx");
+  result->bevy_index = volume.CreateMember(filename + "/index");
   result->bevy = volume.CreateMember(filename);
 
   return result;
