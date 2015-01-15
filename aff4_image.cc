@@ -1,3 +1,4 @@
+#include "lexicon.h"
 #include "aff4_image.h"
 #include <zlib.h>
 
@@ -7,6 +8,7 @@ unique_ptr<AFF4Image> AFF4Image::NewAFF4Image(
 
   result->bevy_index = volume.CreateMember(filename + "/index");
   result->bevy = volume.CreateMember(filename);
+  result->volume_urn = volume.urn;
 
   return result;
 };
@@ -27,6 +29,8 @@ int AFF4Image::FlushChunk(const char *data, int length) {
 };
 
 int AFF4Image::Write(const char *data, int length) {
+  _dirty = true;
+
   buffer.append(data, length);
   // Consume the chunk.
   if (buffer.length() > chunksize) {
@@ -40,5 +44,12 @@ int AFF4Image::Write(const char *data, int length) {
 };
 
 AFF4Image::~AFF4Image() {
-  FlushChunk(buffer.c_str(), buffer.length());
+  if(_dirty) {
+    // Flush the last chunk.
+    FlushChunk(buffer.c_str(), buffer.length());
+
+    oracle.Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
+    oracle.Set(urn, AFF4_STORED, new URN(volume_urn));
+    oracle.Set(urn, AFF4_IMAGE_CHUNK_SIZE, new XSDInteger(chunksize));
+  };
 };

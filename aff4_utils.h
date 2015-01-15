@@ -2,9 +2,9 @@
 #define AFF4_UTILS_H
 
 #include <vector>
+#include <string>
 
-// C++ strings stop on null terminations so we can not use them to store binary
-// data. We use vector<char> to represented binary data.
-typedef std::vector<char> bstring;
+std::string aff4_sprintf(std::string fmt, ...);
+
 
 #endif

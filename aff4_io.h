@@ -103,9 +103,9 @@ class AFF4Object {
 
   // By defining a virtual destructor this allows the destructor of derived
   // objects to be called when deleting a pointer to a base object.
-  virtual ~AFF4Object(){};
+  virtual ~AFF4Object() {};
 
-  virtual bool finish();
+  AFF4Status Flush();
 };
 
 
@@ -116,6 +116,8 @@ class AFF4Stream: public AFF4Object {
   bool _dirty = false;  // Is this stream modified?
 
  public:
+  string name = "AFF4Stream";
+
   AFF4Stream(): readptr(0), size(0) {};
 
   // Convenience methods.
@@ -137,10 +139,9 @@ class AFF4Stream: public AFF4Object {
 };
 
 class StringIO: public AFF4Stream {
- protected:
+ public:
   string buffer;
 
- public:
   StringIO() {};
   StringIO(string data): buffer(data) {};
 
@@ -164,6 +165,8 @@ class FileBackedObject: public AFF4Stream {
   int fd;
 
  public:
+  string name = "FileBackedObject";
+
   FileBackedObject() {};
 
   static unique_ptr<FileBackedObject> NewFileBackedObject(

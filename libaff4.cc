@@ -22,9 +22,10 @@ AFF4Object::AFF4Object(): name("AFF4Object") {
 };
 
 
-bool AFF4Object::finish() {
+AFF4Status AFF4Object::Flush() {
   oracle.Set(urn, AFF4_TYPE, new XSDString(name));
-  return true;
+
+  return STATUS_OK;
 };
 
 
@@ -74,6 +75,33 @@ size_t AFF4Stream::Size() {
   return 0;
 }
 
+string aff4_sprintf(string fmt, ...) {
+  va_list ap;
+  int size = fmt.size() * 2 + 50;
+
+  while (1) {
+    char buffer[size + 1];
+
+    // Null terminate the buffer (important on MSVC which does not always
+    // terminate).
+    buffer[size] = 0;
+
+    va_start(ap, fmt);
+    int n = vsnprintf(buffer, size, fmt.c_str(), ap);
+    va_end(ap);
+
+    if (n > -1 && n < size) {  // Everything worked
+      return string(buffer, n);
+    };
+
+    if (n > -1)  // Needed size returned
+      size = n + 1;   // For null char
+    else
+      size *= 2;      // Guess at a larger size (OS specific)
+  }
+};
+
+
 int AFF4Stream::sprintf(string fmt, ...) {
   va_list ap;
   int size = fmt.size() * 2 + 50;
@@ -91,7 +119,6 @@ int AFF4Stream::sprintf(string fmt, ...) {
 
     if (n > -1 && n < size) {  // Everything worked
       Write(buffer, n);
-
       return n;
     };
 
@@ -141,6 +168,8 @@ unique_ptr<FileBackedObject> FileBackedObject::NewFileBackedObject(
   if(self->fd < 0){
     return NULL;
   };
+
+  result->urn.Set(filename);
 
   return result;
 };

@@ -141,8 +141,8 @@ class ZipFileSegment: public StringIO {
   int compression_method = ZIP_STORED;
 
  public:
-  ZipFileSegment(string filename, ZipFile *owner);
-  ZipFileSegment(string filename, ZipFile *owner, const string data);
+  ZipFileSegment(const string &filename, ZipFile *owner);
+  ZipFileSegment(const string &filename, ZipFile *owner, const string &data);
 
   // When this object is destroyed it will be flushed to the owner zip file.
   virtual ~ZipFileSegment();
@@ -185,6 +185,8 @@ class ZipFile: public AFF4Volume {
 
   // Returns the total number of entries found or -1 on error.
   int parse_cd();
+
+  string rdf_type = "aff4:zip_volume";
 
  public:
   ZipFile();

@@ -1,5 +1,6 @@
 #include "zip.h"
 #include "rdf.h"
+#include "lexicon.h"
 
 #define BUFF_SIZE 4096
 
@@ -71,6 +72,14 @@ int ZipFile::parse_cd() {
   if (!end_cd) {
     DEBUG_OBJECT("Unable to find EndCentralDirectory.");
     return -1;
+  };
+
+  if (end_cd->comment_len > 0) {
+    backing_store->Seek(ecd_offset + sizeof(EndCentralDirectory), SEEK_SET);
+    string urn_string = backing_store->Read(end_cd->comment_len);
+    DEBUG_OBJECT("Loaded AFF4 volume URN %s from zip file.",
+                 urn_string.c_str());
+    urn.Set(urn_string);
   };
 
   directory_offset = end_cd->offset_of_cd;
@@ -170,6 +179,9 @@ ZipFile::~ZipFile() {
 
   // If the zip file was changed, re-write the central directory.
   if (_dirty) {
+    oracle.Set(urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE));
+    oracle.Set(urn, AFF4_STORED, new URN(backing_store->urn));
+
     write_zip64_CD();
   };
 };
@@ -200,6 +212,8 @@ void ZipFile::write_zip64_CD() {
 
   end.total_entries_in_cd_on_disk = members.size();
   end.total_entries_in_cd = members.size();
+  string urn_string = urn.SerializeToString();
+  end.comment_len = urn_string.size();
 
   DEBUG_OBJECT("Writing Zip64EndCD at %#lx", backing_store->Tell());
   backing_store->Write((char *)&end_cd, sizeof(end_cd));
@@ -207,6 +221,7 @@ void ZipFile::write_zip64_CD() {
 
   DEBUG_OBJECT("Writing ECD at %#lx", backing_store->Tell());
   backing_store->Write((char *)&end, sizeof(end));
+  backing_store->Write(urn_string);
 };
 
 unique_ptr<AFF4Stream> ZipFile::CreateMember(string filename) {
@@ -247,14 +262,15 @@ unique_ptr<AFF4Stream> ZipFile::OpenMember(const string filename) {
   backing_store->Seek(file_header.extra_field_len, SEEK_CUR);
 
   // We write the entire file in a memory buffer.
-  int buffer_size = zip_info->file_size;
+  unsigned int buffer_size = zip_info->file_size;
   char buffer[buffer_size];
 
   switch (file_header.compression_method) {
     case ZIP_DEFLATE: {
-      string c_buffer = backing_store->Read(zip_info->compress_size);
-      if(DecompressBuffer(
-             buffer, buffer_size, c_buffer) != zip_info->file_size) {
+      string c_buffer(backing_store->Read(zip_info->compress_size),
+                      zip_info->compress_size);
+
+      if(DecompressBuffer(buffer, buffer_size, c_buffer) != buffer_size) {
         DEBUG_OBJECT("Unable to decompress file.");
         return NULL;
       };
@@ -270,7 +286,7 @@ unique_ptr<AFF4Stream> ZipFile::OpenMember(const string filename) {
   };
 
   unique_ptr<AFF4Stream>result(
-      new ZipFileSegment(filename, this, buffer));
+      new ZipFileSegment(filename, this, string(buffer, buffer_size)));
 
   return result;
 };
@@ -280,7 +296,7 @@ unique_ptr<AFF4Stream> ZipFile::OpenMember(const char *filename) {
 };
 
 
-ZipFileSegment::ZipFileSegment(string filename, ZipFile *owner):
+ZipFileSegment::ZipFileSegment(const string &filename, ZipFile *owner):
     filename(filename), owner(owner) {
 
   // Keep track of all the segments we issue. Note that we do not actually take
@@ -293,7 +309,7 @@ ZipFileSegment::ZipFileSegment(string filename, ZipFile *owner):
 
 // Initializer with knwon data.
 ZipFileSegment::ZipFileSegment(
-    string filename, ZipFile *owner, const string data):
+    const string &filename, ZipFile *owner, const string &data):
     ZipFileSegment::ZipFileSegment(filename, owner) {
   buffer = data;
 };

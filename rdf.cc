@@ -43,6 +43,17 @@ AFF4Status RDFBytes::UnSerializeFromString(const char *data, int length) {
   return STATUS_OK;
 };
 
+raptor_term *RDFBytes::GetRaptorTerm(raptor_world *world) const {
+  string value_string(SerializeToString());
+
+  return raptor_new_term_from_counted_literal(
+      world,
+      (const unsigned char *)value_string.c_str(),
+      value_string.size(),
+      NULL,
+      NULL, 0);
+};
+
 
 string XSDString::SerializeToString() const {
   return string(value.data(), value.size());
@@ -52,4 +63,63 @@ AFF4Status XSDString::UnSerializeFromString(const char *data, int length) {
   value = string(data, length);
 
   return STATUS_OK;
+};
+
+
+raptor_term *XSDString::GetRaptorTerm(raptor_world *world) const {
+  string value_string(SerializeToString());
+  raptor_uri *uri = raptor_new_uri(
+      world, (const unsigned char *)XSD_NAMESPACE "string");
+
+  raptor_term *result= raptor_new_term_from_counted_literal(
+      world,
+      (const unsigned char *)value_string.c_str(),
+      value_string.size(),
+      uri,
+      NULL, 0);
+
+  raptor_free_uri(uri);
+
+  return result;
+};
+
+
+raptor_term *URN::GetRaptorTerm(raptor_world *world) const {
+  string value_string(SerializeToString());
+
+  return raptor_new_term_from_counted_uri_string(
+      world,
+      (const unsigned char *)value_string.c_str(),
+      value_string.size());
+};
+
+string XSDInteger::SerializeToString() const {
+    return aff4_sprintf("%ld", value);
+};
+
+AFF4Status XSDInteger::UnSerializeFromString(const char *data, int length) {
+  string value = string(data, length);
+  if(!sscanf("%ld", value.c_str(), &value)) {
+    return INVALID_INPUT;
+  };
+
+  return STATUS_OK;
+};
+
+
+raptor_term *XSDInteger::GetRaptorTerm(raptor_world *world) const {
+  string value_string(SerializeToString());
+  raptor_uri *uri = raptor_new_uri(
+      world, (const unsigned char *)XSD_NAMESPACE "long");
+
+  raptor_term *result= raptor_new_term_from_counted_literal(
+      world,
+      (const unsigned char *)value_string.c_str(),
+      value_string.size(),
+      uri,
+      NULL, 0);
+
+  raptor_free_uri(uri);
+
+  return result;
 };

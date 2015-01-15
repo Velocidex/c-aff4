@@ -115,10 +115,21 @@ void test_ZipFileRead() {
   cout << member->Read(100).c_str() << "\n";
 };
 
+void DumpOracle() {
+  StringIO output;
+
+  oracle.DumpToTurtle(output);
+
+  cout << output.buffer;
+};
+
 void runTests() {
   test_ZipFileCreate();
   test_AFF4Image();
   test_ZipFileRead();
+
+  DumpOracle();
+  return;
 
   test_AFF4Stream(StringIO::NewStringIO().get());
 

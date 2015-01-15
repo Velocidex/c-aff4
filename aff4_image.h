@@ -11,6 +11,7 @@ class AFF4Image: public AFF4Stream {
   string buffer;
   unique_ptr<AFF4Stream> bevy_index;
   unique_ptr<AFF4Stream> bevy;
+  URN volume_urn;
 
  public:
   virtual ~AFF4Image();

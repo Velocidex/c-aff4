@@ -6,6 +6,7 @@
 #include "string.h"
 #include "aff4_utils.h"
 #include "aff4_errors.h"
+#include <raptor2/raptor2.h>
 
 using std::string;
 using std::unique_ptr;
@@ -15,8 +16,9 @@ using std::vector;
 // serialize and unserialize itself from a DataStoreObject.
 class RDFValue {
  public:
-  string name = "";
-  string rdf_type = "";
+  virtual raptor_term *GetRaptorTerm(raptor_world *world) const {
+    return NULL;
+  };
 
   // RDFValues must provide methods for serializing and unserializing.
   virtual string SerializeToString() const {
@@ -43,8 +45,6 @@ static const char* const lut = "0123456789ABCDEF";
 /* These are the objects which are stored in the data store */
 class RDFBytes: public RDFValue {
  public:
-  string name = "RDFBytes";
-  string rdf_type = "xsd:hexBinary";
   string value;
 
   RDFBytes(string data): RDFBytes(data.c_str(), data.size()) {};
@@ -55,21 +55,33 @@ class RDFBytes: public RDFValue {
 
   string SerializeToString() const;
   AFF4Status UnSerializeFromString(const char *data, int length);
+  raptor_term *GetRaptorTerm(raptor_world *world) const;
 };
 
 
 class XSDString: public RDFBytes {
  public:
-  string name = "XSDString";
-  string rdf_type = "xsd:string";
-
-  XSDString(const XSDString &other): RDFBytes(other) {};
   XSDString(string data): RDFBytes(data.c_str(), data.size()) {};
   XSDString(const char * data): RDFBytes(data, strlen(data)) {};
   XSDString() {};
 
   string SerializeToString() const;
   AFF4Status UnSerializeFromString(const char *data, int length);
+  raptor_term *GetRaptorTerm(raptor_world *world) const;
+};
+
+class XSDInteger: public RDFValue {
+ public:
+  unsigned long long int value;
+
+  XSDInteger(int data): value(data) {};
+  XSDInteger() {};
+
+  string SerializeToString() const;
+
+  AFF4Status UnSerializeFromString(const char *data, int length);
+
+  raptor_term *GetRaptorTerm(raptor_world *world) const;
 };
 
 
@@ -78,6 +90,7 @@ class URN: public XSDString {
   URN(const char * data): XSDString(data) {};
   URN(string data): XSDString(data) {};
   URN() {};
+  raptor_term *GetRaptorTerm(raptor_world *world) const;
 };
 
 #endif // AFF4_RDF_H_

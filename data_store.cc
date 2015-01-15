@@ -1,4 +1,5 @@
 // Implementation of data stores.
+#include "lexicon.h"
 #include "data_store.h"
 #include "aff4.h"
 #include <yaml-cpp/yaml.h>
@@ -34,26 +35,44 @@ class RaptorSerializer {
   size_t length;
   raptor_serializer* serializer;
 
-  RaptorSerializer(): world(raptor_new_world()) {
-    raptor_uri* uri = raptor_new_uri(
-        world, (const unsigned char *)"http://example.org/base");
-
-    serializer = raptor_new_serializer(world, "turtle");
-    raptor_serializer_start_to_string(
-        serializer, uri, &output, &length);
-
-    raptor_free_uri(uri);
-  };
+  RaptorSerializer() {};
 
  public:
   static unique_ptr<RaptorSerializer> NewRaptorSerializer() {
     unique_ptr<RaptorSerializer> result(new RaptorSerializer());
+    raptor_uri *uri;
+
+    result->world = raptor_new_world();
+
+    result->serializer = raptor_new_serializer(result->world, "turtle");
+    raptor_serializer_start_to_string(
+        result->serializer, NULL, &result->output, &result->length);
+
+    // Add the most common namespaces.
+    uri = raptor_new_uri(
+        result->world, (const unsigned char *)AFF4_NAMESPACE);
+    raptor_serializer_set_namespace(result->serializer, uri,
+                                    (const unsigned char *)"aff4");
+    raptor_free_uri(uri);
+
+    uri = raptor_new_uri(
+        result->world, (const unsigned char *)XSD_NAMESPACE);
+    raptor_serializer_set_namespace(result->serializer, uri,
+                                    (const unsigned char *)"xsd");
+    raptor_free_uri(uri);
+
+    uri = raptor_new_uri(
+        result->world,
+        (const unsigned char *)RDF_NAMESPACE);
+    raptor_serializer_set_namespace(result->serializer, uri,
+                                    (const unsigned char *)"rdf");
+    raptor_free_uri(uri);
 
     return result;
   };
 
   AFF4Status AddStatement(const URN &subject, const URN &predicate,
-                          const RDFValue &value) {
+                          const RDFValue *value) {
     raptor_statement* triple = raptor_new_statement(world);
     triple->subject = raptor_new_term_from_uri_string(
         world, (const unsigned char*)
@@ -63,13 +82,10 @@ class RaptorSerializer {
         world, (const unsigned char*)
         predicate.SerializeToString().c_str());
 
-    string value_string = value.SerializeToString();
-    triple->object = raptor_new_term_from_counted_literal(
-        world,
-        (const unsigned char *)value_string.c_str(),
-        value_string.size(),
-        NULL,
-        NULL, 0);
+    triple->object = value->GetRaptorTerm(world);
+    if (!triple->object) {
+      return INCOMPATIBLE_TYPES;
+    };
 
     raptor_serializer_serialize_statement(serializer, triple);
     raptor_free_statement(triple);
@@ -102,7 +118,7 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
     for(const auto &attr_it: it.second) {
       URN predicate(attr_it.first);
       serializer->AddStatement(
-          subject, predicate, *attr_it.second);
+          subject, predicate, attr_it.second.get());
     };
   };
 
@@ -131,13 +147,6 @@ AFF4Status MemoryDataStore::Get(const URN &urn, const URN &attribute,
   auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
   if (attribute_itr == urn_it->second.end())
     return NOT_FOUND;
-
-  RDFValue *found_value = attribute_itr->second.get();
-
-  // Incompatible types stored.
-  if (value.name != found_value->name) {
-    return INCOMPATIBLE_TYPES;
-  };
 
   return value.UnSerializeFromString(
       attribute_itr->second->SerializeToString());
