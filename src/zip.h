@@ -1,3 +1,18 @@
+/*
+Copyright 2014 Google Inc. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License.  You may obtain a copy of the
+License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations under the License.
+*/
+
 #ifndef     AFF4_ZIP_H_
 #define     AFF4_ZIP_H_
 
@@ -197,9 +212,13 @@ class ZipFile: public AFF4Volume {
   static unique_ptr<ZipFile> OpenZipFile(URN urn);
   static unique_ptr<ZipFile> OpenZipFile(unique_ptr<AFF4Stream> stream);
 
+  // Generic stream interface.
   virtual unique_ptr<AFF4Stream> CreateMember(string filename);
   virtual unique_ptr<AFF4Stream> OpenMember(const char *filename);
   virtual unique_ptr<AFF4Stream> OpenMember(const string filename);
+
+  // Specific ZipFile interface. Can be used to set compression type.
+  unique_ptr<ZipFileSegment> CreateZipSegment(string filename);
 
   // All the members of the zip file. Used to reconstruct the central directory.
   unordered_map<string, unique_ptr<ZipInfo>> members;

@@ -1,3 +1,18 @@
+/*
+Copyright 2014 Google Inc. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License.  You may obtain a copy of the
+License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations under the License.
+*/
+
 #include "aff4_errors.h"
 #include "libaff4.h"
 #include <uuid/uuid.h>
@@ -75,6 +90,7 @@ size_t AFF4Stream::Size() {
   return 0;
 }
 
+
 string aff4_sprintf(string fmt, ...) {
   va_list ap;
   int size = fmt.size() * 2 + 50;
@@ -133,7 +149,7 @@ int AFF4Stream::sprintf(string fmt, ...) {
 int StringIO::Write(const char *data, int length) {
   _dirty = true;
 
-  buffer.replace(readptr, length, data);
+  buffer.replace(readptr, length, data, length);
   readptr += length;
 
   return length;

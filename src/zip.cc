@@ -1,3 +1,18 @@
+/*
+Copyright 2014 Google Inc. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License.  You may obtain a copy of the
+License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations under the License.
+*/
+
 #include "zip.h"
 #include "rdf.h"
 #include "lexicon.h"
@@ -171,7 +186,6 @@ int ZipFile::parse_cd() {
 };
 
 
-
 ZipFile::~ZipFile() {
   CHECK(outstanding_members.size() > 0,
         "ZipFile destroyed with %ld outstanding segments.",
@@ -181,6 +195,19 @@ ZipFile::~ZipFile() {
   if (_dirty) {
     oracle.Set(urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE));
     oracle.Set(urn, AFF4_STORED, new URN(backing_store->urn));
+
+    {
+      // Update the oracle into the zip file.
+      unique_ptr<ZipFileSegment> turtle_segment = CreateZipSegment(
+          "information.turtle");
+      turtle_segment->compression_method = ZIP_DEFLATE;
+      oracle.DumpToTurtle(*turtle_segment);
+
+      unique_ptr<ZipFileSegment> yaml_segment = CreateZipSegment(
+          "information.yaml");
+      yaml_segment->compression_method = ZIP_DEFLATE;
+      oracle.DumpToYaml(*yaml_segment);
+    };
 
     write_zip64_CD();
   };
@@ -226,6 +253,12 @@ void ZipFile::write_zip64_CD() {
 
 unique_ptr<AFF4Stream> ZipFile::CreateMember(string filename) {
   unique_ptr<AFF4Stream>result(new ZipFileSegment(filename, this));
+
+  return result;
+};
+
+unique_ptr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
+  unique_ptr<ZipFileSegment>result(new ZipFileSegment(filename, this));
 
   return result;
 };
@@ -333,7 +366,7 @@ static string CompressBuffer(const string &buffer) {
   };
 
   // Get an upper bound on the size of the compressed buffer.
-  int buffer_size = deflateBound(&strm, buffer.size());
+  int buffer_size = deflateBound(&strm, buffer.size() + 10);
   char c_buffer[buffer_size];
 
   strm.next_out = (Bytef *)c_buffer;
@@ -346,7 +379,7 @@ static string CompressBuffer(const string &buffer) {
 
   deflateEnd(&strm);
 
-  return string(c_buffer, buffer_size);
+  return string(c_buffer, buffer_size - strm.avail_out);
 };
 
 static unsigned int DecompressBuffer(
