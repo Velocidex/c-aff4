@@ -22,7 +22,9 @@ typedef enum {
   INCOMPATIBLE_TYPES = -2,
   MEMORY_ERROR = -3,
   GENERIC_ERROR = -4,
-  INVALID_INPUT = -5
+  INVALID_INPUT = -5,
+  PARSING_ERROR = -6,
+  NOT_IMPLEMENTED = -7
 } AFF4Status;
 
 #endif // AFF4_ERRORS_H

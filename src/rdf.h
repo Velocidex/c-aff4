@@ -22,6 +22,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4_utils.h"
 #include "aff4_errors.h"
 #include <raptor2/raptor2.h>
+#include "aff4_registry.h"
 
 using std::string;
 using std::unique_ptr;
@@ -55,6 +56,25 @@ class RDFValue {
   virtual ~RDFValue(){};
 };
 
+
+// A Global Registry for RDFValue. This factory will provide the correct
+// RDFValue instance based on the turtle type URN. For example xsd:integer ->
+// XSDInteger().
+extern ClassFactory<RDFValue> RDFValueRegistry;
+
+template<class T>
+class RDFValueRegistrar {
+ public:
+  RDFValueRegistrar(string name)
+  {
+    // register the class factory function
+    RDFValueRegistry.RegisterFactoryFunction(
+        name,
+        [](void) -> RDFValue * { return new T();});
+  }
+};
+
+
 static const char* const lut = "0123456789ABCDEF";
 
 /* These are the objects which are stored in the data store */
@@ -85,6 +105,8 @@ class XSDString: public RDFBytes {
   raptor_term *GetRaptorTerm(raptor_world *world) const;
 };
 
+
+
 class XSDInteger: public RDFValue {
  public:
   unsigned long long int value;
@@ -107,5 +129,6 @@ class URN: public XSDString {
   URN() {};
   raptor_term *GetRaptorTerm(raptor_world *world) const;
 };
+
 
 #endif // AFF4_RDF_H_

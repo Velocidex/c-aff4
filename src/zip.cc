@@ -54,6 +54,14 @@ unique_ptr<ZipFile> ZipFile::OpenZipFile(
     return NULL;
   };
 
+  // Try to load the RDF metadata file.
+  unique_ptr<AFF4Stream> turtle_stream = self->OpenMember(
+      "information.turtle");
+
+  if (turtle_stream) {
+    oracle.LoadFromTurtle(*turtle_stream);
+  };
+
   return self;
 };
 
@@ -300,8 +308,7 @@ unique_ptr<AFF4Stream> ZipFile::OpenMember(const string filename) {
 
   switch (file_header.compression_method) {
     case ZIP_DEFLATE: {
-      string c_buffer(backing_store->Read(zip_info->compress_size),
-                      zip_info->compress_size);
+      string c_buffer = backing_store->Read(zip_info->compress_size);
 
       if(DecompressBuffer(buffer, buffer_size, c_buffer) != buffer_size) {
         DEBUG_OBJECT("Unable to decompress file.");
@@ -379,7 +386,7 @@ static string CompressBuffer(const string &buffer) {
 
   deflateEnd(&strm);
 
-  return string(c_buffer, buffer_size - strm.avail_out);
+  return string(c_buffer, strm.total_out);
 };
 
 static unsigned int DecompressBuffer(
@@ -393,7 +400,7 @@ static unsigned int DecompressBuffer(
   strm.next_out = (Bytef *)buffer;
   strm.avail_out = length;
 
-  if(inflateInit(&strm) != Z_OK) {
+  if(inflateInit2(&strm, -15) != Z_OK) {
     DEBUG_OBJECT("Unable to initialise zlib (%s)", strm.msg);
     return 0;
   };

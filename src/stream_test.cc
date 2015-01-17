@@ -141,6 +141,9 @@ void DumpOracle() {
 void runTests() {
   test_ZipFileCreate();
   test_AFF4Image();
+
+  oracle.Clear();
+
   test_ZipFileRead();
 
   DumpOracle();

@@ -120,6 +120,109 @@ class RaptorSerializer {
 };
 
 
+static unique_ptr<RDFValue> RDFValueFromRaptorTerm(raptor_term *term) {
+  if (term->type == RAPTOR_TERM_TYPE_URI) {
+    char *uri = (char *)raptor_uri_to_string(term->value.uri);
+    unique_ptr<RDFValue> result(new URN(uri));
+    raptor_free_memory(uri);
+    return result;
+  };
+
+  if (term->type == RAPTOR_TERM_TYPE_LITERAL) {
+    char *uri = (char *)raptor_uri_to_string(term->value.literal.datatype);
+
+    unique_ptr<RDFValue> result = RDFValueRegistry.CreateInstance(uri);
+    raptor_free_memory(uri);
+
+    string value_string((char *)term->value.literal.string,
+                        term->value.literal.string_len);
+
+    if(!result->UnSerializeFromString(value_string)) {
+      DEBUG_OBJECT("Unable to parse %s", value_string.c_str());
+      return NULL;
+    };
+
+    return result;
+  };
+  return NULL;
+};
+
+
+static void statement_handler(void *user_data,
+                              raptor_statement *statement) {
+  if (statement->subject->type == RAPTOR_TERM_TYPE_URI &&
+      statement->predicate->type == RAPTOR_TERM_TYPE_URI) {
+    char *subject = (char *)raptor_uri_to_string(statement->subject->value.uri);
+
+    char *predicate = (char *)raptor_uri_to_string(
+        statement->predicate->value.uri);
+
+    unique_ptr<RDFValue> object(RDFValueFromRaptorTerm(statement->object));
+
+    oracle.Set(URN(subject), URN(predicate), std::move(object));
+
+    raptor_free_memory(subject);
+    raptor_free_memory(predicate);
+  };
+};
+
+
+class RaptorParser {
+ protected:
+  raptor_world *world;
+  raptor_parser *parser;
+
+  RaptorParser() {};
+
+ public:
+  static unique_ptr<RaptorParser> NewRaptorParser() {
+    unique_ptr<RaptorParser> result(new RaptorParser());
+
+    result->world = raptor_new_world();
+
+    result->parser = raptor_new_parser(result->world, "turtle");
+
+    raptor_parser_set_statement_handler(
+        result->parser, NULL, statement_handler);
+
+    // Dont talk to the internet
+    raptor_parser_set_option(result->parser, RAPTOR_OPTION_NO_NET, NULL, 1);
+
+    raptor_uri *uri = raptor_new_uri(
+        result->world, (const unsigned char *)".");
+
+    if(raptor_parser_parse_start(result->parser, uri)) {
+      DEBUG_OBJECT("Unable to initialize the parser.");
+      return NULL;
+    };
+
+    raptor_free_uri(uri);
+
+    return result;
+  };
+
+  AFF4Status Parse(string buffer) {
+    std::cout << buffer << "\n";
+
+    if(raptor_parser_parse_chunk(
+           parser, (const unsigned char *)buffer.data(),
+           buffer.size(), 1)) {
+      return PARSING_ERROR;
+    };
+
+    return STATUS_OK;
+  };
+
+  ~RaptorParser() {
+    // Flush the parser.
+    raptor_parser_parse_chunk(parser, NULL, 0, 1);
+
+    raptor_free_parser(parser);
+    raptor_free_world(world);
+  };
+};
+
+
 AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
   unique_ptr<RaptorSerializer> serializer(
       RaptorSerializer::NewRaptorSerializer());
@@ -143,12 +246,46 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
 };
 
 
+AFF4Status MemoryDataStore::LoadFromTurtle(AFF4Stream &stream) {
+  unique_ptr<RaptorParser> parser(
+      RaptorParser::NewRaptorParser());
+  if (!parser) {
+    return MEMORY_ERROR;
+  };
+
+  while (1) {
+    string buffer = stream.Read(1000000);
+    if (buffer.size() == 0) {
+      break;
+    };
+
+    AFF4Status res = parser->Parse(buffer);
+    if (res != STATUS_OK) {
+      return res;
+    };
+  };
+
+  return STATUS_OK;
+}
+
+AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream &stream) {
+  return NOT_IMPLEMENTED;
+};
+
+
 void MemoryDataStore::Set(const URN &urn, const URN &attribute,
                           RDFValue *value) {
   unique_ptr<RDFValue> unique_value(value);
   // Automatically create needed keys.
   store[urn.SerializeToString()][attribute.SerializeToString()] = (
       std::move(unique_value));
+};
+
+void MemoryDataStore::Set(const URN &urn, const URN &attribute,
+                          unique_ptr<RDFValue> value) {
+  // Automatically create needed keys.
+  store[urn.SerializeToString()][attribute.SerializeToString()] = (
+      std::move(value));
 };
 
 
@@ -165,6 +302,11 @@ AFF4Status MemoryDataStore::Get(const URN &urn, const URN &attribute,
 
   return value.UnSerializeFromString(
       attribute_itr->second->SerializeToString());
+};
+
+AFF4Status MemoryDataStore::Clear() {
+  store.clear();
+  return STATUS_OK;
 };
 
 

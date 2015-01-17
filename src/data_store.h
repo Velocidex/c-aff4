@@ -78,6 +78,12 @@ class DataStore {
   // Dump ourselves to a yaml file.
   virtual AFF4Status DumpToYaml(AFF4Stream &output) = 0;
   virtual AFF4Status DumpToTurtle(AFF4Stream &output) = 0;
+
+  virtual AFF4Status LoadFromYaml(AFF4Stream &output) = 0;
+  virtual AFF4Status LoadFromTurtle(AFF4Stream &output) = 0;
+
+  // Clear all data.
+  virtual AFF4Status Clear() = 0;
 };
 
 
@@ -92,12 +98,21 @@ class MemoryDataStore: public DataStore {
   unordered_map<string, AFF4_Attributes> store;
 
  public:
-  void Set(const URN &urn, const URN &attribute,
-           RDFValue *value);
+  // Set the RDFValue in the data store. Note that the data store will retain
+  // ownership of the value, and therefore callers may not use it after this
+  // call.
+  void Set(const URN &urn, const URN &attribute, RDFValue *value);
+  void Set(const URN &urn, const URN &attribute, unique_ptr<RDFValue> value);
+
   AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value);
 
   virtual AFF4Status DumpToYaml(AFF4Stream &output);
   virtual AFF4Status DumpToTurtle(AFF4Stream &output);
+
+  virtual AFF4Status LoadFromYaml(AFF4Stream &output);
+  virtual AFF4Status LoadFromTurtle(AFF4Stream &output);
+
+  virtual AFF4Status Clear();
 };
 
 extern MemoryDataStore oracle;

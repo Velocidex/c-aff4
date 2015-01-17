@@ -22,14 +22,18 @@ specific language governing permissions and limitations under the License.
 #define XSD_NAMESPACE "http://www.w3.org/2001/XMLSchema#"
 #define RDF_NAMESPACE "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
+// Attribute names for different AFF4 objects.
+// Base AFF4Object
 static URN AFF4_TYPE(RDF_NAMESPACE "type");
 static URN AFF4_STORED(AFF4_NAMESPACE "stored");
 
-
+// AFF4 ZipFile containers.
 static URN AFF4_ZIP_TYPE(AFF4_NAMESPACE "zip_volume");
 
+// AFF4Stream
 static URN AFF4_STREAM_SIZE(AFF4_NAMESPACE "size");
 
+// AFF4Image - stores a stream using Bevies.
 static URN AFF4_IMAGE_TYPE(AFF4_NAMESPACE "image");
 static URN AFF4_IMAGE_CHUNK_SIZE(AFF4_NAMESPACE "chunk_size");
 static URN AFF4_IMAGE_COMPRESSION(AFF4_NAMESPACE "compression");

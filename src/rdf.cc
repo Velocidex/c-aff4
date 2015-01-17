@@ -113,9 +113,15 @@ string XSDInteger::SerializeToString() const {
 };
 
 AFF4Status XSDInteger::UnSerializeFromString(const char *data, int length) {
-  string value = string(data, length);
-  if(!sscanf("%ld", value.c_str(), &value)) {
-    return INVALID_INPUT;
+  string s_data = string(data, length);
+  const char *start = s_data.c_str();
+  char *end;
+
+  errno = 0;
+  value = strtoll(start, &end, 0);
+
+  if (errno != 0 || *end != 0) {
+    return PARSING_ERROR;
   };
 
   return STATUS_OK;
@@ -138,3 +144,16 @@ raptor_term *XSDInteger::GetRaptorTerm(raptor_world *world) const {
 
   return result;
 };
+
+// A Global Registry for RDFValue. This factory will provide the correct
+// RDFValue instance based on the turtle type URN. For example xsd:integer ->
+// XSDInteger().
+ClassFactory<RDFValue> RDFValueRegistry;
+
+
+static RDFValueRegistrar<RDFBytes> r1(XSD_NAMESPACE "hexBinary");
+static RDFValueRegistrar<XSDString> r2(XSD_NAMESPACE "string");
+
+static RDFValueRegistrar<XSDInteger> r3(XSD_NAMESPACE "integer");
+static RDFValueRegistrar<XSDInteger> r4(XSD_NAMESPACE "int");
+static RDFValueRegistrar<XSDInteger> r5(XSD_NAMESPACE "long");
