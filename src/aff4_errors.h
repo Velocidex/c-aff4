@@ -16,15 +16,33 @@ specific language governing permissions and limitations under the License.
 #ifndef AFF4_ERRORS_H
 #define AFF4_ERRORS_H
 
+/**
+ * @file
+ * @author scudette <scudette@google.com>
+ * @date   Sun Jan 18 16:26:57 2015
+ *
+ * @brief  This file contains the error types that AFF4 objects may return.
+ *
+ *
+ */
+
+
+
+/// Return values from AFF4 methods and functions.
 typedef enum {
-  STATUS_OK = 1,
-  NOT_FOUND = -1,
-  INCOMPATIBLE_TYPES = -2,
-  MEMORY_ERROR = -3,
-  GENERIC_ERROR = -4,
-  INVALID_INPUT = -5,
-  PARSING_ERROR = -6,
-  NOT_IMPLEMENTED = -7
+  STATUS_OK = 1,                        /**< Function succeeded. */
+  NOT_FOUND = -1,                       /**< URN or file was not found. */
+  INCOMPATIBLE_TYPES = -2,              /**< Types passed in as arguments were
+                                         * not compatible. */
+  MEMORY_ERROR = -3,                    /**< Failed to allocate sufficient
+                                         * memory. */
+  GENERIC_ERROR = -4,                   /**< Generic Error. */
+  INVALID_INPUT = -5,                   /**<  */
+  PARSING_ERROR = -6,                   /**< Unable to parse the required
+                                         * input. */
+  NOT_IMPLEMENTED = -7,                 /**< This function is not yet
+                                         * implemented. */
+  IO_ERROR = -8
 } AFF4Status;
 
 #endif // AFF4_ERRORS_H

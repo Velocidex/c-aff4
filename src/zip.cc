@@ -44,6 +44,29 @@ unique_ptr<ZipFile> ZipFile::NewZipFile(
   return self;
 };
 
+
+AFF4Status ZipFile::LoadFromURN(const string &mode) {
+  URN stream_urn;
+
+  if (oracle.Get(urn, AFF4_STORED, stream_urn) != STATUS_OK) {
+    return NOT_FOUND;
+  };
+
+  // Open the volume.
+  backing_store = AFF4FactoryOpen<AFF4Stream>(stream_urn);
+  if (!backing_store) {
+    return NOT_FOUND;
+  };
+
+  // Parse the ZIP file.
+  if(parse_cd() < 0) {
+    return PARSING_ERROR;
+  };
+
+  return STATUS_OK;
+};
+
+
 unique_ptr<ZipFile> ZipFile::OpenZipFile(
     unique_ptr<AFF4Stream> backing_store) {
   unique_ptr<ZipFile> self(new ZipFile());
@@ -180,6 +203,13 @@ int ZipFile::parse_cd() {
       DEBUG_OBJECT("Found file %s @ %#lx", zip_info->filename.c_str(),
                    zip_info->local_header_offset);
 
+      // Store this information in the oracle. This allows segments to be
+      // directly opened by URN.
+      URN member_urn(zip_info->filename);
+
+      oracle.Set(member_urn, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
+      oracle.Set(member_urn, AFF4_STORED, new URN(urn));
+
       members[zip_info->filename] = std::move(zip_info);
     };
 
@@ -218,6 +248,8 @@ ZipFile::~ZipFile() {
     };
 
     write_zip64_CD();
+
+    backing_store->Flush();
   };
 };
 
@@ -515,3 +547,7 @@ AFF4Status ZipFile::WriteZipFileHeader(
 
   return STATUS_OK;
 };
+
+
+// Register ZipFile as an AFF4 object.
+static AFF4Registrar<ZipFile> r1(AFF4_ZIP_TYPE);

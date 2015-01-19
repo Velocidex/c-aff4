@@ -14,6 +14,7 @@ specific language governing permissions and limitations under the License.
 */
 
 // Implementation of data stores.
+#include <typeinfo>
 #include "lexicon.h"
 #include "data_store.h"
 #include "libaff4.h"
@@ -299,6 +300,11 @@ AFF4Status MemoryDataStore::Get(const URN &urn, const URN &attribute,
   auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
   if (attribute_itr == urn_it->second.end())
     return NOT_FOUND;
+
+  // The RDFValue type is incompatible with what the caller provided.
+  if (typeid(value) != typeid(*attribute_itr->second)) {
+    return INVALID_INPUT;
+  };
 
   return value.UnSerializeFromString(
       attribute_itr->second->SerializeToString());

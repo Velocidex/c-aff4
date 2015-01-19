@@ -36,12 +36,10 @@ using std::ifstream;
 class AFF4Stream: public AFF4Object {
  protected:
   ssize_t readptr;
-  int size;             // How many bytes are used in the stream?
-  bool _dirty = false;  // Is this stream modified?
+  ssize_t size;             // How many bytes are used in the stream?
+  bool _dirty = false;      // Is this stream modified?
 
  public:
-  string name = "AFF4Stream";
-
   AFF4Stream(): readptr(0), size(0) {};
 
   // Convenience methods.
@@ -89,8 +87,6 @@ class FileBackedObject: public AFF4Stream {
   int fd;
 
  public:
-  string name = "FileBackedObject";
-
   FileBackedObject() {};
 
   static unique_ptr<FileBackedObject> NewFileBackedObject(
@@ -100,6 +96,13 @@ class FileBackedObject: public AFF4Stream {
   virtual int Write(const char *data, int length);
   virtual size_t Size();
 
+  /**
+   * Load the file from a file:/ URN.
+   *
+   *
+   * @return STATUS_OK if we were able to open it successfully.
+   */
+  virtual AFF4Status LoadFromURN(const string &mode);
 };
 
 /**

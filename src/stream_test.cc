@@ -20,17 +20,25 @@ specific language governing permissions and limitations under the License.
 using std::cout;
 
 
-void test_AFF4Image() {
+URN test_AFF4Image() {
   unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
       "test.zip", "rw");
 
   // The backing file is given to the zip.
-  unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
+  shared_ptr<AFF4Volume> zip(ZipFile::NewZipFile(std::move(file)));
 
-  unique_ptr<AFF4Stream> image = AFF4Image::NewAFF4Image(
-      "image.dd", *zip);
+  unique_ptr<AFF4Image> image = AFF4Image::NewAFF4Image(
+      "image.dd", zip);
 
-  image->Write("Hello wolrd!");
+  // For testing - rediculously small chunks.
+  image->chunk_size = 10;
+  image->chunks_per_segment = 3;
+
+  for(int i=0; i<100; i++) {
+    image->Write("Hello wolrd!");
+  };
+
+  return image->urn;
 };
 
 void test_MemoryDataStore() {
@@ -138,9 +146,31 @@ void DumpOracle() {
   cout << output.buffer;
 };
 
+/**
+ * This test will automatically open the image, and its containing volume from
+ * information stored in the AFF4 oracle.
+ *
+ * @param image_urn: The URN of the AFF4Image object to open.
+ */
+void test_OpenImageByURN(URN image_urn) {
+  shared_ptr<AFF4Image> image(AFF4FactoryOpen<AFF4Image>(image_urn));
+
+  if (image) {
+    cout << image->urn.value << "\n";
+  };
+
+  cout << "data:\n" << image->Read(100).c_str() << "\n";
+};
+
+
 void runTests() {
   test_ZipFileCreate();
-  test_AFF4Image();
+  URN image_urn = test_AFF4Image();
+
+  DumpOracle();
+
+  test_OpenImageByURN(image_urn);
+  return;
 
   oracle.Clear();
 

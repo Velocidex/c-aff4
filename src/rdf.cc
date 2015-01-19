@@ -13,6 +13,7 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
+#include <pcre++.h>
 #include "lexicon.h"
 #include "rdf.h"
 
@@ -99,6 +100,25 @@ raptor_term *XSDString::GetRaptorTerm(raptor_world *world) const {
 };
 
 
+uri_components::uri_components(const string &uri) {
+  static pcrepp::Pcre uri_regex(
+      "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\\\?([^#]*))?(#(.*))?");
+
+  if (uri_regex.search(uri)) {
+    scheme = uri_regex[1];
+    path = uri_regex[3];
+  };
+
+  if (scheme == "") {
+    scheme = "file";
+  };
+};
+
+
+uri_components URN::Parse() const {
+  return uri_components(value);
+};
+
 raptor_term *URN::GetRaptorTerm(raptor_world *world) const {
   string value_string(SerializeToString());
 
@@ -107,6 +127,11 @@ raptor_term *URN::GetRaptorTerm(raptor_world *world) const {
       (const unsigned char *)value_string.c_str(),
       value_string.size());
 };
+
+URN URN::Append(const string &component) {
+  return URN(value + "/" + component);
+};
+
 
 string XSDInteger::SerializeToString() const {
     return aff4_sprintf("%ld", value);

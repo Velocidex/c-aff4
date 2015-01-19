@@ -33,13 +33,11 @@ AFF4Object::AFF4Object(): name("AFF4Object") {
 
   uuid_generate(uuid);
   uuid_unparse(uuid, buffer.data());
-  urn.Set("aff4:/" + string(buffer.data()));
+  urn.Set("aff4://" + string(buffer.data()));
 };
 
 
 AFF4Status AFF4Object::Flush() {
-  oracle.Set(urn, AFF4_TYPE, new XSDString(name));
-
   return STATUS_OK;
 };
 
@@ -168,10 +166,24 @@ size_t StringIO::Size() {
 
 unique_ptr<FileBackedObject> FileBackedObject::NewFileBackedObject(
     string filename, string mode) {
+  unique_ptr<FileBackedObject> result(new FileBackedObject());
 
-  FileBackedObject *self = new FileBackedObject();
-  unique_ptr<FileBackedObject> result(self);
+  result->urn.Set("file://" + filename);
+
+  if (result->LoadFromURN(mode) != STATUS_OK)
+    return NULL;
+
+  return result;
+};
+
+AFF4Status FileBackedObject::LoadFromURN(const string &mode) {
   int flags = O_RDONLY | O_BINARY;
+  uri_components components = urn.Parse();
+
+  // Only file:// URNs are supported.
+  if (components.scheme != "file") {
+    return INVALID_INPUT;
+  };
 
   if(mode == "w") {
     flags |= O_CREAT | O_TRUNC | O_RDWR;
@@ -180,15 +192,16 @@ unique_ptr<FileBackedObject> FileBackedObject::NewFileBackedObject(
     flags |= O_CREAT | O_RDWR;
   };
 
-  self->fd = open(filename.c_str(), flags, S_IRWXU | S_IRWXG | S_IRWXO);
-  if(self->fd < 0){
-    return NULL;
+  fd = open(components.path.c_str(), flags,
+            S_IRWXU | S_IRWXG | S_IRWXO);
+
+  if(fd < 0){
+    return IO_ERROR;
   };
 
-  result->urn.Set(filename);
-
-  return result;
+  return STATUS_OK;
 };
+
 
 string FileBackedObject::Read(size_t length) {
   char data[length];
@@ -223,3 +236,18 @@ size_t FileBackedObject::Size() {
 
   return result;
 };
+
+
+AFF4Status aff4_image(char *output_file, char *stream_name,
+                      unsigned int chunks_per_segment,
+                      uint64_t max_volume_size,
+                      AFF4Stream &input_stream) {
+
+  return STATUS_OK;
+};
+
+
+ClassFactory<AFF4Object> AFF4ObjectRegistry;
+
+// The FileBackedObject will be invoked for file:// style urns.
+static AFF4Registrar<FileBackedObject> r1("file");

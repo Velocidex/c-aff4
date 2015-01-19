@@ -25,13 +25,33 @@ specific language governing permissions and limitations under the License.
 #include "aff4_registry.h"
 
 using std::string;
+using std::shared_ptr;
 using std::unique_ptr;
 using std::vector;
 
-// Base class for all RDF Values. An RDFValue is an object which knows how to
-// serialize and unserialize itself from a DataStoreObject.
+/**
+ * @file
+ * @author scudette <scudette@localhost>
+ * @date   Mon Jan 19 09:52:39 2015
+ *
+ * @brief  Define some common RDF value types.
+ *
+ *
+ */
+
+
+/**
+ * An RDFValue object is one which knows how to serialize itself from a string
+ * and back again.
+ *
+ */
+
 class RDFValue {
  public:
+  virtual string GetTypeName() {
+    return "RDFValue";
+  };
+
   virtual raptor_term *GetRaptorTerm(raptor_world *world) const {
     return NULL;
   };
@@ -65,8 +85,7 @@ extern ClassFactory<RDFValue> RDFValueRegistry;
 template<class T>
 class RDFValueRegistrar {
  public:
-  RDFValueRegistrar(string name)
-  {
+  RDFValueRegistrar(string name) {
     // register the class factory function
     RDFValueRegistry.RegisterFactoryFunction(
         name,
@@ -77,10 +96,17 @@ class RDFValueRegistrar {
 
 static const char* const lut = "0123456789ABCDEF";
 
-/* These are the objects which are stored in the data store */
+/**
+ * RDFBytes is an object which stores raw bytes. It serializes into an
+ * xsd:hexBinary type.
+ *
+ */
 class RDFBytes: public RDFValue {
  public:
   string value;
+  virtual string GetTypeName() {
+    return "RDFBytes";
+  };
 
   RDFBytes(string data): RDFBytes(data.c_str(), data.size()) {};
 
@@ -94,8 +120,16 @@ class RDFBytes: public RDFValue {
 };
 
 
+/**
+ * An XSDString is a printable string. It serializes into an xsd:string type.
+ *
+ */
 class XSDString: public RDFBytes {
  public:
+  virtual string GetTypeName() {
+    return "XSDString";
+  };
+
   XSDString(string data): RDFBytes(data.c_str(), data.size()) {};
   XSDString(const char * data): RDFBytes(data, strlen(data)) {};
   XSDString() {};
@@ -107,9 +141,18 @@ class XSDString: public RDFBytes {
 
 
 
+/**
+ * A XSDInteger stores an integer. We can parse xsd:integer, xsd:int and
+ * xsd:long.
+ *
+ */
 class XSDInteger: public RDFValue {
  public:
   unsigned long long int value;
+
+  virtual string GetTypeName() {
+    return "XSDInteger";
+  };
 
   XSDInteger(int data): value(data) {};
   XSDInteger() {};
@@ -122,12 +165,38 @@ class XSDInteger: public RDFValue {
 };
 
 
+/**
+ * Once a URN is parsed we place its components into one easy to use struct.
+ *
+ */
+struct uri_components {
+ public:
+  uri_components(const string &uri);
+
+  string scheme;
+  string path;
+
+};
+
+
+/**
+ * An RDFValue to store and parse a URN.
+ *
+ */
 class URN: public XSDString {
  public:
+  virtual string GetTypeName() {
+    return "URN";
+  };
+
   URN(const char * data): XSDString(data) {};
   URN(string data): XSDString(data) {};
   URN() {};
+
+  URN Append(const string &component);
+
   raptor_term *GetRaptorTerm(raptor_world *world) const;
+  uri_components Parse() const;
 };
 
 

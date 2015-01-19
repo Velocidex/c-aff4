@@ -16,27 +16,45 @@ specific language governing permissions and limitations under the License.
 #ifndef     AFF4_LEXICON_H_
 #define     AFF4_LEXICON_H_
 
+/**
+ * @file
+ * @author scudette <scudette@google.com>
+ * @date   Sun Jan 18 17:08:13 2015
+ *
+ * @brief This file defines attribute URNs of AFF4 object predicates. It
+ *        standardizes on these attributes which must be interoperable to all
+ *        AFF4 implementations.
+ *
+ *
+ */
+
+
 #include "rdf.h"
 
 #define AFF4_NAMESPACE "http://afflib.org/2009/aff4#"
 #define XSD_NAMESPACE "http://www.w3.org/2001/XMLSchema#"
 #define RDF_NAMESPACE "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
-// Attribute names for different AFF4 objects.
-// Base AFF4Object
-static URN AFF4_TYPE(RDF_NAMESPACE "type");
-static URN AFF4_STORED(AFF4_NAMESPACE "stored");
+/// Attribute names for different AFF4 objects.
+/// Base AFF4Object
+#define AFF4_TYPE (RDF_NAMESPACE "type")
+#define AFF4_STORED (AFF4_NAMESPACE "stored")
 
-// AFF4 ZipFile containers.
-static URN AFF4_ZIP_TYPE(AFF4_NAMESPACE "zip_volume");
+/// AFF4 ZipFile containers.
+#define AFF4_ZIP_TYPE (AFF4_NAMESPACE "zip_volume")
 
-// AFF4Stream
-static URN AFF4_STREAM_SIZE(AFF4_NAMESPACE "size");
+/// AFF4Stream
+#define AFF4_STREAM_SIZE (AFF4_NAMESPACE "size")
 
-// AFF4Image - stores a stream using Bevies.
-static URN AFF4_IMAGE_TYPE(AFF4_NAMESPACE "image");
-static URN AFF4_IMAGE_CHUNK_SIZE(AFF4_NAMESPACE "chunk_size");
-static URN AFF4_IMAGE_COMPRESSION(AFF4_NAMESPACE "compression");
-static URN AFF4_IMAGE_COMPRESSION_DEFLATE("https://www.ietf.org/rfc/rfc1951.txt");
+/// ZipFileSegment
+#define AFF4_ZIP_SEGMENT_TYPE (AFF4_NAMESPACE "zip_segment")
+
+/// AFF4Image - stores a stream using Bevies.
+#define AFF4_IMAGE_TYPE (AFF4_NAMESPACE "image")
+#define AFF4_IMAGE_CHUNK_SIZE (AFF4_NAMESPACE "chunk_size")
+#define AFF4_IMAGE_CHUNKS_PER_SEGMENT (AFF4_NAMESPACE "chunks_per_segment")
+#define AFF4_IMAGE_COMPRESSION (AFF4_NAMESPACE "compression")
+#define AFF4_IMAGE_COMPRESSION_DEFLATE "https://www.ietf.org/rfc/rfc1951.txt"
+
 
 #endif

@@ -84,6 +84,14 @@ class DataStore {
 
   // Clear all data.
   virtual AFF4Status Clear() = 0;
+
+  /**
+   * An object cache for objects created via the AFF4FactoryOpen()
+   * interface. Note that the cache owns all objects at all times.
+   *
+   */
+  unordered_map<string, unique_ptr<AFF4Object> > ObjectCache;
+
 };
 
 

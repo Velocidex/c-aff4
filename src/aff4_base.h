@@ -17,6 +17,8 @@ specific language governing permissions and limitations under the License.
 #define AFF4_BASE_H
 // Decleations for basic AFF4 types.
 
+#include "lexicon.h"
+#include "aff4_errors.h"
 #include "rdf.h"
 #include "data_store.h"
 
@@ -30,86 +32,87 @@ struct AFF4Schema {
   RDFValue* (*constructor)();
 };
 
-
 /**
-    All AFF4 objects extend this basic object.
-
-    AFF4Objects present an external API for users. There are two main ways to
-    instantiate an AFF4Object:
-
-    1) To create a new object, one uses the static Factory function defined in
-       the AFF4 public interface. For example:
-
-       static unique_ptr<ZipFile> NewZipFile(unique_ptr<AFF4Stream> stream);
-
-       This will return a new instance of the AFF4Object. When the object is
-       deleted, it will be flushed to the AFF4 resolver.
-
-    2) Similarly, to open an existing object, the static factory function can be
-       used. e.g.:
-
-       static unique_ptr<ZipFile> OpenZipFile(URN urn);
-
-       Typically only the URN is required as a parameter. Note that if the
-       object stored at the specified URN is not of the required type, this
-       method will fail and return NULL.
-
-    Internally all AFF4 objects must be able to be recreated exactly from the
-    AFF4 resolver.  Therefore the following common pattern is followed:
-
-       static unique_ptr<XXXX> NewXXXX(arg1, arg2, arg3) {
-           this->Set(predicate1, arg1);
-           this->Set(predicate2, arg2);
-           this->Set(predicate3, arg2);
-
-           // instantiate the object.
-           XXXX(arg1, arg2, arg3);
-
-           // Now, when the object is destroyed the predicates set above will
-           // be flushed to storage.
-       };
-
-       static unique_ptr<XXXX> OpenXXXX(URN urn) {
-          InitAFF4Attributes();  // Load all attributes from the resolver.
-
-          arg1 = this->Get(predicate1);
-          arg2 = this->Get(predicate2);
-          arg3 = this->Get(predicate3);
-
-          return unique_ptr<XXXX>(new XXX(arg1, arg2, arg3));
-       };
-
- **/
+ * The base class for all AFF4 objects. It is not usually possible to
+ * instantiate a plain AFF4 Object since it does not really do anything.
+ *
+ */
 class AFF4Object {
 
  protected:
-  // AFF4 objects store attributes.
-  AFF4_Attributes attributes;
-
-  AFF4Schema schema[1] = {
-    {"URN", &fCreate<URN>}
-  };
-
   string name = "AFF4Object";
 
  public:
+  /// Each AFF4 object is addressable by its URN.
   URN urn;
 
-  // AFF4 objects are created using the following pattern:
-  // obj = AFF4_FACTORY.Create(type)
-  // obj.Set(attribute1, value1)
-  // obj.Set(attribute2, value2)
-  // if (!obj.finish()) {
-  //     Failed to create object.
-  // }
-  AFF4Object(); // Used by the factory for generic
-                                    // instantiation.
+  AFF4Object();
 
   // By defining a virtual destructor this allows the destructor of derived
   // objects to be called when deleting a pointer to a base object.
   virtual ~AFF4Object() {};
 
+  /**
+   * Load this AFF4 object from the URN provided.
+   *
+   *
+   * @return STATUS_OK if the object was properly loaded.
+   */
+  virtual AFF4Status LoadFromURN(const string &mode) {
+    return NOT_IMPLEMENTED;
+  };
+
   AFF4Status Flush();
 };
+
+
+/**
+ * A registry for AFF4 objects. This is used to instantiate the correct
+ * AFF4Object at a specific URN.
+ *
+ */
+extern ClassFactory<AFF4Object> AFF4ObjectRegistry;
+
+
+template<class T>
+class AFF4Registrar {
+ public:
+  AFF4Registrar(string name) {
+    AFF4ObjectRegistry.RegisterFactoryFunction(
+        name,
+        [](void) -> T *{ return new T(); });
+  };
+};
+
+
+template<typename T>
+unique_ptr<T> AFF4FactoryOpen(const URN &urn, const string &mode = "r") {
+  URN aff4_type(AFF4_TYPE);
+  URN type_urn;
+  const uri_components components = urn.Parse();
+
+  // Try to instantiate the handler based on the URN alone.
+  unique_ptr<AFF4Object> obj = AFF4ObjectRegistry.CreateInstance(
+      components.scheme);
+
+  // Ask the oracle for the correct type.
+  if (!obj) {
+    if (oracle.Get(urn, aff4_type, type_urn) != STATUS_OK) {
+      return NULL;
+    };
+
+    obj = AFF4ObjectRegistry.CreateInstance(type_urn.value);
+  };
+
+  if (!obj)
+    return NULL;
+
+  obj->urn = urn;
+  if(obj->LoadFromURN(mode) != STATUS_OK)
+    return NULL;
+
+  return unique_ptr<T>(dynamic_cast<T *>(obj.release()));
+};
+
 
 #endif // AFF4_BASE_H

@@ -51,19 +51,19 @@ struct CDFileHeader {
   uint16_t version_made_by = 0x317;
   uint16_t version_needed = 0x14;
   uint16_t flags = 0x8;
-  uint16_t compression_method;  /* aff4volatile:compression */
-  uint16_t dostime;             /* aff4volatile:timestamp */
+  uint16_t compression_method;
+  uint16_t dostime;
   uint16_t dosdate;
   uint32_t crc32;
-  int32_t compress_size = -1;       /* aff4volatile:compress_size */
-  int32_t file_size = -1;           /* aff4volatile:file_size */
+  int32_t compress_size = -1;
+  int32_t file_size = -1;
   uint16_t file_name_length;
   uint16_t extra_field_len = 32;
   uint16_t file_comment_length = 0;
   uint16_t disk_number_start = 0;
   uint16_t internal_file_attr = 0;
   uint32_t external_file_attr = 0644 << 16L;
-  int32_t relative_offset_local_header = -1; /* aff2volatile:header_offset */
+  int32_t relative_offset_local_header = -1;
 }__attribute__((packed));
 
 
@@ -113,35 +113,20 @@ struct Zip64CDLocator {
 }__attribute__((packed));
 
 
-/** Represents a single file in the archive. */
-class ZipSegment: public AFF4Stream {
-  struct CDFileHeader cd;
-
-  /* These need to be configured before calling finish() */
-  URN container;
-  int compression_method;
-  time_t timestamp;
-
-  z_stream strm;
-  uint64_t offset_of_file_header;
-  string filename;
-
-  /* Data is compressed to this buffer and only written when the Segment is
-   * closed.
-   *
-   * Note that in AFF4 we assume segments are not too large so we can cache them
-   *  in memory.
-   */
-  StringIO buffer;
-};
-
-
 #define ZIP_STORED 0
 #define ZIP_DEFLATE 8
 
 class ZipFile;
 
-
+/**
+ * The ZipFileSegment is created by the ZipFile.CreateMember() method and is
+ * given to callers to write on. When this object is destroyed, the member will
+ * be flushed to the zip file.
+ *
+ * Note that in AFF4 we typically write smallish segments, hence its ok to keep
+ * this segment in memory before flushing it.
+ *
+ */
 class ZipFileSegment: public StringIO {
   friend class ZipFile;
 
@@ -152,10 +137,14 @@ class ZipFileSegment: public StringIO {
                   // will bug check if the owner zip file is destroyed with
                   // outstanding segments.
 
-  list<ZipFileSegment *>::iterator iter;
-  int compression_method = ZIP_STORED;
-
+  list<ZipFileSegment *>::iterator iter; /**< An iterator to the outstanding
+                                          * list in the owner. We remove
+                                          * ourselves from the owner when
+                                          * destroyed. */
  public:
+
+  int compression_method = ZIP_STORED;  /**< Compression method. */
+
   ZipFileSegment(const string &filename, ZipFile *owner);
   ZipFileSegment(const string &filename, ZipFile *owner, const string &data);
 
@@ -165,7 +154,13 @@ class ZipFileSegment: public StringIO {
   using AFF4Stream::Write;
 };
 
-// Stores information about the zip file.
+
+/**
+ * A simple struct which represents information about a member in the zip
+ * file. We use this to recreate the central directory when updating the
+ * ZipFile.
+ *
+ */
 class ZipInfo {
  public:
   ZipInfo();
@@ -180,6 +175,45 @@ class ZipInfo {
   int lastmodtime;
 };
 
+/**
+ * The main AFF4 ZipFile based container.
+
+ This container can be opened for reading or writing.
+
+ Example usage:
+
+~~~~~~~~~~~~~~~~~~~~~{.c}
+  // First create a backing file for writing the ZipFile onto.
+  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
+      "test.zip", "w");
+
+  // The backing file ownership is given to the zip.
+  unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
+
+  // The CreateMember() method returns a writable stream.
+  unique_ptr<AFF4Stream> segment = zip->CreateMember("Foobar.txt");
+  segment->Write("I am another segment!");
+~~~~~~~~~~~~~~~~~~~~~
+
+The will result in a zip file:
+
+~~~~~~~~~~~~~~~~~~~~~
+Archive:  src/test.zip
+aff4:/8811872a-3fab-45b0-be31-daad6ab4fa70
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+      180  2015-01-18 18:26   information.yaml
+      259  2015-01-18 18:26   information.turtle
+       15  2015-01-18 18:26   Foobar.txt
+---------                     -------
+      454                     3 files
+~~~~~~~~~~~~~~~~~~~~~
+
+Note that when the volume is destroyed, it will automatically update
+the *information.turtle* file if needed.
+
+ *
+ */
 
 class ZipFile: public AFF4Volume {
   friend class ZipFileSegment;
@@ -207,12 +241,29 @@ class ZipFile: public AFF4Volume {
   ZipFile();
   virtual ~ZipFile();
 
+  /**
+   * Creates a new ZipFile object.
+   *
+   * @param stream: An AFF4Stream to write the zip file onto. Note that we first
+   *                read and preserve the objects in the existing volume and
+   *                just append new objects to it.
+   *
+   * @return A new ZipFile reference.
+   */
   static unique_ptr<ZipFile> NewZipFile(unique_ptr<AFF4Stream> stream);
 
   static unique_ptr<ZipFile> OpenZipFile(URN urn);
+
+  /**
+   * Open a new ZipFile from an existing stream.
+   *
+   * @param stream: Stream to read.
+   *
+   * @return A new ZipFile reference.
+   */
   static unique_ptr<ZipFile> OpenZipFile(unique_ptr<AFF4Stream> stream);
 
-  // Generic stream interface.
+  // Generic volume interface.
   virtual unique_ptr<AFF4Stream> CreateMember(string filename);
   virtual unique_ptr<AFF4Stream> OpenMember(const char *filename);
   virtual unique_ptr<AFF4Stream> OpenMember(const string filename);
@@ -220,9 +271,12 @@ class ZipFile: public AFF4Volume {
   // Specific ZipFile interface. Can be used to set compression type.
   unique_ptr<ZipFileSegment> CreateZipSegment(string filename);
 
+
+  // Load the ZipFile from its URN and the information in the oracle.
+  virtual AFF4Status LoadFromURN(const string &mode);
+
   // All the members of the zip file. Used to reconstruct the central directory.
   unordered_map<string, unique_ptr<ZipInfo>> members;
-
 };
 
 #endif   // AFF4_ZIP_H_

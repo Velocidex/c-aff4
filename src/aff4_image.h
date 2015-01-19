@@ -18,24 +18,105 @@ specific language governing permissions and limitations under the License.
 
 #include "aff4_io.h"
 
+using std::shared_ptr;
+
+/**
+ * An AFF4Image is an object which stores an image inside an AFF4Volume.
+ *
+ * The image data is split into *Bevies*. A Bevy contains a large number of
+ * chunks and is stored as a single member of the ZipFile.
+
+ Example usage:
+
+~~~~~~~~~~~~~{.c}
+  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
+      "test.zip", "rw");
+
+  // The backing file is given to the zip.
+  shared_ptr<AFF4Volume> zip(ZipFile::NewZipFile(std::move(file)));
+
+  unique_ptr<AFF4Stream> image = AFF4Image::NewAFF4Image(
+      "image.dd", zip);
+
+  // Can only modify the image attributes before the first write.
+  image->chunks_per_segment = 100;
+
+  image->Write("Hello wolrd!");
+~~~~~~~~~~~~~
+
+ Will result in a zip file containing a bevy and a bevy index member:
+
+~~~~~~~~~~~~~
+  Archive:  test.zip
+  aff4:/9632a8a4-ed83-4564-ba5a-492271985d80
+  Length      Date    Time    Name
+  ---------  ---------- -----   ----
+       20  2015-01-18 17:29   image.dd/00000000
+        4  2015-01-18 17:29   image.dd/00000000/index
+      538  2015-01-18 17:29   information.yaml
+      434  2015-01-18 17:29   information.turtle
+  ---------                     -------
+      996                     4 files
+~~~~~~~~~~~~~
+
+ */
+
 class AFF4Image: public AFF4Stream {
  private:
-  int FlushChunk(const char *data, int length);
+  AFF4Status FlushChunk(const char *data, int length);
+  AFF4Status _CreateBevy();
 
  protected:
   string buffer;
   unique_ptr<AFF4Stream> bevy_index;
   unique_ptr<AFF4Stream> bevy;
-  URN volume_urn;
+  unsigned int bevy_number = 0;           /**< The bevy number of this->bevy. */
+  unsigned int chunk_count_in_bevy = 0;
+  shared_ptr<AFF4Volume> volume;
+  string _ReadPartial(size_t length);
 
  public:
   virtual ~AFF4Image();
 
-  unsigned int chunksize = 32*1024;
+  unsigned int chunk_size = 32*1024;    /**< The number of bytes in each chunk. */
+  unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
+                                           * Bevy. */
 
-  static unique_ptr<AFF4Image> NewAFF4Image(string filename, AFF4Volume &volume);
+  /**
+   * Create a new AFF4Image instance.
+   *
+   * After callers receive a new AFF4Image object they may modify the parameters
+   * before calling Write().
+   *
+   * @param filename: The name of the stream which will be created in the
+   *                  volume.
+   *
+   * @param volume: An AFF4Volume instance. We take a shared reference to the
+   *                volume object and write segments into it as required.
+   *
+   * @return A unique reference to a new AFF4Image object.
+   */
+  static unique_ptr<AFF4Image> NewAFF4Image(
+      const string &filename, shared_ptr<AFF4Volume> volume);
+
+  /**
+   * Load the file from an AFF4 URN.
+   *
+   *
+   * @return
+   */
+  virtual AFF4Status LoadFromURN(const string &mode);
 
   virtual int Write(const char *data, int length);
+
+  /**
+   * Read data from the current read pointer.
+   *
+   * @param length: How much data to read.
+   *
+   * @return A string containing the data to read.
+   */
+  virtual string Read(size_t length);
 
   using AFF4Stream::Write;
 };
