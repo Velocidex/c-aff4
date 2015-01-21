@@ -164,17 +164,12 @@ size_t StringIO::Size() {
   return buffer.size();
 }
 
-unique_ptr<FileBackedObject> FileBackedObject::NewFileBackedObject(
-    string filename, string mode) {
-  unique_ptr<FileBackedObject> result(new FileBackedObject());
-
-  result->urn.Set("file://" + filename);
-
-  if (result->LoadFromURN(mode) != STATUS_OK)
-    return NULL;
-
-  return result;
+AFF4Status StringIO::Truncate() {
+  buffer = "";
+  readptr = 0;
+  return STATUS_OK;
 };
+
 
 AFF4Status FileBackedObject::LoadFromURN(const string &mode) {
   int flags = O_RDONLY | O_BINARY;

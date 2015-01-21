@@ -64,20 +64,24 @@ using std::shared_ptr;
 class AFF4Image: public AFF4Stream {
  private:
   AFF4Status FlushChunk(const char *data, int length);
-  AFF4Status _CreateBevy();
+  AFF4Status _FlushBevy();
+  int _ReadPartial(size_t length, string &result);
+  int _ReadPartialBevy(size_t length, string &result,
+                       AFF4Stream *bevy, uint32_t bevy_index[],
+                       uint32_t index_size);
 
  protected:
   string buffer;
-  unique_ptr<AFF4Stream> bevy_index;
-  unique_ptr<AFF4Stream> bevy;
+
+  // The current bevy we write into.
+  StringIO bevy_index;
+  StringIO bevy;
+
   unsigned int bevy_number = 0;           /**< The bevy number of this->bevy. */
   unsigned int chunk_count_in_bevy = 0;
-  shared_ptr<AFF4Volume> volume;
-  string _ReadPartial(size_t length);
+  URN volume_urn;                       /**< The Volume we are stored on. */
 
  public:
-  virtual ~AFF4Image();
-
   unsigned int chunk_size = 32*1024;    /**< The number of bytes in each chunk. */
   unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
                                            * Bevy. */
@@ -96,8 +100,8 @@ class AFF4Image: public AFF4Stream {
    *
    * @return A unique reference to a new AFF4Image object.
    */
-  static unique_ptr<AFF4Image> NewAFF4Image(
-      const string &filename, shared_ptr<AFF4Volume> volume);
+  static AFF4Image *NewAFF4Image(
+      const string &filename, const URN &volume_urn);
 
   /**
    * Load the file from an AFF4 URN.
@@ -117,6 +121,9 @@ class AFF4Image: public AFF4Stream {
    * @return A string containing the data to read.
    */
   virtual string Read(size_t length);
+
+
+  AFF4Status Flush();
 
   using AFF4Stream::Write;
 };

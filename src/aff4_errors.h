@@ -45,4 +45,12 @@ typedef enum {
   IO_ERROR = -8
 } AFF4Status;
 
+
+#define DEBUG_OBJECT(fmt, ...) printf(fmt "\n", ## __VA_ARGS__)
+
+#define CHECK(cond, fmt, ...) if(cond) {                \
+    printf(fmt "\n", ## __VA_ARGS__);                   \
+    exit(-1);                                           \
+  }
+
 #endif // AFF4_ERRORS_H

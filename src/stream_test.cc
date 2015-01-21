@@ -21,14 +21,12 @@ using std::cout;
 
 
 URN test_AFF4Image() {
-  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
-      "test.zip", "rw");
+  AFF4Stream *file = AFF4FactoryOpen<AFF4Stream>("test.zip", "rw");
 
   // The backing file is given to the zip.
-  shared_ptr<AFF4Volume> zip(ZipFile::NewZipFile(std::move(file)));
+  AFF4Volume *zip = ZipFile::NewZipFile(file->urn);
 
-  unique_ptr<AFF4Image> image = AFF4Image::NewAFF4Image(
-      "image.dd", zip);
+  AFF4Image *image = AFF4Image::NewAFF4Image("image.dd", zip->urn);
 
   // For testing - rediculously small chunks.
   image->chunk_size = 10;
@@ -98,31 +96,29 @@ void test_AFF4Stream(AFF4Stream *stream) {
 };
 
 void test_ZipFileCreate() {
-  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
-      "test.zip", "w");
+  AFF4Stream* file = AFF4FactoryOpen<AFF4Stream>("test.zip", "rw");
 
   // The backing file is given to the zip.
-  unique_ptr<AFF4Volume> zip = ZipFile::NewZipFile(std::move(file));
+  AFF4Volume* zip = ZipFile::NewZipFile(file->urn);
 
   cout << "Volume URN:" << zip->urn.SerializeToString().data() << "\n";
 
-  // Files are added in the order of destruction, which in C++ is in reverse
-  // order of creation. Therefore the zipfile directory will only contain "I am
-  // a segment".
-  unique_ptr<AFF4Stream> segment = zip->CreateMember("Foobar.txt");
+  AFF4Stream *segment = zip->CreateMember("Foobar.txt");
   segment->Write("I am a segment!");
 
-  unique_ptr<AFF4Stream> segment2 = zip->CreateMember("Foobar.txt");
+  // This is actually the same stream as above, we will simply get the same
+  // pointer and so the new message will be appended to the old message.
+  AFF4Stream *segment2 = zip->CreateMember("Foobar.txt");
   segment2->Write("I am another segment!");
 };
 
 
 void test_ZipFileRead() {
-  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
-      "test.zip", "r");
+  AFF4Stream *file = AFF4FactoryOpen<AFF4Stream>("test.zip", "r");
+  URN zip_urn;
 
   // The backing file is given to the zip.
-  unique_ptr<ZipFile> zip = ZipFile::OpenZipFile(std::move(file));
+  ZipFile *zip = ZipFile::NewZipFile(file->urn);
 
   if (!zip) {
     cout << "Cant open zip file.\n";
@@ -153,7 +149,7 @@ void DumpOracle() {
  * @param image_urn: The URN of the AFF4Image object to open.
  */
 void test_OpenImageByURN(URN image_urn) {
-  shared_ptr<AFF4Image> image(AFF4FactoryOpen<AFF4Image>(image_urn));
+  AFF4Image *image = AFF4FactoryOpen<AFF4Image>(image_urn);
 
   if (image) {
     cout << image->urn.value << "\n";
@@ -164,39 +160,56 @@ void test_OpenImageByURN(URN image_urn) {
 
 
 void runTests() {
-  test_ZipFileCreate();
   URN image_urn = test_AFF4Image();
+
+  oracle.Flush();
 
   DumpOracle();
 
   test_OpenImageByURN(image_urn);
   return;
 
-  oracle.Clear();
-
-  test_ZipFileRead();
-
-  DumpOracle();
-  return;
-
-  test_AFF4Stream(StringIO::NewStringIO().get());
 
   test_MemoryDataStore();
 
-  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
-      "test_filename.bin", "w");
+  unique_ptr<AFF4Stream> stream = StringIO::NewStringIO();
+
+  test_AFF4Stream(stream.get());
+
+  DumpOracle();
+
+  AFF4Stream *file = AFF4FactoryOpen<AFF4Stream>("test_filename.bin", "w");
 
   if (file == NULL) {
     cout << "Failed to create file.\n";
     return;
   };
 
-  test_AFF4Stream(file.get());
+  test_AFF4Stream(file);
+
+  test_ZipFileCreate();
+
+  oracle.Flush();
+
+  DumpOracle();
+
+  oracle.Clear();
+
+  test_ZipFileRead();
+
+  return;
+
+
+  return;
+
+  test_AFF4Stream(StringIO::NewStringIO().get());
+
 };
 
 
 int main(int argc, char **argv) {
   runTests();
+  oracle.Clear();
 
   return 0;
 };

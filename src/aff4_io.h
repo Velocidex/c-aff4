@@ -58,6 +58,8 @@ class AFF4Stream: public AFF4Object {
   virtual int Write(const char *data, int length);
   virtual size_t Tell();
   virtual size_t Size();
+
+  virtual AFF4Status Truncate() {return NOT_IMPLEMENTED;};
 };
 
 class StringIO: public AFF4Stream {
@@ -78,6 +80,7 @@ class StringIO: public AFF4Stream {
   virtual int Write(const char *data, int length);
   virtual size_t Size();
 
+  virtual AFF4Status Truncate();
   using AFF4Stream::Write;
 };
 
@@ -88,9 +91,6 @@ class FileBackedObject: public AFF4Stream {
 
  public:
   FileBackedObject() {};
-
-  static unique_ptr<FileBackedObject> NewFileBackedObject(
-      string filename, string mode);
 
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
@@ -125,16 +125,9 @@ class FileBackedObject: public AFF4Stream {
 */
 class AFF4Volume: public AFF4Object {
  public:
-  virtual unique_ptr<AFF4Stream> CreateMember(string filename) = 0;
+  virtual AFF4Stream *CreateMember(string filename) = 0;
+  //virtual AFF4Status Truncate() = 0;
 };
-
-
-#define DEBUG_OBJECT(fmt, ...) printf(fmt "\n", ## __VA_ARGS__)
-
-#define CHECK(cond, fmt, ...) if(cond) {                \
-    printf(fmt "\n", ## __VA_ARGS__);                   \
-    exit(-1);                                           \
-  }
 
 
 #endif      /* !AFF4_IO_H_ */

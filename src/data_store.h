@@ -75,6 +75,8 @@ class DataStore {
 
   virtual AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value) = 0;
 
+  virtual AFF4Status DeleteSubject(const URN &urn) = 0;
+
   // Dump ourselves to a yaml file.
   virtual AFF4Status DumpToYaml(AFF4Stream &output) = 0;
   virtual AFF4Status DumpToTurtle(AFF4Stream &output) = 0;
@@ -84,6 +86,7 @@ class DataStore {
 
   // Clear all data.
   virtual AFF4Status Clear() = 0;
+  virtual AFF4Status Flush() = 0;
 
   /**
    * An object cache for objects created via the AFF4FactoryOpen()
@@ -92,6 +95,7 @@ class DataStore {
    */
   unordered_map<string, unique_ptr<AFF4Object> > ObjectCache;
 
+  virtual ~DataStore();
 };
 
 
@@ -114,6 +118,8 @@ class MemoryDataStore: public DataStore {
 
   AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value);
 
+  virtual AFF4Status DeleteSubject(const URN &urn);
+
   virtual AFF4Status DumpToYaml(AFF4Stream &output);
   virtual AFF4Status DumpToTurtle(AFF4Stream &output);
 
@@ -121,6 +127,9 @@ class MemoryDataStore: public DataStore {
   virtual AFF4Status LoadFromTurtle(AFF4Stream &output);
 
   virtual AFF4Status Clear();
+  virtual AFF4Status Flush();
+
+  virtual ~MemoryDataStore() {};
 };
 
 extern MemoryDataStore oracle;

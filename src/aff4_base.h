@@ -62,7 +62,7 @@ class AFF4Object {
     return NOT_IMPLEMENTED;
   };
 
-  AFF4Status Flush();
+  virtual AFF4Status Flush();
 };
 
 
@@ -86,32 +86,45 @@ class AFF4Registrar {
 
 
 template<typename T>
-unique_ptr<T> AFF4FactoryOpen(const URN &urn, const string &mode = "r") {
-  URN aff4_type(AFF4_TYPE);
-  URN type_urn;
-  const uri_components components = urn.Parse();
-
-  // Try to instantiate the handler based on the URN alone.
-  unique_ptr<AFF4Object> obj = AFF4ObjectRegistry.CreateInstance(
-      components.scheme);
-
-  // Ask the oracle for the correct type.
-  if (!obj) {
-    if (oracle.Get(urn, aff4_type, type_urn) != STATUS_OK) {
-      return NULL;
-    };
-
-    obj = AFF4ObjectRegistry.CreateInstance(type_urn.value);
+T *AFF4FactoryOpen(const URN &urn, const string &mode = "r") {
+  // Search the object cache first.
+  auto it = oracle.ObjectCache.find(urn.value);
+  if (it != oracle.ObjectCache.end()) {
+    return dynamic_cast<T *>(it->second.get());
   };
 
+  URN aff4_type(AFF4_TYPE);
+  URN type_urn;
+  unique_ptr<AFF4Object> obj;
+
+  // Check if there is a resolver triple for it.
+  if (oracle.Get(urn, aff4_type, type_urn) == STATUS_OK) {
+    obj = AFF4ObjectRegistry.CreateInstance(type_urn.value);
+
+  } else {
+    const uri_components components = urn.Parse();
+
+    // Try to instantiate the handler based on the URN scheme alone.
+    obj = AFF4ObjectRegistry.CreateInstance(components.scheme);
+  };
+
+  // Failed to find the object.
   if (!obj)
     return NULL;
 
+  // Have the object load and initialize itself.
   obj->urn = urn;
-  if(obj->LoadFromURN(mode) != STATUS_OK)
+  if(obj->LoadFromURN(mode) != STATUS_OK) {
+    DEBUG_OBJECT("Failed to load %s as %s",
+                 urn.value.c_str(), type_urn.value.c_str());
     return NULL;
+  };
 
-  return unique_ptr<T>(dynamic_cast<T *>(obj.release()));
+  // Cache the object for next time.
+  T *result = dynamic_cast<T *>(obj.get());
+  oracle.ObjectCache[urn.value] = std::move(obj);
+
+  return result;
 };
 
 

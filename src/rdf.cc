@@ -107,6 +107,9 @@ uri_components::uri_components(const string &uri) {
   if (uri_regex.search(uri)) {
     scheme = uri_regex[1];
     path = uri_regex[3];
+    if(path == "") {
+      path = uri_regex[4];
+    };
   };
 
   if (scheme == "") {

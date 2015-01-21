@@ -256,9 +256,7 @@ int main(int argc, char **argv)
             in_stream_name = stream_name;
           };
 
-          unique_ptr<AFF4Stream> stream = FileBackedObject::NewFileBackedObject(
-              in_urn, "r");
-
+          AFF4Stream *stream = AFF4FactoryOpen<AFF4Stream>(in_urn, "r");
           aff4_image(output_file,
                      in_stream_name,
                      chunks_per_segment,

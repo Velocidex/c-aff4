@@ -17,14 +17,14 @@ specific language governing permissions and limitations under the License.
 #include "aff4_image.h"
 #include <zlib.h>
 
-unique_ptr<AFF4Image> AFF4Image::NewAFF4Image(
-    const string &filename, shared_ptr<AFF4Volume> volume) {
+AFF4Image *AFF4Image::NewAFF4Image(
+    const string &filename, const URN &volume_urn) {
   unique_ptr<AFF4Image> result(new AFF4Image());
 
-  result->urn.Set(volume->urn.value + "/" + filename);
-  result->volume = volume;
+  oracle.Set(result->urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
+  oracle.Set(result->urn, AFF4_STORED, new URN(volume_urn));
 
-  return result;
+  return AFF4FactoryOpen<AFF4Image>(result->urn);
 };
 
 
@@ -35,15 +35,7 @@ unique_ptr<AFF4Image> AFF4Image::NewAFF4Image(
  * @return STATUS_OK if the object was successfully initialized.
  */
 AFF4Status AFF4Image::LoadFromURN(const string &mode) {
-  URN volume_urn;
-
   if (oracle.Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-    return NOT_FOUND;
-  };
-
-  // Open the volume.
-  volume = AFF4FactoryOpen<AFF4Volume>(volume_urn);
-  if (!volume) {
     return NOT_FOUND;
   };
 
@@ -67,45 +59,56 @@ AFF4Status AFF4Image::LoadFromURN(const string &mode) {
 
 
 // Check that the bevy
-AFF4Status AFF4Image::_CreateBevy() {
-  // We need to flush the old bevy because it is too full.
-  if(bevy && chunk_count_in_bevy >= chunks_per_segment) {
-    bevy.reset();
-    bevy_index.reset();
+AFF4Status AFF4Image::_FlushBevy() {
+  // If the bevy is empty nothing else to do.
+  if (bevy.Size() == 0)
+    return STATUS_OK;
 
-    // Make a new bevy.
-    bevy_number++;
+  URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number)));
+  URN bevy_index_urn(bevy_urn.Append("index"));
+
+  // Open the volume.
+  AFF4Volume *volume = AFF4FactoryOpen<AFF4Volume>(volume_urn);
+  if (!volume) {
+    return NOT_FOUND;
   };
 
-  // Bevy does not exist yet - we need to make one.
-  if(!bevy) {
-    string filename = urn.SerializeToString();
-    string bevy_urn = aff4_sprintf("%s/%08d", filename.c_str(), bevy_number);
+  // Create the new segments in this zip file.
+  AFF4Stream *bevy_index_stream = volume->CreateMember(bevy_index_urn.value);
+  AFF4Stream *bevy_stream = volume->CreateMember(bevy_urn.value);
 
-    bevy_index = volume->CreateMember(bevy_urn + "/index");
-    bevy = volume->CreateMember(bevy_urn);
-    chunk_count_in_bevy = 0;
+  if(!bevy_index_stream || ! bevy_stream) {
+    return IO_ERROR;
   };
+
+  bevy_index_stream->Write(bevy_index.buffer);
+  bevy_stream->Write(bevy.buffer);
+
+  bevy_index.Truncate();
+  bevy.Truncate();
+
+  chunk_count_in_bevy = 0;
 
   return STATUS_OK;
 };
 
 
 AFF4Status AFF4Image::FlushChunk(const char *data, int length) {
-  _CreateBevy();  // Ensure the bevy is active.
-
-  uint32_t offset = bevy->Tell();
-  bevy_index->Write((char *)&offset, sizeof(offset));
-
+  uint32_t bevy_offset = bevy.Tell();
   uLongf c_length = compressBound(length) + 1;
   Bytef c_buffer[c_length];
 
-  // TODO: What can be done if we failed to compress?
-  compress(c_buffer, &c_length, (Bytef *)data, length);
+  if(compress(c_buffer, &c_length, (Bytef *)data, length) != Z_OK)
+    return MEMORY_ERROR;
 
-  bevy->Write((char *)c_buffer, c_length);
+  bevy_index.Write((char *)&bevy_offset, sizeof(bevy_offset));
+  bevy.Write((char *)c_buffer, c_length);
 
   chunk_count_in_bevy++;
+
+  if(chunk_count_in_bevy >= chunks_per_segment) {
+    return _FlushBevy();
+  };
 
   return STATUS_OK;
 };
@@ -131,45 +134,91 @@ int AFF4Image::Write(const char *data, int length) {
 };
 
 
-string AFF4Image::_ReadPartial(size_t length) {
+int AFF4Image::_ReadPartialBevy(size_t length, string &result,
+                                AFF4Stream *bevy,
+                                uint32_t bevy_index[],
+                                uint32_t index_size) {
   int chunk = readptr / chunk_size;
   int chunk_offset = readptr % chunk_size;
-  int bevy_id = chunk / chunks_per_segment;
-  int chunk_id_in_bevy = chunk % chunks_per_segment;
+  unsigned int chunk_id_in_bevy = chunk % chunks_per_segment;
+
+  // The segment is not completely full.
+  if (chunk_id_in_bevy > index_size) return 0;
+
+  bevy->Seek(bevy_index[chunk_id_in_bevy], SEEK_SET);
+  string cbuffer = bevy->Read(chunk_size);
+  uLongf cbuffer_size = cbuffer.size();
+  uLongf buffer_size = chunk_size;
+
+  // Make sure we have at least this much room.
+  result.reserve(result.size() + chunk_size);
+
+  if(uncompress((Bytef *)(result.data() + result.size()), &buffer_size,
+                (const Bytef *)cbuffer.data(), cbuffer_size) != Z_OK) {
+    return 0;
+  };
+
+  return chunk_size;
+};
+
+int AFF4Image::_ReadPartial(size_t length, string &result) {
+  int bevy_size = chunk_size * chunks_per_segment;
+  int bevy_id = length / bevy_size;
   URN bevy_urn = urn.Append(aff4_sprintf("%08d", bevy_id));
+  URN bevy_index_urn = bevy_urn.Append("index");
 
-  unique_ptr<AFF4Stream> bevy = AFF4FactoryOpen<AFF4Stream>(bevy_urn);
+  AFF4Stream *bevy_index = AFF4FactoryOpen<AFF4Stream>(bevy_index_urn);
+  AFF4Stream *bevy = AFF4FactoryOpen<AFF4Stream>(bevy_urn);
+  if(!bevy_index || !bevy) {
+    return 0;
+  }
 
+  uint32_t index_size = bevy_index->Size() / sizeof(uint32_t);
+  string bevy_index_data = bevy_index->Read(bevy_index->Size());
 
+  uint32_t *bevy_index_array = (uint32_t *)bevy_index_data.data();
+
+  while (length > 0) {
+    int length_read = _ReadPartialBevy(
+        length, result, bevy, bevy_index_array, index_size);
+    if (length_read == 0) {
+      break;
+    };
+
+    length -= length_read;
+  };
+
+  return 0;
 };
 
 string AFF4Image::Read(size_t length) {
   string result;
+  size_t available_to_read = std::min(length, Size() - readptr);
 
   result.reserve(length);
 
   while(length > 0) {
-    string data = _ReadPartial(length);
-    if (data.size() == 0) {
+    int length_read = _ReadPartial(length, result);
+    if (length_read == 0) {
       break;
     };
 
-    length -= data.size();
-    result += data;
+    length -= length_read;
   };
 
   return result;
 };
 
 
-AFF4Image::~AFF4Image() {
+AFF4Status AFF4Image::Flush() {
   if(_dirty) {
     // Flush the last chunk.
     FlushChunk(buffer.c_str(), buffer.length());
+    _FlushBevy();
 
     oracle.Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
 
-    oracle.Set(urn, AFF4_STORED, new URN(volume->urn));
+    oracle.Set(urn, AFF4_STORED, new URN(volume_urn));
 
     oracle.Set(urn, AFF4_IMAGE_CHUNK_SIZE,
                new XSDInteger(chunk_size));

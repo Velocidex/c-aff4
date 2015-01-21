@@ -20,7 +20,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4_io.h"
 #include "data_store.h"
 #include <string.h>
-
+#include <unordered_set>
 #include <zlib.h>
 #include <list>
 
@@ -131,25 +131,19 @@ class ZipFileSegment: public StringIO {
   friend class ZipFile;
 
  protected:
-  string filename;
-  ZipFile *owner; // The zip file who owns us. NOTE: We assume the owner remains
-                  // valid for the lifetime of the segment. The owner destructor
-                  // will bug check if the owner zip file is destroyed with
-                  // outstanding segments.
+  URN owner_urn;                        /**< The zip file who owns us. */
 
-  list<ZipFileSegment *>::iterator iter; /**< An iterator to the outstanding
-                                          * list in the owner. We remove
-                                          * ourselves from the owner when
-                                          * destroyed. */
  public:
+  ZipFileSegment();
 
   int compression_method = ZIP_STORED;  /**< Compression method. */
 
-  ZipFileSegment(const string &filename, ZipFile *owner);
-  ZipFileSegment(const string &filename, ZipFile *owner, const string &data);
+  virtual AFF4Status LoadFromURN(const string &mode);
 
-  // When this object is destroyed it will be flushed to the owner zip file.
-  virtual ~ZipFileSegment();
+  ZipFileSegment(const string &filename, URN &owner);
+  ZipFileSegment(const string &filename, URN &owner, const string &data);
+
+  virtual AFF4Status Flush();
 
   using AFF4Stream::Write;
 };
@@ -219,27 +213,38 @@ class ZipFile: public AFF4Volume {
   friend class ZipFileSegment;
 
  private:
-  void write_zip64_CD();
+  void write_zip64_CD(AFF4Stream *backing_store);
   AFF4Status WriteCDFileHeader(ZipInfo &zip_info, AFF4Stream &output);
   AFF4Status WriteZipFileHeader(ZipInfo &zip_info, AFF4Stream &output);
 
  protected:
-  ssize_t directory_offset = -1;
   int directory_number_of_entries = -1;
-  unique_ptr<AFF4Stream> backing_store;
+  URN backing_store_urn;
   bool _dirty;
 
   // This is a list of outstanding segments.
-  std::list<ZipFileSegment *> outstanding_members;
+  std::unordered_set<string> outstanding_members;
 
-  // Returns the total number of entries found or -1 on error.
-  int parse_cd();
+  /**
+   * Parse the central directory in the Zip File.
+   *
+   * @param backing_store
+   *
+   * @return
+   */
+  AFF4Status parse_cd();
 
-  string rdf_type = "aff4:zip_volume";
+
+  /**
+   * Load the information.turtle file in this volume into the resolver.
+   *
+   *
+   * @return
+   */
+  AFF4Status LoadTurtleMetadata();
 
  public:
   ZipFile();
-  virtual ~ZipFile();
 
   /**
    * Creates a new ZipFile object.
@@ -250,30 +255,38 @@ class ZipFile: public AFF4Volume {
    *
    * @return A new ZipFile reference.
    */
-  static unique_ptr<ZipFile> NewZipFile(unique_ptr<AFF4Stream> stream);
-
-  static unique_ptr<ZipFile> OpenZipFile(URN urn);
+  static ZipFile* NewZipFile(URN backing_store_urn);
 
   /**
-   * Open a new ZipFile from an existing stream.
+   * Parse a stream as a zip file as an AFF4 volume.
    *
-   * @param stream: Stream to read.
+   * @param stream
    *
-   * @return A new ZipFile reference.
+   * @return
    */
-  static unique_ptr<ZipFile> OpenZipFile(unique_ptr<AFF4Stream> stream);
+  static AFF4Status OpenZipFile(AFF4Stream *stream, URN &volume_urn);
 
   // Generic volume interface.
-  virtual unique_ptr<AFF4Stream> CreateMember(string filename);
+  virtual AFF4Stream *CreateMember(string filename);
   virtual unique_ptr<AFF4Stream> OpenMember(const char *filename);
   virtual unique_ptr<AFF4Stream> OpenMember(const string filename);
 
-  // Specific ZipFile interface. Can be used to set compression type.
-  unique_ptr<ZipFileSegment> CreateZipSegment(string filename);
+  /**
+   * Creates a new ZipFileSegment object. The new object is automatically added
+   * to the resolver cache and therefore the caller does not own it (it is
+   * always owned by the resolver cache).
+   *
+   * @param filename
+   *
+   * @return
+   */
+  ZipFileSegment *CreateZipSegment(string filename);
 
 
   // Load the ZipFile from its URN and the information in the oracle.
   virtual AFF4Status LoadFromURN(const string &mode);
+
+  virtual AFF4Status Flush();
 
   // All the members of the zip file. Used to reconstruct the central directory.
   unordered_map<string, unique_ptr<ZipInfo>> members;

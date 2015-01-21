@@ -21,6 +21,8 @@ specific language governing permissions and limitations under the License.
 #include <yaml-cpp/yaml.h>
 #include <raptor2/raptor2.h>
 
+DataStore::~DataStore() {
+};
 
 AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output) {
   YAML::Emitter out;
@@ -310,11 +312,29 @@ AFF4Status MemoryDataStore::Get(const URN &urn, const URN &attribute,
       attribute_itr->second->SerializeToString());
 };
 
-AFF4Status MemoryDataStore::Clear() {
-  store.clear();
+
+AFF4Status MemoryDataStore::DeleteSubject(const URN &urn) {
+  store.erase(urn.SerializeToString());
+
   return STATUS_OK;
 };
 
+AFF4Status MemoryDataStore::Flush() {
+  for(auto it=ObjectCache.begin(); it!=ObjectCache.end(); it++) {
+    DEBUG_OBJECT("Flushing %s", it->first.c_str());
+    it->second->Flush();
+  };
+
+  return STATUS_OK;
+};
+
+AFF4Status MemoryDataStore::Clear() {
+  Flush();
+  ObjectCache.clear();
+
+  store.clear();
+  return STATUS_OK;
+};
 
 // A global resolver.
 MemoryDataStore oracle;
