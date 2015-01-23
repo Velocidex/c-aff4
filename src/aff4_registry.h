@@ -13,29 +13,31 @@ using std::unique_ptr;
 using std::unordered_map;
 using std::function;
 
+class DataStore;
+
 
 template<class T>
 class ClassFactory {
  public:
-  unordered_map<string, function<T* (void)> > factoryFunctionRegistry;
+  unordered_map<string, function<T* (DataStore *)> > factoryFunctionRegistry;
 
-  unique_ptr<T> CreateInstance(char *name) {
-    return CreateInstance(string(name));
+  unique_ptr<T> CreateInstance(char *name, DataStore *resolver) {
+    return CreateInstance(string(name), resolver);
   };
 
-  unique_ptr<T> CreateInstance(string name) {
+  unique_ptr<T> CreateInstance(string name, DataStore *data) {
     T* instance = nullptr;
 
     // find name in the registry and call factory method.
     auto it = factoryFunctionRegistry.find(name);
     if(it != factoryFunctionRegistry.end())
-      instance = it->second();
+      instance = it->second(data);
 
     return unique_ptr<T>(instance);
   };
 
   void RegisterFactoryFunction(
-      string name, function<T*(void)> classFactoryFunction) {
+      string name, function<T*(DataStore *)> classFactoryFunction) {
     // register the class factory function
     factoryFunctionRegistry[name] = classFactoryFunction;
   };

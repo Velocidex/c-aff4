@@ -74,6 +74,7 @@ class DataStore {
                    RDFValue *value) = 0;
 
   virtual AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value) = 0;
+  virtual void Set(const URN &urn, const URN &attribute, unique_ptr<RDFValue> value) = 0;
 
   virtual AFF4Status DeleteSubject(const URN &urn) = 0;
 
@@ -96,6 +97,12 @@ class DataStore {
   unordered_map<string, unique_ptr<AFF4Object> > ObjectCache;
 
   virtual ~DataStore();
+
+  /**
+   * Prints out the contents of the resolver to STDOUT. Used for debugging.
+   *
+   */
+  void Dump();
 };
 
 
@@ -113,8 +120,8 @@ class MemoryDataStore: public DataStore {
   // Set the RDFValue in the data store. Note that the data store will retain
   // ownership of the value, and therefore callers may not use it after this
   // call.
-  void Set(const URN &urn, const URN &attribute, RDFValue *value);
-  void Set(const URN &urn, const URN &attribute, unique_ptr<RDFValue> value);
+  virtual void Set(const URN &urn, const URN &attribute, RDFValue *value);
+  virtual void Set(const URN &urn, const URN &attribute, unique_ptr<RDFValue> value);
 
   AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value);
 
@@ -129,9 +136,7 @@ class MemoryDataStore: public DataStore {
   virtual AFF4Status Clear();
   virtual AFF4Status Flush();
 
-  virtual ~MemoryDataStore() {};
+  virtual ~MemoryDataStore();
 };
-
-extern MemoryDataStore oracle;
 
 #endif //  _AFF4_DATA_STORE_H_

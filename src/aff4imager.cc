@@ -256,7 +256,8 @@ int main(int argc, char **argv)
             in_stream_name = stream_name;
           };
 
-          AFF4Stream *stream = AFF4FactoryOpen<AFF4Stream>(in_urn, "r");
+          unique_ptr<DataStore> resolver(new MemoryDataStore());
+          AFF4Stream *stream = AFF4FactoryOpen<AFF4Stream>(resolver.get(), in_urn);
           aff4_image(output_file,
                      in_stream_name,
                      chunks_per_segment,

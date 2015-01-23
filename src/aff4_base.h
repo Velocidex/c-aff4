@@ -38,15 +38,15 @@ struct AFF4Schema {
  *
  */
 class AFF4Object {
-
- protected:
-  string name = "AFF4Object";
-
  public:
   /// Each AFF4 object is addressable by its URN.
   URN urn;
 
-  AFF4Object();
+  DataStore *resolver;                  /**< All AFF4Objects have a resolver
+                                         * which they use to access information
+                                         * about the AFF4 universe. */
+
+  AFF4Object(DataStore *resolver);
 
   // By defining a virtual destructor this allows the destructor of derived
   // objects to be called when deleting a pointer to a base object.
@@ -58,8 +58,22 @@ class AFF4Object {
    *
    * @return STATUS_OK if the object was properly loaded.
    */
-  virtual AFF4Status LoadFromURN(const string &mode) {
+  virtual AFF4Status LoadFromURN() {
     return NOT_IMPLEMENTED;
+  };
+
+  /**
+   * Prepares an object for re-use. Since AFF4Objects can be cached, we need a
+   * way to reset the object to a consistent state when returning it from the
+   * cache. The AFF4FactoryOpen() function will call this method before
+   * returning it to the caller in order to reset the object into a consistent
+   * state.
+   *
+   *
+   * @return STATUS_OK
+   */
+  virtual AFF4Status Prepare() {
+    return STATUS_OK;
   };
 
   virtual AFF4Status Flush();
@@ -80,16 +94,17 @@ class AFF4Registrar {
   AFF4Registrar(string name) {
     AFF4ObjectRegistry.RegisterFactoryFunction(
         name,
-        [](void) -> T *{ return new T(); });
+        [](DataStore *resolver) -> T *{ return new T(resolver); });
   };
 };
 
 
 template<typename T>
-T *AFF4FactoryOpen(const URN &urn, const string &mode = "r") {
+T *AFF4FactoryOpen(DataStore *resolver, const URN &urn) {
   // Search the object cache first.
-  auto it = oracle.ObjectCache.find(urn.value);
-  if (it != oracle.ObjectCache.end()) {
+  auto it = resolver->ObjectCache.find(urn.value);
+  if (it != resolver->ObjectCache.end()) {
+    it->second->Prepare();
     return dynamic_cast<T *>(it->second.get());
   };
 
@@ -98,14 +113,14 @@ T *AFF4FactoryOpen(const URN &urn, const string &mode = "r") {
   unique_ptr<AFF4Object> obj;
 
   // Check if there is a resolver triple for it.
-  if (oracle.Get(urn, aff4_type, type_urn) == STATUS_OK) {
-    obj = AFF4ObjectRegistry.CreateInstance(type_urn.value);
+  if (resolver->Get(urn, aff4_type, type_urn) == STATUS_OK) {
+    obj = AFF4ObjectRegistry.CreateInstance(type_urn.value, resolver);
 
   } else {
     const uri_components components = urn.Parse();
 
     // Try to instantiate the handler based on the URN scheme alone.
-    obj = AFF4ObjectRegistry.CreateInstance(components.scheme);
+    obj = AFF4ObjectRegistry.CreateInstance(components.scheme, resolver);
   };
 
   // Failed to find the object.
@@ -114,7 +129,7 @@ T *AFF4FactoryOpen(const URN &urn, const string &mode = "r") {
 
   // Have the object load and initialize itself.
   obj->urn = urn;
-  if(obj->LoadFromURN(mode) != STATUS_OK) {
+  if(obj->LoadFromURN() != STATUS_OK) {
     DEBUG_OBJECT("Failed to load %s as %s",
                  urn.value.c_str(), type_urn.value.c_str());
     return NULL;
@@ -122,7 +137,7 @@ T *AFF4FactoryOpen(const URN &urn, const string &mode = "r") {
 
   // Cache the object for next time.
   T *result = dynamic_cast<T *>(obj.get());
-  oracle.ObjectCache[urn.value] = std::move(obj);
+  resolver->ObjectCache[urn.value] = std::move(obj);
 
   return result;
 };

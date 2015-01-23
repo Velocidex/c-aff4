@@ -17,6 +17,7 @@ specific language governing permissions and limitations under the License.
 #define     AFF4_IO_H_
 
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <memory>
 #include <fstream>
@@ -40,7 +41,7 @@ class AFF4Stream: public AFF4Object {
   bool _dirty = false;      // Is this stream modified?
 
  public:
-  AFF4Stream(): readptr(0), size(0) {};
+  AFF4Stream(DataStore *result): AFF4Object(result), readptr(0), size(0) {};
 
   // Convenience methods.
   int Write(const unique_ptr<string> &data);
@@ -59,15 +60,35 @@ class AFF4Stream: public AFF4Object {
   virtual size_t Tell();
   virtual size_t Size();
 
-  virtual AFF4Status Truncate() {return NOT_IMPLEMENTED;};
+  /**
+   * Streams are always reset to their begining when returned from the cache.
+   *
+   *
+   * @return
+   */
+  virtual AFF4Status Prepare() {
+    Seek(0, SEEK_SET);
+    return STATUS_OK;
+  };
+
+  /**
+   * Streams can be truncated. This means the older stream data will be removed
+   * and the object is returned to its initial state.
+   *
+   *
+   * @return STATUS_OK if we were able to truncate the stream successfully.
+   */
+  virtual AFF4Status Truncate() {
+    return NOT_IMPLEMENTED;
+  };
 };
 
 class StringIO: public AFF4Stream {
  public:
   string buffer;
-
-  StringIO() {};
-  StringIO(string data): buffer(data) {};
+  StringIO(DataStore *resolver): AFF4Stream(resolver) {};
+  StringIO(): AFF4Stream(NULL) {};
+  StringIO(string data): AFF4Stream(NULL), buffer(data) {};
 
   // Convenience constructors.
   static unique_ptr<StringIO> NewStringIO() {
@@ -90,7 +111,7 @@ class FileBackedObject: public AFF4Stream {
   int fd;
 
  public:
-  FileBackedObject() {};
+  FileBackedObject(DataStore *resolver): AFF4Stream(resolver) {};
 
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
@@ -102,7 +123,9 @@ class FileBackedObject: public AFF4Stream {
    *
    * @return STATUS_OK if we were able to open it successfully.
    */
-  virtual AFF4Status LoadFromURN(const string &mode);
+  virtual AFF4Status LoadFromURN();
+
+  virtual AFF4Status Truncate();
 };
 
 /**
@@ -125,6 +148,10 @@ class FileBackedObject: public AFF4Stream {
 */
 class AFF4Volume: public AFF4Object {
  public:
+  // This is a list of URNs contained in this volume.
+  std::unordered_set<string> children;
+
+  AFF4Volume(DataStore *resolver): AFF4Object(resolver) {};
   virtual AFF4Stream *CreateMember(string filename) = 0;
   //virtual AFF4Status Truncate() = 0;
 };

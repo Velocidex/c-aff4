@@ -82,6 +82,8 @@ class AFF4Image: public AFF4Stream {
   URN volume_urn;                       /**< The Volume we are stored on. */
 
  public:
+  AFF4Image(DataStore *resolver): AFF4Stream(resolver){};
+
   unsigned int chunk_size = 32*1024;    /**< The number of bytes in each chunk. */
   unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
                                            * Bevy. */
@@ -101,7 +103,7 @@ class AFF4Image: public AFF4Stream {
    * @return A unique reference to a new AFF4Image object.
    */
   static AFF4Image *NewAFF4Image(
-      const string &filename, const URN &volume_urn);
+      DataStore *resolver, const string &filename, const URN &volume_urn);
 
   /**
    * Load the file from an AFF4 URN.
@@ -109,7 +111,7 @@ class AFF4Image: public AFF4Stream {
    *
    * @return
    */
-  virtual AFF4Status LoadFromURN(const string &mode);
+  virtual AFF4Status LoadFromURN();
 
   virtual int Write(const char *data, int length);
 

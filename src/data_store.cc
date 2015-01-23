@@ -123,7 +123,8 @@ class RaptorSerializer {
 };
 
 
-static unique_ptr<RDFValue> RDFValueFromRaptorTerm(raptor_term *term) {
+static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
+    DataStore *resolver, raptor_term *term) {
   if (term->type == RAPTOR_TERM_TYPE_URI) {
     char *uri = (char *)raptor_uri_to_string(term->value.uri);
     unique_ptr<RDFValue> result(new URN(uri));
@@ -134,7 +135,7 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(raptor_term *term) {
   if (term->type == RAPTOR_TERM_TYPE_LITERAL) {
     char *uri = (char *)raptor_uri_to_string(term->value.literal.datatype);
 
-    unique_ptr<RDFValue> result = RDFValueRegistry.CreateInstance(uri);
+    unique_ptr<RDFValue> result = RDFValueRegistry.CreateInstance(uri, resolver);
     raptor_free_memory(uri);
 
     string value_string((char *)term->value.literal.string,
@@ -153,6 +154,8 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(raptor_term *term) {
 
 static void statement_handler(void *user_data,
                               raptor_statement *statement) {
+  DataStore *resolver = (DataStore *)user_data;
+
   if (statement->subject->type == RAPTOR_TERM_TYPE_URI &&
       statement->predicate->type == RAPTOR_TERM_TYPE_URI) {
     char *subject = (char *)raptor_uri_to_string(statement->subject->value.uri);
@@ -160,9 +163,10 @@ static void statement_handler(void *user_data,
     char *predicate = (char *)raptor_uri_to_string(
         statement->predicate->value.uri);
 
-    unique_ptr<RDFValue> object(RDFValueFromRaptorTerm(statement->object));
+    unique_ptr<RDFValue> object(RDFValueFromRaptorTerm(
+        resolver, statement->object));
 
-    oracle.Set(URN(subject), URN(predicate), std::move(object));
+    resolver->Set(URN(subject), URN(predicate), std::move(object));
 
     raptor_free_memory(subject);
     raptor_free_memory(predicate);
@@ -174,19 +178,20 @@ class RaptorParser {
  protected:
   raptor_world *world;
   raptor_parser *parser;
+  DataStore *resolver;
 
-  RaptorParser() {};
+  RaptorParser(DataStore *resolver): resolver(resolver) {};
 
  public:
-  static unique_ptr<RaptorParser> NewRaptorParser() {
-    unique_ptr<RaptorParser> result(new RaptorParser());
+  static unique_ptr<RaptorParser> NewRaptorParser(DataStore *resolver) {
+    unique_ptr<RaptorParser> result(new RaptorParser(resolver));
 
     result->world = raptor_new_world();
 
     result->parser = raptor_new_parser(result->world, "turtle");
 
     raptor_parser_set_statement_handler(
-        result->parser, NULL, statement_handler);
+        result->parser, resolver, statement_handler);
 
     // Dont talk to the internet
     raptor_parser_set_option(result->parser, RAPTOR_OPTION_NO_NET, NULL, 1);
@@ -251,7 +256,7 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
 
 AFF4Status MemoryDataStore::LoadFromTurtle(AFF4Stream &stream) {
   unique_ptr<RaptorParser> parser(
-      RaptorParser::NewRaptorParser());
+      RaptorParser::NewRaptorParser(this));
   if (!parser) {
     return MEMORY_ERROR;
   };
@@ -336,5 +341,14 @@ AFF4Status MemoryDataStore::Clear() {
   return STATUS_OK;
 };
 
-// A global resolver.
-MemoryDataStore oracle;
+MemoryDataStore::~MemoryDataStore() {
+  Flush();
+};
+
+void DataStore::Dump() {
+  StringIO output;
+
+  DumpToTurtle(output);
+
+  std::cout << output.buffer;
+};

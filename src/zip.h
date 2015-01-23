@@ -20,7 +20,6 @@ specific language governing permissions and limitations under the License.
 #include "aff4_io.h"
 #include "data_store.h"
 #include <string.h>
-#include <unordered_set>
 #include <zlib.h>
 #include <list>
 
@@ -134,11 +133,12 @@ class ZipFileSegment: public StringIO {
   URN owner_urn;                        /**< The zip file who owns us. */
 
  public:
-  ZipFileSegment();
+  ZipFileSegment(DataStore *resolver);
 
   int compression_method = ZIP_STORED;  /**< Compression method. */
 
-  virtual AFF4Status LoadFromURN(const string &mode);
+  virtual AFF4Status LoadFromURN();
+  virtual AFF4Status LoadFromZipFile(ZipFile *owner);
 
   ZipFileSegment(const string &filename, URN &owner);
   ZipFileSegment(const string &filename, URN &owner, const string &data);
@@ -222,9 +222,6 @@ class ZipFile: public AFF4Volume {
   URN backing_store_urn;
   bool _dirty;
 
-  // This is a list of outstanding segments.
-  std::unordered_set<string> outstanding_members;
-
   /**
    * Parse the central directory in the Zip File.
    *
@@ -244,7 +241,7 @@ class ZipFile: public AFF4Volume {
   AFF4Status LoadTurtleMetadata();
 
  public:
-  ZipFile();
+  ZipFile(DataStore *resolver);
 
   /**
    * Creates a new ZipFile object.
@@ -255,7 +252,7 @@ class ZipFile: public AFF4Volume {
    *
    * @return A new ZipFile reference.
    */
-  static ZipFile* NewZipFile(URN backing_store_urn);
+  static ZipFile* NewZipFile(DataStore *resolver, URN backing_store_urn);
 
   /**
    * Parse a stream as a zip file as an AFF4 volume.
@@ -264,12 +261,11 @@ class ZipFile: public AFF4Volume {
    *
    * @return
    */
-  static AFF4Status OpenZipFile(AFF4Stream *stream, URN &volume_urn);
+  static AFF4Status OpenZipFile(DataStore *resolver, AFF4Stream *stream,
+                                URN &volume_urn);
 
   // Generic volume interface.
   virtual AFF4Stream *CreateMember(string filename);
-  virtual unique_ptr<AFF4Stream> OpenMember(const char *filename);
-  virtual unique_ptr<AFF4Stream> OpenMember(const string filename);
 
   /**
    * Creates a new ZipFileSegment object. The new object is automatically added
@@ -281,10 +277,10 @@ class ZipFile: public AFF4Volume {
    * @return
    */
   ZipFileSegment *CreateZipSegment(string filename);
-
+  unique_ptr<ZipFileSegment> OpenZipSegment(string filename);
 
   // Load the ZipFile from its URN and the information in the oracle.
-  virtual AFF4Status LoadFromURN(const string &mode);
+  virtual AFF4Status LoadFromURN();
 
   virtual AFF4Status Flush();
 

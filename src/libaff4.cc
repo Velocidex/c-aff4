@@ -27,7 +27,7 @@ specific language governing permissions and limitations under the License.
 
 #define O_BINARY 0
 
-AFF4Object::AFF4Object(): name("AFF4Object") {
+AFF4Object::AFF4Object(DataStore *resolver): resolver(resolver) {
   uuid_t uuid;
   vector<char> buffer(100);
 
@@ -85,7 +85,7 @@ size_t AFF4Stream::Tell() {
 }
 
 size_t AFF4Stream::Size() {
-  return 0;
+  return size;
 }
 
 
@@ -171,9 +171,10 @@ AFF4Status StringIO::Truncate() {
 };
 
 
-AFF4Status FileBackedObject::LoadFromURN(const string &mode) {
+AFF4Status FileBackedObject::LoadFromURN() {
   int flags = O_RDONLY | O_BINARY;
   uri_components components = urn.Parse();
+  string mode = "rw";
 
   // Only file:// URNs are supported.
   if (components.scheme != "file") {
@@ -232,6 +233,13 @@ size_t FileBackedObject::Size() {
   return result;
 };
 
+
+AFF4Status FileBackedObject::Truncate() {
+  if(ftruncate(fd, 0) != 0)
+    return IO_ERROR;
+
+  return STATUS_OK;
+};
 
 AFF4Status aff4_image(char *output_file, char *stream_name,
                       unsigned int chunks_per_segment,

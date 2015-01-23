@@ -39,6 +39,8 @@ using std::vector;
  *
  */
 
+class DataStore;
+
 
 /**
  * An RDFValue object is one which knows how to serialize itself from a string
@@ -47,7 +49,13 @@ using std::vector;
  */
 
 class RDFValue {
+ protected:
+  DataStore *resolver;
+
  public:
+  RDFValue(DataStore *resolver): resolver(resolver) {};
+  RDFValue(): resolver(NULL) {};
+
   virtual string GetTypeName() {
     return "RDFValue";
   };
@@ -89,7 +97,7 @@ class RDFValueRegistrar {
     // register the class factory function
     RDFValueRegistry.RegisterFactoryFunction(
         name,
-        [](void) -> RDFValue * { return new T();});
+        [](DataStore *resolver) -> RDFValue * { return new T(resolver);});
   }
 };
 
@@ -108,9 +116,13 @@ class RDFBytes: public RDFValue {
     return "RDFBytes";
   };
 
-  RDFBytes(string data): RDFBytes(data.c_str(), data.size()) {};
+  RDFBytes(string data):
+      RDFBytes(data.c_str(), data.size()) {};
 
-  RDFBytes(const char * data, unsigned int length): value(data, length) {}
+  RDFBytes(const char * data, unsigned int length):
+      RDFValue(), value(data, length) {}
+
+  RDFBytes(DataStore *resolver): RDFValue(resolver) {};
 
   RDFBytes() {};
 
@@ -130,8 +142,14 @@ class XSDString: public RDFBytes {
     return "XSDString";
   };
 
-  XSDString(string data): RDFBytes(data.c_str(), data.size()) {};
-  XSDString(const char * data): RDFBytes(data, strlen(data)) {};
+  XSDString(string data):
+      RDFBytes(data.c_str(), data.size()) {};
+
+  XSDString(const char * data):
+      RDFBytes(data, strlen(data)) {};
+
+  XSDString(DataStore *resolver): RDFBytes(resolver) {};
+
   XSDString() {};
 
   string SerializeToString() const;
@@ -154,7 +172,12 @@ class XSDInteger: public RDFValue {
     return "XSDInteger";
   };
 
-  XSDInteger(int data): value(data) {};
+  XSDInteger(int data):
+      RDFValue(NULL), value(data) {};
+
+  XSDInteger(DataStore *resolver):
+      RDFValue(resolver) {};
+
   XSDInteger() {};
 
   string SerializeToString() const;
@@ -191,7 +214,8 @@ class URN: public XSDString {
 
   URN(const char * data): XSDString(data) {};
   URN(string data): XSDString(data) {};
-  URN() {};
+  URN(DataStore *resolver): XSDString(resolver) {};
+  URN(){};
 
   URN Append(const string &component);
 
