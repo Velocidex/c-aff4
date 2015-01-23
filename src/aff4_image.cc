@@ -100,6 +100,15 @@ AFF4Status AFF4Image::_FlushBevy() {
 };
 
 
+/**
+ * Flush the current chunk into the current bevy.
+ *
+ * @param data: Chunk data. This should be a full chunk unless it is the last
+ *        chunk in the stream which may be short.
+ * @param length: Length of data.
+ *
+ * @return Status.
+ */
 AFF4Status AFF4Image::FlushChunk(const char *data, int length) {
   uint32_t bevy_offset = bevy.Tell();
   uLongf c_length = compressBound(length) + 1;
@@ -124,8 +133,9 @@ int AFF4Image::Write(const char *data, int length) {
   _dirty = true;
 
   buffer.append(data, length);
-  // Consume the chunk.
-  if (buffer.length() > chunk_size) {
+
+  // Consume full chunks.
+  while (buffer.length() > chunk_size) {
     string chunk = buffer.substr(0, chunk_size);
     buffer.erase(0, chunk_size);
 
@@ -141,25 +151,36 @@ int AFF4Image::Write(const char *data, int length) {
 };
 
 
-int AFF4Image::_ReadPartialBevy(size_t length, string &result,
-                                AFF4Stream *bevy,
-                                uint32_t bevy_index[],
-                                uint32_t index_size) {
-  int chunk = readptr / chunk_size;
+/**
+ * Read a single chunk from the bevy and append it to result.
+ *
+ * @param result: A string which will receive the chunk data.
+ * @param bevy: The bevy to read from.
+ * @param bevy_index: A bevy index array - the is the offset of each chunk in
+ *        the bevy.
+ * @param index_size: The length of the bevy index array.
+ *
+ * @return number of bytes read, or AFF4Status for error.
+ */
+int AFF4Image::_ReadChunkFromBevy(
+    string &result, int chunk, AFF4Stream *bevy,
+    uint32_t bevy_index[], uint32_t index_size) {
+
   unsigned int chunk_id_in_bevy = chunk % chunks_per_segment;
   unsigned int compressed_chunk_size;
 
   if (index_size == 0) {
-    return -1;
+    return IO_ERROR;
   };
 
   // The segment is not completely full.
   if (chunk_id_in_bevy >= index_size) {
-    return -1;
+    return IO_ERROR;
 
     // For the last chunk in the bevy, consume to the end of the bevy segment.
   } else if (chunk_id_in_bevy == index_size - 1) {
     compressed_chunk_size = bevy->Size() - bevy->Tell();
+
   } else {
     compressed_chunk_size = (bevy_index[chunk_id_in_bevy + 1] -
                              bevy_index[chunk_id_in_bevy]);
@@ -177,12 +198,10 @@ int AFF4Image::_ReadPartialBevy(size_t length, string &result,
                 (const Bytef *)cbuffer.data(), cbuffer.size()) == Z_OK) {
 
     result += buffer;
-    readptr += buffer.size();
-
     return buffer.size();
   };
 
-  return -1;
+  return IO_ERROR;
 };
 
 int AFF4Image::_ReadPartial(size_t length, string &result) {
@@ -207,11 +226,12 @@ int AFF4Image::_ReadPartial(size_t length, string &result) {
     uint32_t *bevy_index_array = (uint32_t *)bevy_index_data.data();
 
     while (length > 0) {
-      int length_read = _ReadPartialBevy(
-          length, result, bevy, bevy_index_array, index_size);
+      int chunk = (readptr / chunk_size) % chunks_per_segment;
+      int length_read = _ReadChunkFromBevy(
+          result, chunk, bevy, bevy_index_array, index_size);
 
       if(length_read < 0) {
-        return -1;
+        return IO_ERROR;
       };
 
       if (length_read == 0) {
@@ -219,6 +239,7 @@ int AFF4Image::_ReadPartial(size_t length, string &result) {
       };
 
       length -= length_read;
+      readptr += length_read;
 
       // The current bevy is more than the bevy we have opened. Return 0 here so
       // our caller can call us again.

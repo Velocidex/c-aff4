@@ -26,11 +26,9 @@ specific language governing permissions and limitations under the License.
  *
  */
 
-
-
 /// Return values from AFF4 methods and functions.
 typedef enum {
-  STATUS_OK = 1,                        /**< Function succeeded. */
+  STATUS_OK = 0,                        /**< Function succeeded. */
   NOT_FOUND = -1,                       /**< URN or file was not found. */
   INCOMPATIBLE_TYPES = -2,              /**< Types passed in as arguments were
                                          * not compatible. */
@@ -42,12 +40,21 @@ typedef enum {
                                          * input. */
   NOT_IMPLEMENTED = -7,                 /**< This function is not yet
                                          * implemented. */
-  IO_ERROR = -8
+  IO_ERROR = -8                         /**< Unable to open URN for IO. */
 } AFF4Status;
 
 
+// Some error checking and debugging macros.
 #define DEBUG_OBJECT(fmt, ...) printf(fmt "\n", ## __VA_ARGS__)
 
+/**
+ * Hard exit the program when a fatal errors exists.
+ *
+ * @param cond Condition to evaluate.
+ * @param fmt Message to emit.
+ *
+ * @return
+ */
 #define CHECK(cond, fmt, ...) if(cond) {                \
     printf(fmt "\n", ## __VA_ARGS__);                   \
     exit(-1);                                           \

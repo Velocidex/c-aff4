@@ -1,0 +1,16 @@
+BUILDING
+========
+
+* Build the required prerequisite libraries.
+
+* Build and install the AFF4 library:
+  $ ./configure
+  $ make
+  $ make install
+
+
+TESTING
+=======
+
+* Build and run the tests:
+  $ make check

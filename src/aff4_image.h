@@ -29,14 +29,10 @@ using std::shared_ptr;
  Example usage:
 
 ~~~~~~~~~~~~~{.c}
-  unique_ptr<AFF4Stream> file = FileBackedObject::NewFileBackedObject(
-      "test.zip", "rw");
+  unique_ptr<DataStore> resolver(new MemoryDataStore());
+  AFF4Volume* zip = ZipFile::NewZipFile(resolver, "test.zip");
 
-  // The backing file is given to the zip.
-  shared_ptr<AFF4Volume> zip(ZipFile::NewZipFile(std::move(file)));
-
-  unique_ptr<AFF4Stream> image = AFF4Image::NewAFF4Image(
-      "image.dd", zip);
+  AFF4Stream *image = AFF4Image::NewAFF4Image("image.dd", zip->urn);
 
   // Can only modify the image attributes before the first write.
   image->chunks_per_segment = 100;
@@ -66,19 +62,20 @@ class AFF4Image: public AFF4Stream {
   AFF4Status FlushChunk(const char *data, int length);
   AFF4Status _FlushBevy();
   int _ReadPartial(size_t length, string &result);
-  int _ReadPartialBevy(size_t length, string &result,
-                       AFF4Stream *bevy, uint32_t bevy_index[],
-                       uint32_t index_size);
-
- protected:
+  int _ReadChunkFromBevy(string &result, int chunk,
+                         AFF4Stream *bevy, uint32_t bevy_index[],
+                         uint32_t index_size);
   string buffer;
 
   // The current bevy we write into.
   StringIO bevy_index;
   StringIO bevy;
 
-  unsigned int bevy_number = 0;           /**< The bevy number of this->bevy. */
+  unsigned int bevy_number = 0;           /**< The current bevy number for
+                                           * writing. */
   unsigned int chunk_count_in_bevy = 0;
+
+ protected:
   URN volume_urn;                       /**< The Volume we are stored on. */
 
  public:

@@ -141,7 +141,7 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
     string value_string((char *)term->value.literal.string,
                         term->value.literal.string_len);
 
-    if(!result->UnSerializeFromString(value_string)) {
+    if(result->UnSerializeFromString(value_string) != STATUS_OK) {
       DEBUG_OBJECT("Unable to parse %s", value_string.c_str());
       return NULL;
     };

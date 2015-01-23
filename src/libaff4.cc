@@ -27,6 +27,11 @@ specific language governing permissions and limitations under the License.
 
 #define O_BINARY 0
 
+/**
+ * By default empty objects receive a unique URN.
+ *
+ * @param resolver
+ */
 AFF4Object::AFF4Object(DataStore *resolver): resolver(resolver) {
   uuid_t uuid;
   vector<char> buffer(100);
@@ -241,16 +246,31 @@ AFF4Status FileBackedObject::Truncate() {
   return STATUS_OK;
 };
 
+/**
+ * A helper function to create an AFF4 image stream inside a new or existing
+ * AFF4 Zip volume.
+ *
+ * @param output_file
+ * @param stream_name
+ * @param chunks_per_segment
+ * @param max_volume_size
+ * @param input_stream
+ *
+ * @return AFF4Status.
+ */
 AFF4Status aff4_image(char *output_file, char *stream_name,
                       unsigned int chunks_per_segment,
                       uint64_t max_volume_size,
                       AFF4Stream &input_stream) {
 
-  return STATUS_OK;
+  return NOT_IMPLEMENTED;
 };
 
 
-ClassFactory<AFF4Object> AFF4ObjectRegistry;
+ClassFactory<AFF4Object> *GetAFF4ClassFactory() {
+  static auto* factory = new ClassFactory<AFF4Object>();
+  return factory;
+}
 
 // The FileBackedObject will be invoked for file:// style urns.
 static AFF4Registrar<FileBackedObject> r1("file");

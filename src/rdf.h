@@ -47,7 +47,6 @@ class DataStore;
  * and back again.
  *
  */
-
 class RDFValue {
  protected:
   DataStore *resolver;
@@ -55,10 +54,6 @@ class RDFValue {
  public:
   RDFValue(DataStore *resolver): resolver(resolver) {};
   RDFValue(): resolver(NULL) {};
-
-  virtual string GetTypeName() {
-    return "RDFValue";
-  };
 
   virtual raptor_term *GetRaptorTerm(raptor_world *world) const {
     return NULL;
@@ -112,9 +107,6 @@ static const char* const lut = "0123456789ABCDEF";
 class RDFBytes: public RDFValue {
  public:
   string value;
-  virtual string GetTypeName() {
-    return "RDFBytes";
-  };
 
   RDFBytes(string data):
       RDFBytes(data.c_str(), data.size()) {};
@@ -138,9 +130,6 @@ class RDFBytes: public RDFValue {
  */
 class XSDString: public RDFBytes {
  public:
-  virtual string GetTypeName() {
-    return "XSDString";
-  };
 
   XSDString(string data):
       RDFBytes(data.c_str(), data.size()) {};
@@ -158,7 +147,6 @@ class XSDString: public RDFBytes {
 };
 
 
-
 /**
  * A XSDInteger stores an integer. We can parse xsd:integer, xsd:int and
  * xsd:long.
@@ -167,10 +155,6 @@ class XSDString: public RDFBytes {
 class XSDInteger: public RDFValue {
  public:
   unsigned long long int value;
-
-  virtual string GetTypeName() {
-    return "XSDInteger";
-  };
 
   XSDInteger(int data):
       RDFValue(NULL), value(data) {};
@@ -208,9 +192,6 @@ struct uri_components {
  */
 class URN: public XSDString {
  public:
-  virtual string GetTypeName() {
-    return "URN";
-  };
 
   URN(const char * data): XSDString(data) {};
   URN(string data): XSDString(data) {};

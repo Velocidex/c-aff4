@@ -34,3 +34,11 @@ test_filename.bin
 src/aff4imager
 
 doxygen/
+
+# autoconf related files.
+Makefile
+config.log
+.deps
+.libs
+autom4te.cache
+config.h

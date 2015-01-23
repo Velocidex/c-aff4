@@ -16,7 +16,46 @@ specific language governing permissions and limitations under the License.
 #ifndef  _AFF4_DATA_STORE_H_
 #define  _AFF4_DATA_STORE_H_
 
-// This file defines the AFF4 data store abstraction.
+/**
+ * @file   data_store.h
+ * @author scudette <scudette@google.com>
+ * @date   Fri Jan 23 12:11:05 2015
+ *
+ * @brief This file defines the AFF4 data store abstraction.
+ *
+ * AFF4 relies on the data store to maintain relational information about the
+ * AFF4 universe. This relation information is used to reconstruct objects which
+ * have been previously stored in this data store.
+ *
+ * Note: In this implementation the data store caches all AFF4 objects which
+ * have been produced and flushes them when the DataStore::Flush() method is
+ * called. The Flush() method is also called during object destruction.
+
+ * This essentially defines a transaction, for example, to open an AFF4 Zip
+ * volume, add a new image to it and close it:
+
+~~~~~~~~~~~~~{.c}
+  // This essentially starts a transaction in the Volume
+  unique_ptr<DataStore> resolver(new MemoryDataStore());
+
+  // This will open and reparse the zip file, populating the resolver.
+  AFF4Volume *zip = ZipFile::NewZipFile(resolver.get(), "file.zip");
+
+  // This creates a new image with URN "image.dd" inside the zip file's URN.
+  AFF4Image *image = AFF4Image::NewAFF4Image(
+       resolver.get(), "image.dd", zip->urn);
+
+  // Write something on the image.
+  image->sprintf("Hello world!");
+
+  // This will flush all images, close the zip file etc. This method is also
+  // automatically called when the resolver is destructed so it is unnecessary
+  // here.
+  resolver->Flush();
+~~~~~~~~~~~~~
+
+ */
+
 #include <unordered_map>
 #include <string>
 #include <memory>
@@ -37,25 +76,8 @@ class AFF4Object;
 class AFF4Stream;
 class AFF4Volume;
 
-enum DataStoreObjectWireType {
-  STRING,
-  INTEGER
-};
 
-/* These are the objects which are stored in the data store */
-class DataStoreObject {
- public:
-  // The data store can only store the following primitive types.
-  int int_data = 0;
-  string string_data;
-  DataStoreObjectWireType wire_type = STRING;
-
-  DataStoreObject(int data): int_data(data), wire_type(INTEGER) {};
-  DataStoreObject(string data): string_data(data), wire_type(STRING) {};
-  DataStoreObject(){};
-};
-
-// AFF4_Attributes are a collection of data store objects, keyed by attributes.
+// AFF4_Attributes are a collection of RDFValue objects, keyed by attributes.
 typedef unordered_map<string, unique_ptr<RDFValue> > AFF4_Attributes;
 
 
@@ -67,14 +89,17 @@ typedef unordered_map<string, unique_ptr<RDFValue> > AFF4_Attributes;
 
     Where both subject and predicate are a URN into the AFF4 space, and value is
     a serialized RDFValue.
- */
+*/
 class DataStore {
  public:
   virtual void Set(const URN &urn, const URN &attribute,
                    RDFValue *value) = 0;
 
-  virtual AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value) = 0;
-  virtual void Set(const URN &urn, const URN &attribute, unique_ptr<RDFValue> value) = 0;
+  virtual AFF4Status Get(const URN &urn, const URN &attribute,
+                         RDFValue &value) = 0;
+
+  virtual void Set(const URN &urn, const URN &attribute,
+                   unique_ptr<RDFValue> value) = 0;
 
   virtual AFF4Status DeleteSubject(const URN &urn) = 0;
 
@@ -85,8 +110,21 @@ class DataStore {
   virtual AFF4Status LoadFromYaml(AFF4Stream &output) = 0;
   virtual AFF4Status LoadFromTurtle(AFF4Stream &output) = 0;
 
-  // Clear all data.
+  /**
+   * Clear all data.
+   *
+   *
+   * @return Status
+   */
   virtual AFF4Status Clear() = 0;
+
+
+  /**
+   * Flush all objects cached in the data store.
+   *
+   *
+   * @return Status.
+   */
   virtual AFF4Status Flush() = 0;
 
   /**
@@ -117,11 +155,18 @@ class MemoryDataStore: public DataStore {
   unordered_map<string, AFF4_Attributes> store;
 
  public:
-  // Set the RDFValue in the data store. Note that the data store will retain
-  // ownership of the value, and therefore callers may not use it after this
-  // call.
+  /**
+   * Set the RDFValue in the data store. Note that the data store will retain
+   * ownership of the value, and therefore callers may not use it after this
+   * call.
+   *
+   * @param urn: The subject to set the attribute for.
+   * @param attribute: The attribute to set.
+   * @param value: The value.
+   */
   virtual void Set(const URN &urn, const URN &attribute, RDFValue *value);
-  virtual void Set(const URN &urn, const URN &attribute, unique_ptr<RDFValue> value);
+  virtual void Set(const URN &urn, const URN &attribute,
+                   unique_ptr<RDFValue> value);
 
   AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value);
 
