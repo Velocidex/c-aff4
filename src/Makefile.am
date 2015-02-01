@@ -6,8 +6,7 @@ ACLOCAL_AMFLAGS = -I m4
 # This is so we can #include <package/foo>
 AM_CPPFLAGS = -I$(top_srcdir)/src \
   -I$(top_srcdir)/tests \
-  -I$(GTEST_DIR) -I$(GTEST_DIR)/include \
-  -I$(GMOCK_DIR) -I$(GMOCK_DIR)/include
+  -I$(top_srcdir)/gtest/ -I$(top_srcdir)/gtest/include
 
 # These are good warnings to turn on by default
 if GCC
@@ -24,7 +23,7 @@ AM_LDFLAGS = -no-undefined $(LIBSTDCXX_LA_LINKER_FLAG) \
 lib_LTLIBRARIES = libaff4.la
 
 # Libraries that are built but not installed.
-#noinst_LTLIBRARIES = libgtest.la libgmock.la
+noinst_LTLIBRARIES = libgtest.la
 
 libaff4_includedir = $(includedir)/aff4/
 libaff4_include_HEADERS = \
@@ -40,10 +39,10 @@ libaff4_la_SOURCES = \
 
 libaff4_la_LIBADD =  -lz -lyaml-cpp -luuid -lraptor2 -lpcre++
 
-#libgtest_la_SOURCES = $(GTEST_DIR)/src/gtest-all.cc
-#libgtest_la_CXXFLAGS = -g -Wall -O0
+libgtest_la_SOURCES = $(top_srcdir)/gtest/src/gtest-all.cc
+libgtest_la_CXXFLAGS = -g -Wall -O0
 
 bin_PROGRAMS = stream_test
-stream_test_LDADD = libaff4.la
+stream_test_LDADD = libaff4.la libgtest.la
 stream_test_CXXFLAGS = -std=c++11 -g -Wall -O0
 stream_test_SOURCES = stream_test.cc

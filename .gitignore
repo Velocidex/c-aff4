@@ -42,3 +42,4 @@ config.log
 .libs
 autom4te.cache
 config.h
+stamp-h1

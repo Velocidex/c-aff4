@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.69])
 AC_INIT([AFF4], [0.1], [aff4@googlegroups.com])
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AM_INIT_AUTOMAKE([-Wall foreign])
 AC_CONFIG_MACRO_DIR([m4])
 
 SO_VERSION=0:0:0
