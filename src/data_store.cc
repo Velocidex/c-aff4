@@ -20,6 +20,7 @@ specific language governing permissions and limitations under the License.
 #include "libaff4.h"
 #include <yaml-cpp/yaml.h>
 #include <raptor2/raptor2.h>
+#include <glog/logging.h>
 
 DataStore::~DataStore() {
 };
@@ -142,7 +143,7 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
                         term->value.literal.string_len);
 
     if(result->UnSerializeFromString(value_string) != STATUS_OK) {
-      DEBUG_OBJECT("Unable to parse %s", value_string.c_str());
+      LOG(ERROR) << "Unable to parse " << value_string.c_str();
       return NULL;
     };
 
@@ -200,7 +201,7 @@ class RaptorParser {
         result->world, (const unsigned char *)".");
 
     if(raptor_parser_parse_start(result->parser, uri)) {
-      DEBUG_OBJECT("Unable to initialize the parser.");
+      LOG(ERROR) << "Unable to initialize the parser.";
       return NULL;
     };
 
@@ -210,8 +211,6 @@ class RaptorParser {
   };
 
   AFF4Status Parse(string buffer) {
-    std::cout << buffer << "\n";
-
     if(raptor_parser_parse_chunk(
            parser, (const unsigned char *)buffer.data(),
            buffer.size(), 1)) {
@@ -310,7 +309,7 @@ AFF4Status MemoryDataStore::Get(const URN &urn, const URN &attribute,
 
   // The RDFValue type is incompatible with what the caller provided.
   if (typeid(value) != typeid(*attribute_itr->second)) {
-    return INVALID_INPUT;
+    return INCOMPATIBLE_TYPES;
   };
 
   return value.UnSerializeFromString(
@@ -326,7 +325,7 @@ AFF4Status MemoryDataStore::DeleteSubject(const URN &urn) {
 
 AFF4Status MemoryDataStore::Flush() {
   for(auto it=ObjectCache.begin(); it!=ObjectCache.end(); it++) {
-    DEBUG_OBJECT("Flushing %s", it->first.c_str());
+    LOG(INFO) << "Flushing " << it->first.c_str();
     it->second->Flush();
   };
 

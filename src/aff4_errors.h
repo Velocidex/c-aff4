@@ -44,20 +44,4 @@ typedef enum {
 } AFF4Status;
 
 
-// Some error checking and debugging macros.
-#define DEBUG_OBJECT(fmt, ...) printf(fmt "\n", ## __VA_ARGS__)
-
-/**
- * Hard exit the program when a fatal errors exists.
- *
- * @param cond Condition to evaluate.
- * @param fmt Message to emit.
- *
- * @return
- */
-#define CHECK(cond, fmt, ...) if(cond) {                \
-    printf(fmt "\n", ## __VA_ARGS__);                   \
-    exit(-1);                                           \
-  }
-
 #endif // AFF4_ERRORS_H

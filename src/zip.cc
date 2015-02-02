@@ -13,13 +13,15 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
+#include <glog/logging.h>
+
 #include "zip.h"
 #include "rdf.h"
 #include "lexicon.h"
 
 #define BUFF_SIZE 4096
 
-ZipFile::ZipFile(DataStore *resolver): AFF4Volume(resolver), _dirty(false) {}
+ZipFile::ZipFile(DataStore *resolver): AFF4Volume(resolver) {}
 
 // Prototypes.
 static string CompressBuffer(const string &buffer);
@@ -40,21 +42,9 @@ ZipFile* ZipFile::NewZipFile(DataStore *resolver, URN backing_store_urn) {
 };
 
 
-AFF4Status ZipFile::OpenZipFile(DataStore *resolver, AFF4Stream *backing_store,
-                                URN &volume_urn) {
-  unique_ptr<ZipFile> self(new ZipFile(resolver));
-
-  if(self->parse_cd() == STATUS_OK) {
-    self->LoadTurtleMetadata();
-  };
-
-  return STATUS_OK;
-};
-
-
 AFF4Status ZipFile::LoadTurtleMetadata() {
   // Try to load the RDF metadata file.
-  unique_ptr<AFF4Stream> turtle_stream = OpenZipSegment("information.turtle");
+  unique_ptr<AFF4Stream> turtle_stream(OpenZipSegment("information.turtle"));
 
   if (turtle_stream) {
     return resolver->LoadFromTurtle(*turtle_stream);
@@ -102,21 +92,21 @@ AFF4Status ZipFile::parse_cd() {
     end_cd = (EndCentralDirectory *)&buffer[i];
     if(end_cd->magic == 0x6054b50) {
       ecd_offset += i;
-      DEBUG_OBJECT("Found ECD at %#lx", ecd_offset);
+      LOG(INFO) << "Found ECD at " << std::hex << ecd_offset;
       break;
     };
   };
 
   if (end_cd->magic != 0x6054b50) {
-    DEBUG_OBJECT("Unable to find EndCentralDirectory.");
+    LOG(INFO) << "Unable to find EndCentralDirectory.";
     return PARSING_ERROR;
   };
 
   if (end_cd->comment_len > 0) {
     backing_store->Seek(ecd_offset + sizeof(EndCentralDirectory), SEEK_SET);
     string urn_string = backing_store->Read(end_cd->comment_len);
-    DEBUG_OBJECT("Loaded AFF4 volume URN %s from zip file.",
-                 urn_string.c_str());
+    LOG(INFO) << "Loaded AFF4 volume URN %s from zip file." <<
+        urn_string.c_str();
 
     // There is a catch 22 here - before we parse the ZipFile we dont know the
     // Volume's URN, but we need to know the URN so the AFF4FactoryOpen() can
@@ -148,7 +138,7 @@ AFF4Status ZipFile::parse_cd() {
     if (locator.magic != magic ||
         locator.disk_with_cd != 0 ||
         locator.number_of_disks != 1) {
-      DEBUG_OBJECT("Zip64CDLocator invalid or not supported.");
+      LOG(INFO) << "Zip64CDLocator invalid or not supported.";
       return PARSING_ERROR;
     };
 
@@ -171,8 +161,9 @@ AFF4Status ZipFile::parse_cd() {
     backing_store->ReadIntoBuffer(&entry, sizeof(entry));
 
     if (entry.magic != magic) {
-      DEBUG_OBJECT("CDFileHeader at offset %#lx invalid.",
-                   entry_offset);
+      LOG(INFO) << "CDFileHeader at offset " << std::hex << entry_offset <<
+          "invalid.";
+
       return PARSING_ERROR;
     };
 
@@ -206,10 +197,10 @@ AFF4Status ZipFile::parse_cd() {
     };
 
     if (zip_info->local_header_offset >= 0) {
-      DEBUG_OBJECT("Found file %s @ %#lx", zip_info->filename.c_str(),
-                   zip_info->local_header_offset);
+      LOG(INFO) << "Found file " << zip_info->filename.c_str() << " @ " <<
+          std::hex << zip_info->local_header_offset;
 
-      // Store this information in the resolver. This allows segments to be
+      // Store this information in the resolver. Ths allows segments to be
       // directly opened by URN.
       URN member_urn(zip_info->filename);
 
@@ -238,7 +229,7 @@ AFF4Status ZipFile::Flush() {
   };
 
   // If the zip file was changed, re-write the central directory.
-  if (_dirty) {
+  if (IsDirty()) {
     AFF4Stream *backing_store = AFF4FactoryOpen<AFF4Stream>(
         resolver, backing_store_urn);
 
@@ -296,11 +287,11 @@ void ZipFile::write_zip64_CD(AFF4Stream *backing_store) {
   string urn_string = urn.SerializeToString();
   end.comment_len = urn_string.size();
 
-  DEBUG_OBJECT("Writing Zip64EndCD at %#lx", backing_store->Tell());
+  LOG(INFO) << "Writing Zip64EndCD at " << std::hex << backing_store->Tell();
   backing_store->Write((char *)&end_cd, sizeof(end_cd));
   backing_store->Write((char *)&locator, sizeof(locator));
 
-  DEBUG_OBJECT("Writing ECD at %#lx", backing_store->Tell());
+  LOG(INFO) << "Writing ECD at " << std::hex << backing_store->Tell();
   backing_store->Write((char *)&end, sizeof(end));
   backing_store->Write(urn_string);
 };
@@ -378,14 +369,14 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile *owner) {
 
   if (file_header.magic != magic ||
       file_header.compression_method != zip_info->compression_method) {
-    DEBUG_OBJECT("Local file header invalid!");
+    LOG(INFO) << "Local file header invalid!";
     return PARSING_ERROR;
   };
 
   string file_header_filename = backing_store->Read(
       file_header.file_name_length).c_str();
   if (file_header_filename != zip_info->filename) {
-    DEBUG_OBJECT("Local filename different from central directory.");
+    LOG(INFO) << "Local filename different from central directory.";
     return PARSING_ERROR;
   };
 
@@ -400,7 +391,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile *owner) {
       string c_buffer = backing_store->Read(zip_info->compress_size);
 
       if(DecompressBuffer(&buffer[0], buffer_size, c_buffer) != buffer_size) {
-        DEBUG_OBJECT("Unable to decompress file.");
+        LOG(INFO) << "Unable to decompress file.";
         return PARSING_ERROR;
       };
     } break;
@@ -410,7 +401,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile *owner) {
     } break;
 
     default:
-      DEBUG_OBJECT("Unsupported compression method.");
+      LOG(INFO) << "Unsupported compression method.";
       return NOT_IMPLEMENTED;
   };
 
@@ -445,7 +436,7 @@ static string CompressBuffer(const string &buffer) {
 
   if(deflateInit2(&strm, 9, Z_DEFLATED, -15,
                   9, Z_DEFAULT_STRATEGY) != Z_OK) {
-    DEBUG_OBJECT("Unable to initialise zlib (%s)", strm.msg);
+    LOG(INFO) << "Unable to initialise zlib (" <<  strm.msg << ")";
     return NULL;
   };
 
@@ -478,7 +469,7 @@ static unsigned int DecompressBuffer(
   strm.avail_out = length;
 
   if(inflateInit2(&strm, -15) != Z_OK) {
-    DEBUG_OBJECT("Unable to initialise zlib (%s)", strm.msg);
+    LOG(ERROR) << "Unable to initialise zlib (" <<  strm.msg << ")";
     return 0;
   };
 
@@ -498,13 +489,13 @@ AFF4Status ZipFileSegment::Flush() {
 
   if(!owner) return GENERIC_ERROR;
 
-  if (_dirty) {
+  if (IsDirty()) {
     AFF4Stream *backing_store = AFF4FactoryOpen<AFF4Stream>(
         resolver, owner->backing_store_urn);
 
     if(!backing_store) return GENERIC_ERROR;
 
-    DEBUG_OBJECT("Writing member %s", urn.value.c_str());
+    LOG(INFO) << "Writing member " << urn.value.c_str();
     unique_ptr<ZipInfo> zip_info(new ZipInfo());
 
     // Append member at the end of the file.
@@ -534,9 +525,10 @@ AFF4Status ZipFileSegment::Flush() {
     owner->members[urn.value] = std::move(zip_info);
 
     // Mark the owner as dirty.
-    DEBUG_OBJECT("%s is dirtied by segment %s", owner->urn.value.c_str(),
-                 urn.value.c_str());
-    owner->_dirty = true;
+    LOG(INFO) << owner->urn.value.c_str() << " is dirtied by segment " <<
+        urn.value.c_str();
+
+    owner->MarkDirty();
 
     // We are now considered flushed.
     _dirty = false;

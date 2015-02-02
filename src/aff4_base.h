@@ -30,6 +30,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4_errors.h"
 #include "rdf.h"
 #include "data_store.h"
+#include <glog/logging.h>
+
 
 /**
  * The base class for all AFF4 objects. It is not usually possible to
@@ -65,6 +67,9 @@ specific language governing permissions and limitations under the License.
  *        which reference it.
  */
 class AFF4Object {
+ protected:
+  bool _dirty = false;                  /**< true if the object was modified. */
+
  public:
   URN urn;                              /**< Each AFF4 object is addressable by
                                          * its URN. */
@@ -110,6 +115,24 @@ class AFF4Object {
    * @return
    */
   virtual AFF4Status Flush();
+
+  /**
+   * Has the object been modified in any way?
+   *
+   *
+   * @return true if the object is dirty.
+   */
+  virtual bool IsDirty() {
+    return _dirty;
+  };
+
+  /**
+   * Mark the object as dirty. Note that the only way the object can become
+   * non-dirty is through a flush.
+   */
+  virtual void MarkDirty() {
+    _dirty = true;
+  };
 };
 
 
@@ -220,8 +243,9 @@ T *AFF4FactoryOpen(DataStore *resolver, const URN &urn) {
   // Have the object load and initialize itself.
   obj->urn = urn;
   if(obj->LoadFromURN() != STATUS_OK) {
-    DEBUG_OBJECT("Failed to load %s as %s",
-                 urn.value.c_str(), type_urn.value.c_str());
+    LOG(WARNING) << "Failed to load " << urn.value.c_str() << " as " <<
+        type_urn.value.c_str();
+
     return NULL;
   };
 

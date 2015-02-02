@@ -38,7 +38,6 @@ class AFF4Stream: public AFF4Object {
  protected:
   ssize_t readptr;
   ssize_t size;             // How many bytes are used in the stream?
-  bool _dirty = false;      // Is this stream modified?
 
  public:
   AFF4Stream(DataStore *result): AFF4Object(result), readptr(0), size(0) {};

@@ -11,17 +11,6 @@ SO_VERSION=0:0:0
 AC_CONFIG_SRCDIR([src])
 AC_CONFIG_HEADERS([src/config.h])
 
-# Optionally use gtest
-AC_ARG_WITH([gtest],
-  [AS_HELP_STRING([--with-gtest], [location of Google Test source])],
-  [GTEST_DIR=$withval])
-AC_SUBST([GTEST_DIR])
-
-AC_ARG_WITH([gmock],
-  [AS_HELP_STRING([--with-gmock], [location of Google Mock source])],
-  [GMOCK_DIR=$withval])
-AC_SUBST([GMOCK_DIR])
-
 AC_LANG(C++)
 
 # Checks for programs.
@@ -29,11 +18,36 @@ AC_PROG_CXX
 AC_PROG_CC
 
 # Checks for libraries.
-AC_CHECK_LIB([raptor2], [raptor_new_term_from_counted_uri_string])
-AC_CHECK_LIB([uuid], [uuid_generate])
-AC_CHECK_LIB([z], [compress])
-AC_CHECK_LIB([yaml-cpp], [main])
-AC_CHECK_LIB([pcre++], [main])
+AC_CHECK_LIB([raptor2], [raptor_new_term_from_counted_uri_string], [], [
+  echo raptor RDF library not found. On debian systems this is provided by
+  echp apt-get install libraptor2-dev
+  exit -1
+])
+AC_CHECK_LIB([uuid], [uuid_generate], [], [
+  echo uuid library not found. On debian systems this is provided by
+  echp apt-get install uuid-dev
+  exit -1
+])
+AC_CHECK_LIB([z], [compress], [], [
+  echo zlib not found. On debian systems this is provided by
+  echp apt-get install zlib1g-dev
+  exit -1
+])
+AC_CHECK_LIB([yaml-cpp], [main], [], [
+  echo libyaml-cpp not found. On debian systems this is provided by
+  echp apt-get install libyaml-cpp-dev
+  exit -1
+])
+AC_CHECK_LIB([pcre++], [main]. [], [
+  echo Libpcre++ not found. On debian systems this is provided by
+  echp apt-get install libpcre++-dev
+  exit -1
+])
+AC_CHECK_LIB([glog], [main], [], [
+  echo Google logging library not found. On debian systems this is provided by
+  echp apt-get install libgoogle-glog-dev
+  exit -1
+])
 
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h])
@@ -61,5 +75,6 @@ AC_SUBST(SO_VERSION)
 AC_CONFIG_FILES([
         Makefile
         src/Makefile
+        tests/Makefile
         ])
 AC_OUTPUT

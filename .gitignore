@@ -32,6 +32,7 @@ test_filename.bin
 *_test
 *.zip
 src/aff4imager
+*~
 
 doxygen/
 

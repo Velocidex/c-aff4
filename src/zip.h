@@ -220,7 +220,6 @@ class ZipFile: public AFF4Volume {
  protected:
   int directory_number_of_entries = -1;
   URN backing_store_urn;
-  bool _dirty;
 
   /**
    * Parse the central directory in the Zip File.
@@ -253,16 +252,6 @@ class ZipFile: public AFF4Volume {
    * @return A new ZipFile reference.
    */
   static ZipFile* NewZipFile(DataStore *resolver, URN backing_store_urn);
-
-  /**
-   * Parse a stream as a zip file as an AFF4 volume.
-   *
-   * @param stream
-   *
-   * @return
-   */
-  static AFF4Status OpenZipFile(DataStore *resolver, AFF4Stream *stream,
-                                URN &volume_urn);
 
   // Generic volume interface.
   virtual AFF4Stream *CreateMember(string filename);

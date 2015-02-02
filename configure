@@ -693,8 +693,6 @@ CPPFLAGS
 LDFLAGS
 CXXFLAGS
 CXX
-GMOCK_DIR
-GTEST_DIR
 AM_BACKSLASH
 AM_DEFAULT_VERBOSITY
 AM_DEFAULT_V
@@ -764,8 +762,6 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 enable_silent_rules
-with_gtest
-with_gmock
 enable_dependency_tracking
 enable_shared
 enable_static
@@ -1420,8 +1416,6 @@ Optional Features:
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
-  --with-gtest            location of Google Test source
-  --with-gmock            location of Google Mock source
   --with-pic[=PKGS]       try to use only PIC/non-PIC objects [default=use
                           both]
   --with-gnu-ld           assume the C compiler uses GNU ld [default=no]
@@ -3204,23 +3198,6 @@ SO_VERSION=0:0:0
 ac_config_headers="$ac_config_headers src/config.h"
 
 
-# Optionally use gtest
-
-# Check whether --with-gtest was given.
-if test "${with_gtest+set}" = set; then :
-  withval=$with_gtest; GTEST_DIR=$withval
-fi
-
-
-
-
-# Check whether --with-gmock was given.
-if test "${with_gmock+set}" = set; then :
-  withval=$with_gmock; GMOCK_DIR=$withval
-fi
-
-
-
 ac_ext=cpp
 ac_cpp='$CXXCPP $CPPFLAGS'
 ac_compile='$CXX -c $CXXFLAGS $CPPFLAGS conftest.$ac_ext >&5'
@@ -4699,6 +4676,12 @@ _ACEOF
 
   LIBS="-lraptor2 $LIBS"
 
+else
+
+  echo raptor RDF library not found. On debian systems this is provided by
+  echp apt-get install libraptor2-dev
+  exit -1
+
 fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for uuid_generate in -luuid" >&5
@@ -4743,6 +4726,12 @@ if test "x$ac_cv_lib_uuid_uuid_generate" = xyes; then :
 _ACEOF
 
   LIBS="-luuid $LIBS"
+
+else
+
+  echo uuid library not found. On debian systems this is provided by
+  echp apt-get install uuid-dev
+  exit -1
 
 fi
 
@@ -4789,6 +4778,12 @@ _ACEOF
 
   LIBS="-lz $LIBS"
 
+else
+
+  echo zlib not found. On debian systems this is provided by
+  echp apt-get install zlib1g-dev
+  exit -1
+
 fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lyaml-cpp" >&5
@@ -4828,15 +4823,65 @@ _ACEOF
 
   LIBS="-lyaml-cpp $LIBS"
 
+else
+
+  echo libyaml-cpp not found. On debian systems this is provided by
+  echp apt-get install libyaml-cpp-dev
+  exit -1
+
 fi
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lpcre++" >&5
-$as_echo_n "checking for main in -lpcre++... " >&6; }
-if ${ac_cv_lib_pcrepp_main+:} false; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for main.  in -lpcre++" >&5
+$as_echo_n "checking for main.  in -lpcre++... " >&6; }
+if ${ac_cv_lib_pcrepp_main__+:} false; then :
   $as_echo_n "(cached) " >&6
 else
   ac_check_lib_save_LIBS=$LIBS
 LIBS="-lpcre++  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char main.  ();
+int
+main ()
+{
+return main.  ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  ac_cv_lib_pcrepp_main__=yes
+else
+  ac_cv_lib_pcrepp_main__=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pcrepp_main__" >&5
+$as_echo "$ac_cv_lib_pcrepp_main__" >&6; }
+if test "x$ac_cv_lib_pcrepp_main__" = xyes; then :
+
+  echo Libpcre++ not found. On debian systems this is provided by
+  echp apt-get install libpcre++-dev
+  exit -1
+
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lglog" >&5
+$as_echo_n "checking for main in -lglog... " >&6; }
+if ${ac_cv_lib_glog_main+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lglog  $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -4850,22 +4895,28 @@ return main ();
 }
 _ACEOF
 if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_pcrepp_main=yes
+  ac_cv_lib_glog_main=yes
 else
-  ac_cv_lib_pcrepp_main=no
+  ac_cv_lib_glog_main=no
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
 LIBS=$ac_check_lib_save_LIBS
 fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_pcrepp_main" >&5
-$as_echo "$ac_cv_lib_pcrepp_main" >&6; }
-if test "x$ac_cv_lib_pcrepp_main" = xyes; then :
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_glog_main" >&5
+$as_echo "$ac_cv_lib_glog_main" >&6; }
+if test "x$ac_cv_lib_glog_main" = xyes; then :
   cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBPCRE__ 1
+#define HAVE_LIBGLOG 1
 _ACEOF
 
-  LIBS="-lpcre++ $LIBS"
+  LIBS="-lglog $LIBS"
+
+else
+
+  echo Google logging library not found. On debian systems this is provided by
+  echp apt-get install libgoogle-glog-dev
+  exit -1
 
 fi
 
@@ -16047,7 +16098,7 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 
 
 
-ac_config_files="$ac_config_files Makefile src/Makefile"
+ac_config_files="$ac_config_files Makefile src/Makefile tests/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -17162,6 +17213,7 @@ do
     "libtool") CONFIG_COMMANDS="$CONFIG_COMMANDS libtool" ;;
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "src/Makefile") CONFIG_FILES="$CONFIG_FILES src/Makefile" ;;
+    "tests/Makefile") CONFIG_FILES="$CONFIG_FILES tests/Makefile" ;;
 
   *) as_fn_error $? "invalid argument: \`$ac_config_target'" "$LINENO" 5;;
   esac

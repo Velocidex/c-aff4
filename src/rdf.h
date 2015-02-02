@@ -121,8 +121,12 @@ class RDFBytes: public RDFValue {
   string SerializeToString() const;
   AFF4Status UnSerializeFromString(const char *data, int length);
   raptor_term *GetRaptorTerm(raptor_world *world) const;
-};
 
+  bool operator==(const RDFBytes& other) const {
+    return this->value == other.value;
+  }
+
+};
 
 /**
  * An XSDString is a printable string. It serializes into an xsd:string type.
@@ -202,6 +206,7 @@ class URN: public XSDString {
 
   raptor_term *GetRaptorTerm(raptor_world *world) const;
   uri_components Parse() const;
+
 };
 
 

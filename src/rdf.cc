@@ -31,7 +31,6 @@ string RDFBytes::SerializeToString() const {
   return result;
 };
 
-
 AFF4Status RDFBytes::UnSerializeFromString(const char *data, int length) {
   // Length is odd.
   if (length & 1) {

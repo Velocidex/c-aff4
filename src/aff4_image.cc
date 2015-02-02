@@ -282,7 +282,7 @@ string AFF4Image::Read(size_t length) {
 
 
 AFF4Status AFF4Image::Flush() {
-  if(_dirty) {
+  if(IsDirty()) {
     // Flush the last chunk.
     FlushChunk(buffer.c_str(), buffer.length());
     _FlushBevy();
