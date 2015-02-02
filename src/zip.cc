@@ -105,8 +105,8 @@ AFF4Status ZipFile::parse_cd() {
   if (end_cd->comment_len > 0) {
     backing_store->Seek(ecd_offset + sizeof(EndCentralDirectory), SEEK_SET);
     string urn_string = backing_store->Read(end_cd->comment_len);
-    LOG(INFO) << "Loaded AFF4 volume URN %s from zip file." <<
-        urn_string.c_str();
+    LOG(INFO) << "Loaded AFF4 volume URN " << urn_string.c_str() <<
+        " from zip file.";
 
     // There is a catch 22 here - before we parse the ZipFile we dont know the
     // Volume's URN, but we need to know the URN so the AFF4FactoryOpen() can

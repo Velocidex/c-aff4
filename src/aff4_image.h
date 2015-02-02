@@ -61,10 +61,10 @@ class AFF4Image: public AFF4Stream {
  private:
   AFF4Status FlushChunk(const char *data, int length);
   AFF4Status _FlushBevy();
-  int _ReadPartial(size_t length, string &result);
-  int _ReadChunkFromBevy(string &result, int chunk,
-                         AFF4Stream *bevy, uint32_t bevy_index[],
-                         uint32_t index_size);
+  int _ReadPartial(unsigned int chunk_id, int chunks_to_read, string &result);
+  AFF4Status _ReadChunkFromBevy(string &result, unsigned int chunk_id,
+                                AFF4Stream *bevy, uint32_t bevy_index[],
+                                uint32_t index_size);
   string buffer;
 
   // The current bevy we write into.

@@ -68,8 +68,10 @@ AFF4Status AFF4Image::LoadFromURN() {
 // Check that the bevy
 AFF4Status AFF4Image::_FlushBevy() {
   // If the bevy is empty nothing else to do.
-  if (bevy.Size() == 0)
+  if (bevy.Size() == 0) {
+    LOG(INFO) << urn.value.c_str() << "Bevy is empty.";
     return STATUS_OK;
+  };
 
   URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number++)));
   URN bevy_index_urn(bevy_urn.Append("index"));
@@ -85,11 +87,15 @@ AFF4Status AFF4Image::_FlushBevy() {
   AFF4Stream *bevy_stream = volume->CreateMember(bevy_urn.value);
 
   if(!bevy_index_stream || ! bevy_stream) {
+    LOG(ERROR) << "Unable to create bevy URN";
     return IO_ERROR;
   };
 
   bevy_index_stream->Write(bevy_index.buffer);
   bevy_stream->Write(bevy.buffer);
+
+  bevy_index_stream->Flush();
+  bevy_stream->Flush();
 
   bevy_index.Truncate();
   bevy.Truncate();
@@ -114,8 +120,10 @@ AFF4Status AFF4Image::FlushChunk(const char *data, int length) {
   uLongf c_length = compressBound(length) + 1;
   Bytef c_buffer[c_length];
 
-  if(compress(c_buffer, &c_length, (Bytef *)data, length) != Z_OK)
+  if(compress(c_buffer, &c_length, (Bytef *)data, length) != Z_OK) {
+    LOG(ERROR) << "Unable to compress chunk " << urn.value.c_str();
     return MEMORY_ERROR;
+  };
 
   bevy_index.Write((char *)&bevy_offset, sizeof(bevy_offset));
   bevy.Write((char *)c_buffer, c_length);
@@ -162,19 +170,22 @@ int AFF4Image::Write(const char *data, int length) {
  *
  * @return number of bytes read, or AFF4Status for error.
  */
-int AFF4Image::_ReadChunkFromBevy(
-    string &result, int chunk, AFF4Stream *bevy,
+AFF4Status AFF4Image::_ReadChunkFromBevy(
+    string &result, unsigned int chunk_id, AFF4Stream *bevy,
     uint32_t bevy_index[], uint32_t index_size) {
 
-  unsigned int chunk_id_in_bevy = chunk % chunks_per_segment;
+  unsigned int chunk_id_in_bevy = chunk_id % chunks_per_segment;
   unsigned int compressed_chunk_size;
 
   if (index_size == 0) {
+    LOG(ERROR) << "Index empty in " << urn.value.c_str() << ":" << chunk_id;
     return IO_ERROR;
   };
 
   // The segment is not completely full.
   if (chunk_id_in_bevy >= index_size) {
+    LOG(ERROR) << "Bevy index too short in " << urn.value.c_str() << ":"
+               << chunk_id;
     return IO_ERROR;
 
     // For the last chunk in the bevy, consume to the end of the bevy segment.
@@ -189,6 +200,7 @@ int AFF4Image::_ReadChunkFromBevy(
 
   bevy->Seek(bevy_index[chunk_id_in_bevy], SEEK_SET);
   string cbuffer = bevy->Read(compressed_chunk_size);
+
   string buffer;
   buffer.resize(chunk_size);
 
@@ -198,17 +210,20 @@ int AFF4Image::_ReadChunkFromBevy(
                 (const Bytef *)cbuffer.data(), cbuffer.size()) == Z_OK) {
 
     result += buffer;
-    return buffer.size();
+    return STATUS_OK;
   };
 
+  LOG(ERROR) << urn.value.c_str() << ": Unable to uncompress chunk "
+             << chunk_id;
   return IO_ERROR;
 };
 
-int AFF4Image::_ReadPartial(size_t length, string &result) {
-  int bevy_size = chunk_size * chunks_per_segment;
+int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
+                            string &result) {
+  int chunks_read = 0;
 
-  while (length > 0) {
-    int bevy_id = readptr / bevy_size;
+  while (chunks_to_read > 0) {
+    unsigned int bevy_id = chunk_id / chunks_per_segment;
     URN bevy_urn = urn.Append(aff4_sprintf("%08d", bevy_id));
     URN bevy_index_urn = bevy_urn.Append("index");
 
@@ -217,7 +232,8 @@ int AFF4Image::_ReadPartial(size_t length, string &result) {
 
     AFF4Stream *bevy = AFF4FactoryOpen<AFF4Stream>(resolver, bevy_urn);
     if(!bevy_index || !bevy) {
-      return 0;
+      LOG(ERROR) << "Unable to open bevy " << bevy_urn.value.c_str();
+      return -1;
     }
 
     uint32_t index_size = bevy_index->Size() / sizeof(uint32_t);
@@ -225,57 +241,58 @@ int AFF4Image::_ReadPartial(size_t length, string &result) {
 
     uint32_t *bevy_index_array = (uint32_t *)bevy_index_data.data();
 
-    while (length > 0) {
-      int chunk = (readptr / chunk_size) % chunks_per_segment;
-      int length_read = _ReadChunkFromBevy(
-          result, chunk, bevy, bevy_index_array, index_size);
+    while (chunks_to_read > 0) {
+      // Read a full chunk from the bevy.
+      AFF4Status res = _ReadChunkFromBevy(
+          result, chunk_id, bevy, bevy_index_array, index_size);
 
-      if(length_read < 0) {
-        return IO_ERROR;
+      if(res != STATUS_OK) {
+        return res;
       };
 
-      if (length_read == 0) {
+      chunks_to_read--;
+      chunk_id++;
+      chunks_read++;
+
+      // This bevy is exhausted, get the next one.
+      if(bevy_id < chunk_id / chunks_per_segment) {
         break;
-      };
-
-      length -= length_read;
-      readptr += length_read;
-
-      // The current bevy is more than the bevy we have opened. Return 0 here so
-      // our caller can call us again.
-      if (readptr / bevy_size > bevy_id) {
-        break;
-      };
+      }
     };
   };
 
-  return 0;
+  return chunks_read;
 };
 
 string AFF4Image::Read(size_t length) {
-  string result;
-  int initial_chunk_offset = readptr % chunk_size;
-
   length = std::min(length, Size() - readptr);
 
-  // Make sure we have enough room for output.
-  result.reserve(length + chunk_size);
+  int initial_chunk_offset = readptr % chunk_size;
+  // We read this many full chunks at once.
+  int chunks_to_read = length / chunk_size + 1;
+  unsigned int chunk_id = readptr / chunk_size;
+  string result;
 
-  while(length > 0) {
-    int length_read = _ReadPartial(length, result);
+  // Make sure we have enough room for output.
+  result.reserve(chunks_to_read * chunk_size);
+
+  while(chunks_to_read > 0) {
+    int chunks_read = _ReadPartial(chunk_id, chunks_to_read, result);
     // Error occured.
-    if (length_read < 0) {
+    if (chunks_read < 0) {
       return "";
-    } else if (length_read == 0) {
+    } else if (chunks_read == 0) {
       break;
     };
 
-    length -= length_read;
+    chunks_to_read -= chunks_read;
   };
 
   if (initial_chunk_offset) {
     result.erase(0, initial_chunk_offset);
   };
+
+  result.resize(length);
 
   return result;
 };

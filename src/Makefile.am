@@ -32,7 +32,7 @@ libaff4_la_SOURCES = \
 	aff4_image.cc  aff4_init.cc  data_store.cc  libaff4.cc \
 	 rdf.cc  stream_test.cc  zip.cc
 
-libaff4_la_LIBADD =  -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog
+libaff4_la_LIBADD =  -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog -lgflags
 
 bin_PROGRAMS = stream_test
 stream_test_LDADD = libaff4.la

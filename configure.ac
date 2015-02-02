@@ -23,29 +23,40 @@ AC_CHECK_LIB([raptor2], [raptor_new_term_from_counted_uri_string], [], [
   echp apt-get install libraptor2-dev
   exit -1
 ])
+
 AC_CHECK_LIB([uuid], [uuid_generate], [], [
   echo uuid library not found. On debian systems this is provided by
   echp apt-get install uuid-dev
   exit -1
 ])
+
 AC_CHECK_LIB([z], [compress], [], [
   echo zlib not found. On debian systems this is provided by
   echp apt-get install zlib1g-dev
   exit -1
 ])
+
 AC_CHECK_LIB([yaml-cpp], [main], [], [
   echo libyaml-cpp not found. On debian systems this is provided by
   echp apt-get install libyaml-cpp-dev
   exit -1
 ])
+
 AC_CHECK_LIB([pcre++], [main]. [], [
   echo Libpcre++ not found. On debian systems this is provided by
   echp apt-get install libpcre++-dev
   exit -1
 ])
+
 AC_CHECK_LIB([glog], [main], [], [
   echo Google logging library not found. On debian systems this is provided by
   echp apt-get install libgoogle-glog-dev
+  exit -1
+])
+
+AC_CHECK_LIB([gflags], [main], [], [
+  echo Google flags library not found. On debian systems this is provided by
+  echp apt-get install libgflags-dev
   exit -1
 ])
 

@@ -4684,6 +4684,7 @@ else
 
 fi
 
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for uuid_generate in -luuid" >&5
 $as_echo_n "checking for uuid_generate in -luuid... " >&6; }
 if ${ac_cv_lib_uuid_uuid_generate+:} false; then :
@@ -4734,6 +4735,7 @@ else
   exit -1
 
 fi
+
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for compress in -lz" >&5
 $as_echo_n "checking for compress in -lz... " >&6; }
@@ -4786,6 +4788,7 @@ else
 
 fi
 
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lyaml-cpp" >&5
 $as_echo_n "checking for main in -lyaml-cpp... " >&6; }
 if ${ac_cv_lib_yaml_cpp_main+:} false; then :
@@ -4831,6 +4834,7 @@ else
 
 fi
 
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for main.  in -lpcre++" >&5
 $as_echo_n "checking for main.  in -lpcre++... " >&6; }
 if ${ac_cv_lib_pcrepp_main__+:} false; then :
@@ -4875,6 +4879,7 @@ if test "x$ac_cv_lib_pcrepp_main__" = xyes; then :
 
 fi
 
+
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lglog" >&5
 $as_echo_n "checking for main in -lglog... " >&6; }
 if ${ac_cv_lib_glog_main+:} false; then :
@@ -4916,6 +4921,52 @@ else
 
   echo Google logging library not found. On debian systems this is provided by
   echp apt-get install libgoogle-glog-dev
+  exit -1
+
+fi
+
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lgflags" >&5
+$as_echo_n "checking for main in -lgflags... " >&6; }
+if ${ac_cv_lib_gflags_main+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lgflags  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+int
+main ()
+{
+return main ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  ac_cv_lib_gflags_main=yes
+else
+  ac_cv_lib_gflags_main=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_gflags_main" >&5
+$as_echo "$ac_cv_lib_gflags_main" >&6; }
+if test "x$ac_cv_lib_gflags_main" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBGFLAGS 1
+_ACEOF
+
+  LIBS="-lgflags $LIBS"
+
+else
+
+  echo Google flags library not found. On debian systems this is provided by
+  echp apt-get install libgflags-dev
   exit -1
 
 fi
