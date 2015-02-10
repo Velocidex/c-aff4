@@ -23,14 +23,16 @@ using std::cout;
 URN test_AFF4Image() {
   unique_ptr<DataStore> resolver(new MemoryDataStore());
 
-  AFF4Stream *file = AFF4FactoryOpen<AFF4Stream>(resolver.get(), "test.zip");
+  AFF4ScopedPtr<AFF4Stream> file = resolver->AFF4FactoryOpen<AFF4Stream>(
+      "test.zip");
 
   file->Truncate();
 
   // The backing file is given to the zip.
-  AFF4Volume *zip = ZipFile::NewZipFile(resolver.get(), file->urn);
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(resolver.get(), file->urn);
 
-  AFF4Image *image = AFF4Image::NewAFF4Image(resolver.get(), "image.dd", zip->urn);
+  AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
+      resolver.get(), "image.dd", zip->urn);
 
   // For testing - rediculously small chunks.
   image->chunk_size = 10;
@@ -101,19 +103,20 @@ void test_AFF4Stream(AFF4Stream *stream) {
 
 void test_ZipFileCreate() {
   unique_ptr<DataStore> resolver(new MemoryDataStore());
-  AFF4Stream* file = AFF4FactoryOpen<AFF4Stream>(resolver.get(), "test.zip");
+  AFF4ScopedPtr<AFF4Stream> file = resolver->AFF4FactoryOpen<AFF4Stream>(
+      "test.zip");
 
   // The backing file is given to the zip.
-  AFF4Volume* zip = ZipFile::NewZipFile(resolver.get(), file->urn);
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(resolver.get(), file->urn);
 
   cout << "Volume URN:" << zip->urn.SerializeToString().data() << "\n";
 
-  AFF4Stream *segment = zip->CreateMember("Foobar.txt");
+  AFF4ScopedPtr<AFF4Stream> segment = zip->CreateMember("Foobar.txt");
   segment->Write("I am a segment!");
 
   // This is actually the same stream as above, we will simply get the same
   // pointer and so the new message will be appended to the old message.
-  AFF4Stream *segment2 = zip->CreateMember("Foobar.txt");
+  AFF4ScopedPtr<AFF4Stream> segment2 = zip->CreateMember("Foobar.txt");
   segment2->Write("I am another segment!");
 };
 
@@ -121,11 +124,13 @@ void test_ZipFileCreate() {
 void test_ZipFileRead() {
   unique_ptr<DataStore> resolver(new MemoryDataStore());
 
-  AFF4Stream *file = AFF4FactoryOpen<AFF4Stream>(resolver.get(), "test.zip");
+  AFF4ScopedPtr<AFF4Stream> file = resolver->AFF4FactoryOpen<AFF4Stream>(
+      "test.zip");
+
   URN zip_urn;
 
   // The backing file is given to the zip.
-  ZipFile *zip = ZipFile::NewZipFile(resolver.get(), file->urn);
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(resolver.get(), file->urn);
 
   if (!zip) {
     cout << "Cant open zip file.\n";
@@ -137,7 +142,7 @@ void test_ZipFileRead() {
     cout << it->first << "\n";
   };
 
-  AFF4Stream *member = zip->CreateMember("Foobar.txt");
+  AFF4ScopedPtr<AFF4Stream> member = zip->CreateMember("Foobar.txt");
   cout << member->Read(100).c_str() << "\n";
 };
 
@@ -150,12 +155,15 @@ void test_ZipFileRead() {
 void test_OpenImageByURN(URN image_urn) {
   unique_ptr<DataStore> resolver(new MemoryDataStore());
 
-  AFF4Stream *file = AFF4FactoryOpen<AFF4Stream>(resolver.get(), "test.zip");
+  AFF4ScopedPtr<AFF4Stream> file = resolver->AFF4FactoryOpen<AFF4Stream>(
+      "test.zip");
+
   ZipFile::NewZipFile(resolver.get(), file->urn);
 
-  AFF4Image *image = AFF4FactoryOpen<AFF4Image>(resolver.get(), image_urn);
+  AFF4ScopedPtr<AFF4Image> image = resolver->AFF4FactoryOpen<AFF4Image>(
+      image_urn);
 
-  if (image) {
+  if (image.get()) {
     cout << image->urn.value << "\n";
     image->Seek(4, SEEK_SET);
     cout << "data:\n" << image->Read(100).c_str() << "\n";
@@ -168,43 +176,6 @@ void runTests() {
   test_OpenImageByURN(image_urn);
 
   return;
-
-#if 0
-  test_MemoryDataStore();
-
-  unique_ptr<AFF4Stream> stream = StringIO::NewStringIO();
-
-  test_AFF4Stream(stream.get());
-
-  DumpOracle();
-
-  AFF4Stream *file = AFF4FactoryOpen<AFF4Stream>("test_filename.bin");
-
-  if (file == NULL) {
-    cout << "Failed to create file.\n";
-    return;
-  };
-
-  test_AFF4Stream(file);
-
-  test_ZipFileCreate();
-
-  oracle.Flush();
-
-  DumpOracle();
-
-  oracle.Clear();
-
-  test_ZipFileRead();
-
-  return;
-
-
-  return;
-
-  test_AFF4Stream(StringIO::NewStringIO().get());
-#endif
-
 };
 
 

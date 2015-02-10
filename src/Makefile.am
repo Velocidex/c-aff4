@@ -34,7 +34,7 @@ libaff4_la_SOURCES = \
 
 libaff4_la_LIBADD =  -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog -lgflags
 
-bin_PROGRAMS = stream_test
-stream_test_LDADD = libaff4.la
-stream_test_CXXFLAGS = -std=c++11 -g -Wall -O0
-stream_test_SOURCES = stream_test.cc
+bin_PROGRAMS = aff4imager
+aff4imager_LDADD = libaff4.la
+aff4imager_CXXFLAGS = -std=c++11 -g -Wall -O0
+aff4imager_SOURCES = aff4imager.cc

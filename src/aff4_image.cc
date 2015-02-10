@@ -17,11 +17,13 @@ specific language governing permissions and limitations under the License.
 #include "aff4_image.h"
 #include <zlib.h>
 
-AFF4Image *AFF4Image::NewAFF4Image(
+AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
     DataStore *resolver, const string &filename, const URN &volume_urn) {
-  AFF4Volume *volume = AFF4FactoryOpen<AFF4Volume>(resolver, volume_urn);
+  AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
+      volume_urn);
+
   if (!volume)
-    return NULL;                        /** Volume not known? */
+    return AFF4ScopedPtr<AFF4Image>();        /** Volume not known? */
 
   unique_ptr<AFF4Image> result(new AFF4Image(resolver));
 
@@ -31,7 +33,7 @@ AFF4Image *AFF4Image::NewAFF4Image(
   resolver->Set(result->urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
   resolver->Set(result->urn, AFF4_STORED, new URN(volume_urn));
 
-  return AFF4FactoryOpen<AFF4Image>(resolver, result->urn);
+  return resolver->AFF4FactoryOpen<AFF4Image>(result->urn);
 };
 
 
@@ -77,14 +79,16 @@ AFF4Status AFF4Image::_FlushBevy() {
   URN bevy_index_urn(bevy_urn.Append("index"));
 
   // Open the volume.
-  AFF4Volume *volume = AFF4FactoryOpen<AFF4Volume>(resolver, volume_urn);
+  AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
+      volume_urn);
+
   if (!volume) {
     return NOT_FOUND;
   };
 
   // Create the new segments in this zip file.
-  AFF4Stream *bevy_index_stream = volume->CreateMember(bevy_index_urn.value);
-  AFF4Stream *bevy_stream = volume->CreateMember(bevy_urn.value);
+  AFF4ScopedPtr<AFF4Stream> bevy_index_stream = volume->CreateMember(bevy_index_urn.value);
+  AFF4ScopedPtr<AFF4Stream> bevy_stream = volume->CreateMember(bevy_urn.value);
 
   if(!bevy_index_stream || ! bevy_stream) {
     LOG(ERROR) << "Unable to create bevy URN";
@@ -171,7 +175,7 @@ int AFF4Image::Write(const char *data, int length) {
  * @return number of bytes read, or AFF4Status for error.
  */
 AFF4Status AFF4Image::_ReadChunkFromBevy(
-    string &result, unsigned int chunk_id, AFF4Stream *bevy,
+    string &result, unsigned int chunk_id, AFF4ScopedPtr<AFF4Stream> &bevy,
     uint32_t bevy_index[], uint32_t index_size) {
 
   unsigned int chunk_id_in_bevy = chunk_id % chunks_per_segment;
@@ -227,10 +231,12 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
     URN bevy_urn = urn.Append(aff4_sprintf("%08d", bevy_id));
     URN bevy_index_urn = bevy_urn.Append("index");
 
-    AFF4Stream *bevy_index = AFF4FactoryOpen<AFF4Stream>(
-        resolver, bevy_index_urn);
+    AFF4ScopedPtr<AFF4Stream> bevy_index = resolver->AFF4FactoryOpen<AFF4Stream>(
+        bevy_index_urn);
 
-    AFF4Stream *bevy = AFF4FactoryOpen<AFF4Stream>(resolver, bevy_urn);
+    AFF4ScopedPtr<AFF4Stream> bevy = resolver->AFF4FactoryOpen<AFF4Stream>(
+        bevy_urn);
+
     if(!bevy_index || !bevy) {
       LOG(ERROR) << "Unable to open bevy " << bevy_urn.value.c_str();
       return -1;
@@ -318,6 +324,8 @@ AFF4Status AFF4Image::Flush() {
     resolver->Set(urn, AFF4_IMAGE_COMPRESSION,
                   new URN(AFF4_IMAGE_COMPRESSION_DEFLATE));
   };
+
+  return STATUS_OK;
 };
 
 static AFF4Registrar<AFF4Image> r1(AFF4_IMAGE_TYPE);

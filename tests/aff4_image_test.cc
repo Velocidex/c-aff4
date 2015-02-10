@@ -23,15 +23,18 @@ class AFF4ImageTest: public ::testing::Test {
     unlink(filename.c_str());
 
     // First create the backing file.
-    AFF4Stream* file = AFF4FactoryOpen<AFF4Stream>(&resolver, filename);
+    AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
+        filename);
 
-    ASSERT_TRUE(file) << "Unable to create file";
+    ASSERT_TRUE(file.get()) << "Unable to create file";
 
     // The backing file is given to the volume.
-    AFF4Volume* zip = ZipFile::NewZipFile(&resolver, file->urn);
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
+        &resolver, file->urn);
 
     // Now an image is created inside the volume.
-    AFF4Image *image = AFF4Image::NewAFF4Image(&resolver, image_name, zip->urn);
+    AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
+        &resolver, image_name, zip->urn);
 
     // For testing - rediculously small chunks. This will create many bevies.
     image->chunk_size = 10;
@@ -50,13 +53,14 @@ TEST_F(AFF4ImageTest, OpenImageByURN) {
   MemoryDataStore resolver;
 
   // Load the zip file into the resolver.
-  AFF4Volume* zip = ZipFile::NewZipFile(&resolver, filename);
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
 
-  ASSERT_TRUE(zip);
+  ASSERT_TRUE(zip.get());
 
-  AFF4Image *image = AFF4FactoryOpen<AFF4Image>(&resolver, image_urn);
+  AFF4ScopedPtr<AFF4Image> image = resolver.AFF4FactoryOpen<AFF4Image>(
+      image_urn);
 
-  ASSERT_TRUE(image) << "Unable to open the image urn!";
+  ASSERT_TRUE(image.get()) << "Unable to open the image urn!";
 
   // Ensure the newly opened image has the correct parameters.
   EXPECT_EQ(image->chunk_size, 10);
@@ -75,13 +79,15 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
   MemoryDataStore resolver;
 
   // Load the zip file into the resolver.
-  AFF4Volume* zip = ZipFile::NewZipFile(&resolver, filename);
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
+      &resolver, filename);
 
-  ASSERT_TRUE(zip);
+  ASSERT_TRUE(zip.get());
 
-  AFF4Image *image = AFF4FactoryOpen<AFF4Image>(&resolver, image_urn);
+  AFF4ScopedPtr<AFF4Image> image = resolver.AFF4FactoryOpen<AFF4Image>(
+      image_urn);
 
-  ASSERT_TRUE(image) << "Unable to open the image urn!";
+  ASSERT_TRUE(image.get()) << "Unable to open the image urn!";
 
   unique_ptr<StringIO> stream_copy = StringIO::NewStringIO();
   for(int i=0; i<100; i++) {

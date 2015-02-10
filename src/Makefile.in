@@ -80,7 +80,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-bin_PROGRAMS = stream_test$(EXEEXT)
+bin_PROGRAMS = aff4imager$(EXEEXT)
 subdir = src
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(srcdir)/config.h.in $(top_srcdir)/depcomp \
@@ -140,11 +140,11 @@ libaff4_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(libaff4_la_CXXFLAGS) \
 	$(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 PROGRAMS = $(bin_PROGRAMS)
-am_stream_test_OBJECTS = stream_test-stream_test.$(OBJEXT)
-stream_test_OBJECTS = $(am_stream_test_OBJECTS)
-stream_test_DEPENDENCIES = libaff4.la
-stream_test_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
-	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(stream_test_CXXFLAGS) \
+am_aff4imager_OBJECTS = aff4imager-aff4imager.$(OBJEXT)
+aff4imager_OBJECTS = $(am_aff4imager_OBJECTS)
+aff4imager_DEPENDENCIES = libaff4.la
+aff4imager_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(aff4imager_CXXFLAGS) \
 	$(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -180,8 +180,8 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
-SOURCES = $(libaff4_la_SOURCES) $(stream_test_SOURCES)
-DIST_SOURCES = $(libaff4_la_SOURCES) $(stream_test_SOURCES)
+SOURCES = $(libaff4_la_SOURCES) $(aff4imager_SOURCES)
+DIST_SOURCES = $(libaff4_la_SOURCES) $(aff4imager_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -361,9 +361,9 @@ libaff4_la_SOURCES = \
 	 rdf.cc  stream_test.cc  zip.cc
 
 libaff4_la_LIBADD = -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog -lgflags
-stream_test_LDADD = libaff4.la
-stream_test_CXXFLAGS = -std=c++11 -g -Wall -O0
-stream_test_SOURCES = stream_test.cc
+aff4imager_LDADD = libaff4.la
+aff4imager_CXXFLAGS = -std=c++11 -g -Wall -O0
+aff4imager_SOURCES = aff4imager.cc
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
 
@@ -502,9 +502,9 @@ clean-binPROGRAMS:
 	echo " rm -f" $$list; \
 	rm -f $$list
 
-stream_test$(EXEEXT): $(stream_test_OBJECTS) $(stream_test_DEPENDENCIES) $(EXTRA_stream_test_DEPENDENCIES) 
-	@rm -f stream_test$(EXEEXT)
-	$(AM_V_CXXLD)$(stream_test_LINK) $(stream_test_OBJECTS) $(stream_test_LDADD) $(LIBS)
+aff4imager$(EXEEXT): $(aff4imager_OBJECTS) $(aff4imager_DEPENDENCIES) $(EXTRA_aff4imager_DEPENDENCIES) 
+	@rm -f aff4imager$(EXEEXT)
+	$(AM_V_CXXLD)$(aff4imager_LINK) $(aff4imager_OBJECTS) $(aff4imager_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -512,6 +512,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4imager-aff4imager.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-aff4_image.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-aff4_init.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-data_store.Plo@am__quote@
@@ -519,7 +520,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-rdf.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-stream_test.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-zip.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stream_test-stream_test.Po@am__quote@
 
 .cc.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -591,19 +591,19 @@ libaff4_la-zip.lo: zip.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libaff4_la_CXXFLAGS) $(CXXFLAGS) -c -o libaff4_la-zip.lo `test -f 'zip.cc' || echo '$(srcdir)/'`zip.cc
 
-stream_test-stream_test.o: stream_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(stream_test_CXXFLAGS) $(CXXFLAGS) -MT stream_test-stream_test.o -MD -MP -MF $(DEPDIR)/stream_test-stream_test.Tpo -c -o stream_test-stream_test.o `test -f 'stream_test.cc' || echo '$(srcdir)/'`stream_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/stream_test-stream_test.Tpo $(DEPDIR)/stream_test-stream_test.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='stream_test.cc' object='stream_test-stream_test.o' libtool=no @AMDEPBACKSLASH@
+aff4imager-aff4imager.o: aff4imager.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4imager_CXXFLAGS) $(CXXFLAGS) -MT aff4imager-aff4imager.o -MD -MP -MF $(DEPDIR)/aff4imager-aff4imager.Tpo -c -o aff4imager-aff4imager.o `test -f 'aff4imager.cc' || echo '$(srcdir)/'`aff4imager.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/aff4imager-aff4imager.Tpo $(DEPDIR)/aff4imager-aff4imager.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='aff4imager.cc' object='aff4imager-aff4imager.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(stream_test_CXXFLAGS) $(CXXFLAGS) -c -o stream_test-stream_test.o `test -f 'stream_test.cc' || echo '$(srcdir)/'`stream_test.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4imager_CXXFLAGS) $(CXXFLAGS) -c -o aff4imager-aff4imager.o `test -f 'aff4imager.cc' || echo '$(srcdir)/'`aff4imager.cc
 
-stream_test-stream_test.obj: stream_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(stream_test_CXXFLAGS) $(CXXFLAGS) -MT stream_test-stream_test.obj -MD -MP -MF $(DEPDIR)/stream_test-stream_test.Tpo -c -o stream_test-stream_test.obj `if test -f 'stream_test.cc'; then $(CYGPATH_W) 'stream_test.cc'; else $(CYGPATH_W) '$(srcdir)/stream_test.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/stream_test-stream_test.Tpo $(DEPDIR)/stream_test-stream_test.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='stream_test.cc' object='stream_test-stream_test.obj' libtool=no @AMDEPBACKSLASH@
+aff4imager-aff4imager.obj: aff4imager.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4imager_CXXFLAGS) $(CXXFLAGS) -MT aff4imager-aff4imager.obj -MD -MP -MF $(DEPDIR)/aff4imager-aff4imager.Tpo -c -o aff4imager-aff4imager.obj `if test -f 'aff4imager.cc'; then $(CYGPATH_W) 'aff4imager.cc'; else $(CYGPATH_W) '$(srcdir)/aff4imager.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/aff4imager-aff4imager.Tpo $(DEPDIR)/aff4imager-aff4imager.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='aff4imager.cc' object='aff4imager-aff4imager.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(stream_test_CXXFLAGS) $(CXXFLAGS) -c -o stream_test-stream_test.obj `if test -f 'stream_test.cc'; then $(CYGPATH_W) 'stream_test.cc'; else $(CYGPATH_W) '$(srcdir)/stream_test.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4imager_CXXFLAGS) $(CXXFLAGS) -c -o aff4imager-aff4imager.obj `if test -f 'aff4imager.cc'; then $(CYGPATH_W) 'aff4imager.cc'; else $(CYGPATH_W) '$(srcdir)/aff4imager.cc'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

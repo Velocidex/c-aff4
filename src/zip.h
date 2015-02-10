@@ -138,7 +138,7 @@ class ZipFileSegment: public StringIO {
   int compression_method = ZIP_STORED;  /**< Compression method. */
 
   virtual AFF4Status LoadFromURN();
-  virtual AFF4Status LoadFromZipFile(ZipFile *owner);
+  virtual AFF4Status LoadFromZipFile(ZipFile &owner);
 
   ZipFileSegment(const string &filename, URN &owner);
   ZipFileSegment(const string &filename, URN &owner, const string &data);
@@ -213,7 +213,7 @@ class ZipFile: public AFF4Volume {
   friend class ZipFileSegment;
 
  private:
-  void write_zip64_CD(AFF4Stream *backing_store);
+  void write_zip64_CD(AFF4Stream &backing_store);
   AFF4Status WriteCDFileHeader(ZipInfo &zip_info, AFF4Stream &output);
   AFF4Status WriteZipFileHeader(ZipInfo &zip_info, AFF4Stream &output);
 
@@ -251,10 +251,10 @@ class ZipFile: public AFF4Volume {
    *
    * @return A new ZipFile reference.
    */
-  static ZipFile* NewZipFile(DataStore *resolver, URN backing_store_urn);
+  static AFF4ScopedPtr<ZipFile> NewZipFile(DataStore *resolver, URN backing_store_urn);
 
   // Generic volume interface.
-  virtual AFF4Stream *CreateMember(string filename);
+  virtual AFF4ScopedPtr<AFF4Stream> CreateMember(string filename);
 
   /**
    * Creates a new ZipFileSegment object. The new object is automatically added
@@ -265,8 +265,8 @@ class ZipFile: public AFF4Volume {
    *
    * @return
    */
-  ZipFileSegment *CreateZipSegment(string filename);
-  unique_ptr<ZipFileSegment> OpenZipSegment(string filename);
+  AFF4ScopedPtr<ZipFileSegment> CreateZipSegment(string filename);
+  AFF4ScopedPtr<ZipFileSegment> OpenZipSegment(string filename);
 
   // Load the ZipFile from its URN and the information in the oracle.
   virtual AFF4Status LoadFromURN();

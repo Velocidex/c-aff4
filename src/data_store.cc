@@ -22,6 +22,13 @@ specific language governing permissions and limitations under the License.
 #include <raptor2/raptor2.h>
 #include <glog/logging.h>
 
+DataStore::DataStore() {
+  // By default suppress ZipFileSegment objects since all their metadata comes
+  // directly from the ZIP container. This keeps the turtle files a bit cleaner.
+  suppressed_rdftypes.insert(AFF4_ZIP_SEGMENT_TYPE);
+};
+
+
 DataStore::~DataStore() {
 };
 
@@ -239,6 +246,14 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
 
   for(const auto &it: store) {
     URN subject(it.first);
+    URN type;
+
+    // Skip this URN if it is in the suppressed_rdftypes set.
+    if (Get(subject, AFF4_TYPE, type) == STATUS_OK) {
+      if(suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
+        continue;
+      };
+    };
 
     for(const auto &attr_it: it.second) {
       URN predicate(attr_it.first);

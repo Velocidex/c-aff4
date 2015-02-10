@@ -63,7 +63,7 @@ class AFF4Image: public AFF4Stream {
   AFF4Status _FlushBevy();
   int _ReadPartial(unsigned int chunk_id, int chunks_to_read, string &result);
   AFF4Status _ReadChunkFromBevy(string &result, unsigned int chunk_id,
-                                AFF4Stream *bevy, uint32_t bevy_index[],
+                                AFF4ScopedPtr<AFF4Stream> &bevy, uint32_t bevy_index[],
                                 uint32_t index_size);
   string buffer;
 
@@ -99,7 +99,7 @@ class AFF4Image: public AFF4Stream {
    *
    * @return A unique reference to a new AFF4Image object.
    */
-  static AFF4Image *NewAFF4Image(
+  static AFF4ScopedPtr<AFF4Image> NewAFF4Image(
       DataStore *resolver, const string &filename, const URN &volume_urn);
 
   /**

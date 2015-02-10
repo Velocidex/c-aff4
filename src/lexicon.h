@@ -31,6 +31,9 @@ specific language governing permissions and limitations under the License.
 
 #include "rdf.h"
 
+#define AFF4_VERSION "0.1"
+
+
 #define AFF4_NAMESPACE "http://afflib.org/2009/aff4#"
 #define XSD_NAMESPACE "http://www.w3.org/2001/XMLSchema#"
 #define RDF_NAMESPACE "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
