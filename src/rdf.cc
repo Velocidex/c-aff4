@@ -135,6 +135,16 @@ URN URN::Append(const string &component) {
 };
 
 
+string URN::RelativePath(const URN urn) const {
+  // For now very simple. In future normalize the URNs.
+  if (0 == urn.value.compare(0, value.size(), value)) {
+    return urn.value.substr(value.size(), string::npos);
+  };
+
+  return urn.value;
+};
+
+
 string XSDInteger::SerializeToString() const {
     return aff4_sprintf("%ld", value);
 };
@@ -172,6 +182,43 @@ raptor_term *XSDInteger::GetRaptorTerm(raptor_world *world) const {
   return result;
 };
 
+
+string XSDBoolean::SerializeToString() const {
+  return value ? "true": "false";
+};
+
+AFF4Status XSDBoolean::UnSerializeFromString(const char *data, int length) {
+  string s_data = string(data, length);
+  if (s_data == "true" || s_data == "1") {
+    value = true;
+  } else if(s_data == "false" || s_data == "0") {
+    value = false;
+  } else {
+    return PARSING_ERROR;
+  };
+
+  return STATUS_OK;
+};
+
+
+raptor_term *XSDBoolean::GetRaptorTerm(raptor_world *world) const {
+  string value_string(SerializeToString());
+  raptor_uri *uri = raptor_new_uri(
+      world, (const unsigned char *)XSD_NAMESPACE "boolean");
+
+  raptor_term *result= raptor_new_term_from_counted_literal(
+      world,
+      (const unsigned char *)value_string.c_str(),
+      value_string.size(),
+      uri,
+      NULL, 0);
+
+  raptor_free_uri(uri);
+
+  return result;
+};
+
+
 // A Global Registry for RDFValue. This factory will provide the correct
 // RDFValue instance based on the turtle type URN. For example xsd:integer ->
 // XSDInteger().
@@ -184,3 +231,4 @@ static RDFValueRegistrar<XSDString> r2(XSD_NAMESPACE "string");
 static RDFValueRegistrar<XSDInteger> r3(XSD_NAMESPACE "integer");
 static RDFValueRegistrar<XSDInteger> r4(XSD_NAMESPACE "int");
 static RDFValueRegistrar<XSDInteger> r5(XSD_NAMESPACE "long");
+static RDFValueRegistrar<XSDBoolean> r6(XSD_NAMESPACE "boolean");

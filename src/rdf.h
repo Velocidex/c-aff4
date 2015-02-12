@@ -126,6 +126,10 @@ class RDFBytes: public RDFValue {
     return this->value == other.value;
   }
 
+  bool operator==(const string& other) const {
+    return this->value == other;
+  }
+
 };
 
 /**
@@ -177,6 +181,31 @@ class XSDInteger: public RDFValue {
 
 
 /**
+ * A XSDBoolean stores a boolean. We can parse xsd:boolean.
+ *
+ */
+class XSDBoolean: public RDFValue {
+ public:
+  bool value;
+
+  XSDBoolean(bool data):
+      RDFValue(NULL), value(data) {};
+
+  XSDBoolean(DataStore *resolver):
+      RDFValue(resolver) {};
+
+  XSDBoolean() {};
+
+  string SerializeToString() const;
+
+  AFF4Status UnSerializeFromString(const char *data, int length);
+
+  raptor_term *GetRaptorTerm(raptor_world *world) const;
+};
+
+
+
+/**
  * Once a URN is parsed we place its components into one easy to use struct.
  *
  */
@@ -207,6 +236,17 @@ class URN: public XSDString {
   raptor_term *GetRaptorTerm(raptor_world *world) const;
   uri_components Parse() const;
 
+  /**
+   * returns the path of the URN relative to ourselves.
+   *
+   * If the urn contains us as a common prefix, we remove that and return a
+   * relative path. Otherwise we return the complete urn as an absolution path.
+   *
+   * @param urn: The urn to check.
+   *
+   * @return A string representing the path.
+   */
+  string RelativePath(const URN urn) const;
 };
 
 

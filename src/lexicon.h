@@ -24,8 +24,6 @@ specific language governing permissions and limitations under the License.
  * @brief This file defines attribute URNs of AFF4 object predicates. It
  *        standardizes on these attributes which must be interoperable to all
  *        AFF4 implementations.
- *
- *
  */
 
 
@@ -38,6 +36,11 @@ specific language governing permissions and limitations under the License.
 #define XSD_NAMESPACE "http://www.w3.org/2001/XMLSchema#"
 #define RDF_NAMESPACE "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
+// Attributes in this namespace will never be written to persistant
+// storage. They are simply used as a way for storing metadata about an AFF4
+// object internally.
+#define AFF4_VOLATILE_NAMESPACE "Volatile:"
+
 /// Attribute names for different AFF4 objects.
 /// Base AFF4Object
 #define AFF4_TYPE (RDF_NAMESPACE "type")
@@ -48,6 +51,9 @@ specific language governing permissions and limitations under the License.
 
 /// AFF4Stream
 #define AFF4_STREAM_SIZE (AFF4_NAMESPACE "size")
+
+// Can be "read", "truncate", "append"
+#define AFF4_STREAM_WRITE_MODE (AFF4_VOLATILE_NAMESPACE "writable")
 
 /// ZipFileSegment
 #define AFF4_ZIP_SEGMENT_TYPE (AFF4_NAMESPACE "zip_segment")

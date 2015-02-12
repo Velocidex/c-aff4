@@ -4,7 +4,7 @@
 ACLOCAL_AMFLAGS = -I m4
 
 # This is so we can #include <package/foo>
-AM_CPPFLAGS = -I$(top_srcdir)/src
+AM_CPPFLAGS = -I$(top_srcdir)/src -I$(top_srcdir)/third_party/include -DHAVE_SSTREAM
 
 # These are good warnings to turn on by default
 if GCC
@@ -27,10 +27,11 @@ libaff4_include_HEADERS = \
 	aff4_errors.h  aff4_init.h   aff4_registry.h \
 	aff4_utils.h   data_store.h  libaff4.h  zip.h
 
+
 libaff4_la_CXXFLAGS = -std=c++11 -g -Wall -O0
 libaff4_la_SOURCES = \
-	aff4_image.cc  aff4_init.cc  data_store.cc  libaff4.cc \
-	 rdf.cc  stream_test.cc  zip.cc
+	aff4_image.cc aff4_init.cc data_store.cc libaff4.cc \
+	rdf.cc stream_test.cc zip.cc
 
 libaff4_la_LIBADD =  -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog -lgflags
 

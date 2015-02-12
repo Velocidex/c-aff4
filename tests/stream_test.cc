@@ -71,6 +71,10 @@ class FileBackedStreamTest: public StreamTest {
 
 TEST_F(FileBackedStreamTest, FileBackedObjectIOTest) {
   MemoryDataStore resolver;
+
+  // We are allowed to write on the output filename.
+  resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+
   AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
       filename);
 

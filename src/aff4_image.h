@@ -91,8 +91,8 @@ class AFF4Image: public AFF4Stream {
    * After callers receive a new AFF4Image object they may modify the parameters
    * before calling Write().
    *
-   * @param filename: The name of the stream which will be created in the
-   *                  volume.
+   * @param image_urn: The URN of the stream which will be created in the
+   *                   volume.
    *
    * @param volume: An AFF4Volume instance. We take a shared reference to the
    *                volume object and write segments into it as required.
@@ -100,7 +100,7 @@ class AFF4Image: public AFF4Stream {
    * @return A unique reference to a new AFF4Image object.
    */
   static AFF4ScopedPtr<AFF4Image> NewAFF4Image(
-      DataStore *resolver, const string &filename, const URN &volume_urn);
+      DataStore *resolver, const URN &image_urn, const URN &volume_urn);
 
   /**
    * Load the file from an AFF4 URN.

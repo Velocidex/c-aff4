@@ -334,8 +334,7 @@ class MemoryDataStore: public DataStore {
    * @param value: The value.
    */
   virtual void Set(const URN &urn, const URN &attribute, RDFValue *value);
-  virtual void Set(const URN &urn, const URN &attribute,
-                   unique_ptr<RDFValue> value);
+  virtual void Set(const URN &urn, const URN &attribute, unique_ptr<RDFValue> value);
 
   AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value);
 

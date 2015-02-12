@@ -18,6 +18,10 @@ class ZipTest: public ::testing::Test {
   // Create an initial Zip file for each test.
   virtual void SetUp() {
     MemoryDataStore resolver;
+
+    // We are allowed to write on the output filename.
+    resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+
     AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
         filename);
 

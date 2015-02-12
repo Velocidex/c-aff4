@@ -18,22 +18,20 @@ specific language governing permissions and limitations under the License.
 #include <zlib.h>
 
 AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
-    DataStore *resolver, const string &filename, const URN &volume_urn) {
+    DataStore *resolver, const URN &image_urn, const URN &volume_urn) {
   AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
       volume_urn);
 
   if (!volume)
     return AFF4ScopedPtr<AFF4Image>();        /** Volume not known? */
 
-  unique_ptr<AFF4Image> result(new AFF4Image(resolver));
-
   // Inform the volume that we have a new image stream contained within it.
-  volume->children.insert(result->urn.value);
+  volume->children.insert(image_urn.value);
 
-  resolver->Set(result->urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
-  resolver->Set(result->urn, AFF4_STORED, new URN(volume_urn));
+  resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
+  resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
 
-  return resolver->AFF4FactoryOpen<AFF4Image>(result->urn);
+  return resolver->AFF4FactoryOpen<AFF4Image>(image_urn);
 };
 
 
@@ -142,7 +140,8 @@ AFF4Status AFF4Image::FlushChunk(const char *data, int length) {
 };
 
 int AFF4Image::Write(const char *data, int length) {
-  _dirty = true;
+  // This object is now dirty.
+  MarkDirty();
 
   buffer.append(data, length);
 
@@ -308,6 +307,7 @@ AFF4Status AFF4Image::Flush() {
   if(IsDirty()) {
     // Flush the last chunk.
     FlushChunk(buffer.c_str(), buffer.length());
+    buffer.resize(0);
     _FlushBevy();
 
     resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
@@ -323,9 +323,11 @@ AFF4Status AFF4Image::Flush() {
     resolver->Set(urn, AFF4_STREAM_SIZE, new XSDInteger(size));
     resolver->Set(urn, AFF4_IMAGE_COMPRESSION,
                   new URN(AFF4_IMAGE_COMPRESSION_DEFLATE));
+
   };
 
-  return STATUS_OK;
+  // Always call the baseclass to ensure the object is marked non dirty.
+  return AFF4Stream::Flush();
 };
 
 static AFF4Registrar<AFF4Image> r1(AFF4_IMAGE_TYPE);

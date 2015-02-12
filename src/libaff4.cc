@@ -43,6 +43,9 @@ AFF4Object::AFF4Object(DataStore *resolver): resolver(resolver) {
 
 
 AFF4Status AFF4Object::Flush() {
+  // Flushing makes the object no longer dirty.
+  _dirty = false;
+
   return STATUS_OK;
 };
 
@@ -150,7 +153,7 @@ int AFF4Stream::sprintf(string fmt, ...) {
 
 
 int StringIO::Write(const char *data, int length) {
-  _dirty = true;
+  MarkDirty();
 
   buffer.replace(readptr, length, data, length);
   readptr += length;
@@ -179,17 +182,23 @@ AFF4Status StringIO::Truncate() {
 AFF4Status FileBackedObject::LoadFromURN() {
   int flags = O_RDONLY | O_BINARY;
   uri_components components = urn.Parse();
-  string mode = "rw";
+  XSDString mode("read");
 
   // Only file:// URNs are supported.
   if (components.scheme != "file") {
     return INVALID_INPUT;
   };
 
-  if(mode == "w") {
+  // Attribute is optional so if it is not there we just go with false.
+  resolver->Get(urn, AFF4_STREAM_WRITE_MODE, mode);
+
+  if(mode == "truncate") {
     flags |= O_CREAT | O_TRUNC | O_RDWR;
 
-  } else if (mode == "rw") {
+    // Next call will append.
+    resolver->Set(urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+
+  } else if (mode == "append") {
     flags |= O_CREAT | O_RDWR;
   };
 
@@ -221,8 +230,6 @@ string FileBackedObject::Read(size_t length) {
 
 int FileBackedObject::Write(const char *data, int length) {
   // Since all file operations are synchronous this object can not be dirty.
-  _dirty = false;
-
   lseek(fd, readptr, SEEK_SET);
   int res = write(fd, data, length);
   if (res > 0) {

@@ -255,11 +255,9 @@ AFF4Status ZipFile::Flush() {
     write_zip64_CD(*backing_store);
 
     backing_store->Flush();
-
-    _dirty = false;
   };
 
-  return STATUS_OK;
+  return AFF4Volume::Flush();
 };
 
 /** This writes a zip64 end of central directory and a central
@@ -540,11 +538,9 @@ AFF4Status ZipFileSegment::Flush() {
 
     owner->MarkDirty();
 
-    // We are now considered flushed.
-    _dirty = false;
   };
 
-  return STATUS_OK;
+  return AFF4Stream::Flush();
 };
 
 

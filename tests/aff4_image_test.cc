@@ -22,6 +22,9 @@ class AFF4ImageTest: public ::testing::Test {
 
     unlink(filename.c_str());
 
+    // We are allowed to write on the output filename.
+    resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+
     // First create the backing file.
     AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
         filename);
@@ -34,7 +37,7 @@ class AFF4ImageTest: public ::testing::Test {
 
     // Now an image is created inside the volume.
     AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
-        &resolver, image_name, zip->urn);
+        &resolver, zip->urn.Append(image_name), zip->urn);
 
     // For testing - rediculously small chunks. This will create many bevies.
     image->chunk_size = 10;

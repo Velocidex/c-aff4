@@ -19,60 +19,145 @@ specific language governing permissions and limitations under the License.
 */
 #include "libaff4.h"
 #include <glog/logging.h>
-#include <gflags/gflags.h>
 #include <iostream>
+#include <algorithm>
 
-DEFINE_bool(aff4_version, false, "Print version of AFF4 library.");
+// Supports all integer inputs given as hex.
+#define TCLAP_SETBASE_ZERO 1
+#include <tclap/CmdLine.h>
 
-DEFINE_bool(view, false, "Dump information about all streams. This command "
-            "should be followed by a list of AFF4 volumes to open.");
+using namespace TCLAP;
+using namespace std;
 
-DEFINE_bool(image, false, "Switch on imaging mode. The infile and outfile "
-            "parameters are expected.");
 
-DEFINE_string(infile, "-", "The filename to read or '-' for stdin.");
-DEFINE_string(outfile, "-", "The filename to write on or '-' for stdout.");
+AFF4Status ImageStream(DataStore &resolver, URN input_urn,
+                       URN output_urn,
+                       unsigned int buffer_size=1024*1024) {
+  AFF4ScopedPtr<AFF4Stream> input = resolver.AFF4FactoryOpen<AFF4Stream>(input_urn);
+  AFF4ScopedPtr<AFF4Stream> output = resolver.AFF4FactoryOpen<AFF4Stream>(output_urn);
+
+  if(!input) {
+    LOG(ERROR) << "Failed to open input file: " << input_urn.value.c_str()
+               << ".\n";
+    return IO_ERROR;
+  };
+
+  if(!output) {
+    LOG(ERROR) << "Failed to create output file: " << output_urn.value.c_str()
+               << ".\n";
+    return IO_ERROR;
+  };
+
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, output->urn);
+  if(!zip) {
+    return IO_ERROR;
+  };
+
+  // Create a new image in this volume.
+  URN image_urn = zip->urn.Append(input_urn.Parse().path);
+
+  AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
+      &resolver, image_urn, zip->urn);
+
+  if(!image) {
+    return IO_ERROR;
+  };
+
+  while(1) {
+    string data = input->Read(buffer_size);
+    if(data.size() == 0) {
+      break;
+    };
+
+    image->Write(data);
+  };
+
+  return STATUS_OK;
+};
+
+
+AFF4Status parseOptions(int argc, char** argv) {
+  MemoryDataStore resolver;
+
+  try {
+    CmdLine cmd("AFF4 Imager", ' ', AFF4_VERSION);
+
+    SwitchArg view("V", "view", "View AFF4 metadata", false);
+    cmd.add(view);
+
+    SwitchArg verbose("v", "verbose", "Display more verbose logging", false);
+    cmd.add(verbose);
+
+    SwitchArg truncate("t", "truncate", "Truncate the output file.", false);
+    cmd.add(truncate);
+
+    ValueArg<string> input("i", "in", "File to Image", false, "",
+                           "string");
+    cmd.add(input);
+
+    ValueArg<string> output(
+        "o", "out", "Output Volume to write to. If the volume does not "
+        "exit we create it.", false, "",
+        "Output Volume.");
+    cmd.add(output);
+
+    UnlabeledMultiArg<string> filename(
+        "fileName", "These AFF4 Volumes will be loaded and their metadata will "
+        "be parsed before the program runs.",
+        false, "AFF4 Volumes to pre-load.");
+    cmd.add(filename);
+
+    //
+    // Parse the command line.
+    //
+    cmd.parse(argc,argv);
+
+    if(verbose.isSet()) {
+      google::SetStderrLogging(google::GLOG_INFO);
+    };
+
+    if(input.isSet()) {
+      if(!output.isSet()) {
+        cout << "ERROR: Can not specify an input without an output\n";
+        return INVALID_INPUT;
+      };
+
+      URN output_urn(output.getValue());
+      URN input_urn(input.getValue());
+
+      // We are allowed to write on the output file.
+      if(truncate.isSet()) {
+        LOG(INFO) << "Truncating output file: " << output_urn.value << "\n";
+        resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+      } else {
+        resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+      };
+
+      return ImageStream(resolver, input_urn, output_urn);
+    };
+
+    vector<string> v = filename.getValue();
+    for (unsigned int i = 0; i < v.size(); i++)
+      cout << i << "  " <<  v[i] << endl;
+
+  } catch (ArgException& e) {
+    cout << "ERROR: " << e.error() << " " << e.argId() << endl;
+  }
+
+  return STATUS_OK;
+}
 
 
 int main(int argc, char* argv[]) {
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
 
-  google::SetUsageMessage("AFF4 Imager.");
-  google::SetVersionString(AFF4_VERSION);
+  google::LogToStderr();
+  google::SetStderrLogging(google::GLOG_ERROR);
 
-  google::ParseCommandLineFlags(&argc, &argv, true);
+  AFF4Status res = parseOptions(argc, argv);
+  if (res == STATUS_OK)
+    return 0;
 
-  MemoryDataStore resolver;
-
-  // First load all volumes provided. If we fail we die here.
-  for(int i=1; i<argc; i++) {
-    AFF4ScopedPtr<AFF4Stream> backing_file = resolver.AFF4FactoryOpen<AFF4Stream>(
-        argv[i]);
-
-    if(!backing_file->Size()) {
-      LOG(ERROR) << "Unable to open " << argv[i] << "\n";
-      exit(-1);
-    };
-
-    ZipFile::NewZipFile(&resolver, argv[i]);
-  };
-
-
-  if (FLAGS_aff4_version) {
-    std::cout << "AFF4 Library version: " << AFF4_VERSION << "\n";
-    exit(0);
-  } else if (FLAGS_view) {
-    resolver.Dump();
-    exit(0);
-  } else if (FLAGS_image) {
-    LOG(INFO) << "Imaging mode selected." << "\n";
-  };
-
-  // If we get here just show the short help.
-  char *newargv[2] = {argv[0], (char *)"-helpshort"};
-  char **newargv_p = (char **)&newargv;
-  int newargc = 2;
-
-  google::ParseCommandLineFlags(&newargc, &newargv_p, false);
+  return res;
 }

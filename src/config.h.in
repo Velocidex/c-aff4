@@ -18,6 +18,9 @@
 /* Define to 1 if you have the `glog' library (-lglog). */
 #undef HAVE_LIBGLOG
 
+/* Define to 1 if you have the `pthread' library (-lpthread). */
+#undef HAVE_LIBPTHREAD
+
 /* Define to 1 if you have the `raptor2' library (-lraptor2). */
 #undef HAVE_LIBRAPTOR2
 

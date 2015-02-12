@@ -257,6 +257,13 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
 
     for(const auto &attr_it: it.second) {
       URN predicate(attr_it.first);
+
+      // Volatile predicates are suppressed.
+      if(0 == predicate.value.compare(
+             0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
+        continue;
+      };
+
       serializer->AddStatement(
           subject, predicate, attr_it.second.get());
     };
@@ -309,7 +316,6 @@ void MemoryDataStore::Set(const URN &urn, const URN &attribute,
   store[urn.SerializeToString()][attribute.SerializeToString()] = (
       std::move(value));
 };
-
 
 AFF4Status MemoryDataStore::Get(const URN &urn, const URN &attribute,
                                 RDFValue &value) {

@@ -60,6 +60,8 @@ AC_CHECK_LIB([gflags], [main], [], [
   exit -1
 ])
 
+AC_CHECK_LIB(pthread, pthread_create)
+
 # Checks for header files.
 AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h])
 
