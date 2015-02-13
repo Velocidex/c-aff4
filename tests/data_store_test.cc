@@ -58,7 +58,7 @@ TEST_F(MemoryDataStoreTest, TurtleSerializationTest) {
   unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
   XSDString result;
 
-  store.DumpToTurtle(*output);
+  store.DumpToTurtle(*output, "");
   output->Seek(0, 0);
 
   // Load the new store with the serialized data.

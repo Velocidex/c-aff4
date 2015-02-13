@@ -51,7 +51,13 @@ AFF4Status ZipFile::LoadTurtleMetadata() {
       OpenZipSegment("information.turtle"));
 
   if (turtle_stream.get()) {
-    return resolver->LoadFromTurtle(*turtle_stream);
+    AFF4Status res = resolver->LoadFromTurtle(*turtle_stream);
+
+    // Ensure the correct backing store URN overrides the one stored in the turtle
+    // file since it is more current.
+    resolver->Set(urn, AFF4_STORED, new URN(backing_store_urn));
+
+    return res;
   };
 
   return NOT_FOUND;
@@ -77,6 +83,11 @@ AFF4Status ZipFile::parse_cd() {
   EndCentralDirectory *end_cd = NULL;
   AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(
       backing_store_urn);
+
+  if (!backing_store) {
+    LOG(ERROR) << "Unable to open backing URN " << backing_store_urn.value.c_str();
+    return IO_ERROR;
+  };
 
   // Find the End of Central Directory Record - We read about 4k of
   // data and scan for the header from the end, just in case there is
@@ -206,7 +217,7 @@ AFF4Status ZipFile::parse_cd() {
 
       // Store this information in the resolver. Ths allows segments to be
       // directly opened by URN.
-      URN member_urn(zip_info->filename);
+      URN member_urn = _urn_from_member_name(zip_info->filename);
 
       resolver->Set(member_urn, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
       resolver->Set(member_urn, AFF4_STORED, new URN(urn));
@@ -243,7 +254,7 @@ AFF4Status ZipFile::Flush() {
         "information.turtle");
 
     turtle_segment->compression_method = ZIP_DEFLATE;
-    resolver->DumpToTurtle(*turtle_segment);
+    resolver->DumpToTurtle(*turtle_segment, urn);
     turtle_segment->Flush();
 
     AFF4ScopedPtr<ZipFileSegment> yaml_segment = CreateZipSegment(
@@ -302,8 +313,13 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   backing_store.Write(urn_string);
 };
 
-AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(string filename) {
-  AFF4ScopedPtr<ZipFileSegment> result = CreateZipSegment(filename);
+AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(URN child) {
+  // Create a zip member with a name relative to our volume URN. So for example,
+  // say our volume URN is "aff4://e21659ea-c7d6-4f4d-8070-919178aa4c7b" and the
+  // child is
+  // "aff4://e21659ea-c7d6-4f4d-8070-919178aa4c7b/bin/ls/00000000/index" then
+  // the zip member will be simply "/bin/ls/00000000/index".
+  AFF4ScopedPtr<ZipFileSegment> result = CreateZipSegment(urn.RelativePath(child));
   return result.cast<AFF4Stream>();
 };
 
@@ -314,7 +330,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::OpenZipSegment(string filename) {
   };
 
   AFF4ScopedPtr<ZipFileSegment> result(new ZipFileSegment(resolver), resolver);
-  result->urn.Set(filename);
+  result->urn = urn.Append(filename);
 
   result->LoadFromZipFile(*this);
 
@@ -322,14 +338,16 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::OpenZipSegment(string filename) {
 };
 
 AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
-  // Keep track of all the segments we issue.
-  children.insert(filename);
+  URN segment_urn = urn.Append(filename);
 
-  resolver->Set(filename, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
-  resolver->Set(filename, AFF4_STORED, new URN(urn));
+  resolver->Set(segment_urn, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
+  resolver->Set(segment_urn, AFF4_STORED, new URN(urn));
+
+  // Keep track of all the segments we issue.
+  children.insert(segment_urn.value);
 
   // Add the new object to the object cache.
-  return resolver->AFF4FactoryOpen<ZipFileSegment>(filename);
+  return resolver->AFF4FactoryOpen<ZipFileSegment>(segment_urn);
 };
 
 
@@ -350,8 +368,10 @@ ZipFileSegment::ZipFileSegment(
 
 
 AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
+  string member_name = owner._member_name_for_urn(urn);
+
   // Parse the ZipFileHeader for this filename.
-  auto it = owner.members.find(urn.value);
+  auto it = owner.members.find(member_name);
   if (it == owner.members.end()) {
     // The owner does not have this file yet.
     return STATUS_OK;
@@ -401,7 +421,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
       };
     } break;
 
-    case ZIP_STORED:{
+    case ZIP_STORED: {
       backing_store->ReadIntoBuffer(&buffer[0], buffer_size);
     } break;
 
@@ -510,7 +530,7 @@ AFF4Status ZipFileSegment::Flush() {
     backing_store->Seek(0, SEEK_END);
 
     zip_info->local_header_offset = backing_store->Tell();
-    zip_info->filename = urn.value.c_str();
+    zip_info->filename = owner->_member_name_for_urn(urn);
     zip_info->file_size = buffer.size();
     zip_info->crc32 = crc32(0, (Bytef*)buffer.data(), buffer.size());
 
@@ -557,20 +577,37 @@ ZipInfo::ZipInfo() {
       now.tm_sec / 2;
 }
 
+string ZipFile::_member_name_for_urn(const URN member) const {
+  string filename = urn.RelativePath(member);
+
+  // Make sure zip members do not have leading /.
+  if (filename[0] == '/') {
+    return filename.substr(1, filename.size());
+  };
+
+  return filename;
+};
+
+URN ZipFile::_urn_from_member_name(const string member) const {
+  return urn.Append(member);
+};
+
+
 AFF4Status ZipFile::WriteCDFileHeader(
     ZipInfo &zip_info, AFF4Stream &output) {
   struct CDFileHeader header;
   struct Zip64FileHeaderExtensibleField zip64header;
+  string filename = zip_info.filename;
 
   header.compression_method = zip_info.compression_method;
   header.crc32 = zip_info.crc32;
-  header.file_name_length = zip_info.filename.length();
+  header.file_name_length = filename.length();
   header.dostime = zip_info.lastmodtime;
   header.dosdate = zip_info.lastmoddate;
   header.extra_field_len = sizeof(zip64header);
 
   output.Write((char *)&header, sizeof(header));
-  output.Write(zip_info.filename);
+  output.Write(filename);
 
   zip64header.file_size = zip_info.file_size;
   zip64header.compress_size = zip_info.compress_size;
@@ -585,18 +622,19 @@ AFF4Status ZipFile::WriteZipFileHeader(
     ZipInfo &zip_info, AFF4Stream &output) {
   struct ZipFileHeader header;
   struct Zip64FileHeaderExtensibleField zip64header;
+  string filename = zip_info.filename;
 
   header.crc32 = zip_info.crc32;
   header.compress_size = zip_info.compress_size;
   header.file_size = zip_info.file_size;
-  header.file_name_length = zip_info.filename.length();
+  header.file_name_length = filename.length();
   header.compression_method = zip_info.compression_method;
   header.lastmodtime = zip_info.lastmodtime;
   header.lastmoddate = zip_info.lastmoddate;
   header.extra_field_len = sizeof(zip64header);
 
   output.Write((char *)&header, sizeof(header));
-  output.Write(zip_info.filename);
+  output.Write(filename);
 
   zip64header.file_size = zip_info.file_size;
   zip64header.compress_size = zip_info.compress_size;

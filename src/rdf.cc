@@ -104,11 +104,19 @@ uri_components::uri_components(const string &uri) {
       "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\\\?([^#]*))?(#(.*))?");
 
   if (uri_regex.search(uri)) {
-    scheme = uri_regex[1];
-    path = uri_regex[3];
-    if(path == "") {
+    try {
+      scheme = uri_regex[1];
+      domain = uri_regex[3];
       path = uri_regex[4];
-    };
+      if (path.size() && path[0] != '/') {
+        path = "/" + path;
+      };
+
+      hash_data = uri_regex[8];
+
+      // Not all subexpression need match. In that case we catch the exception
+      // and leave the items blank.
+    } catch (pcrepp::Pcre::exception &E) {};
   };
 
   if (scheme == "") {
@@ -130,20 +138,98 @@ raptor_term *URN::GetRaptorTerm(raptor_world *world) const {
       value_string.size());
 };
 
-URN URN::Append(const string &component) {
-  return URN(value + "/" + component);
-};
 
+static string _NormalizeComponent(const string &component) {
+  vector<string> result;
+  size_t i = 0, j = 0;
 
-string URN::RelativePath(const URN urn) const {
-  // For now very simple. In future normalize the URNs.
-  if (0 == urn.value.compare(0, value.size(), value)) {
-    return urn.value.substr(value.size(), string::npos);
+  while(j < component.size()) {
+    j = component.find("/", i);
+    if (j == std::string::npos)
+      j = component.size();
+
+    string sub_component = component.substr(i, j - i);
+    i = j + 1;
+    if (sub_component == "..") {
+      if(!result.empty()) {
+        result.pop_back();
+      };
+
+      continue;
+    };
+
+    if (sub_component == "." || sub_component == "") {
+      continue;
+    };
+
+    result.push_back(sub_component);
   };
 
-  return urn.value;
+  string result_component = "/";
+  for(auto sub_component: result) {
+    result_component.append(sub_component);
+    result_component.append("/");
+  };
+
+  result_component.pop_back();
+  return result_component;
 };
 
+
+URN URN::Append(const string &component) const {
+  return URN(value + _NormalizeComponent(component));
+};
+
+
+string URN::RelativePath(const URN other) const {
+  string my_urn = SerializeToString();
+  string other_urn = other.SerializeToString();
+
+  if (0 == my_urn.compare(0, my_urn.size(), other_urn,
+                          0, my_urn.size())) {
+    return other_urn.substr(my_urn.size(), string::npos);
+  };
+
+  return other_urn;
+};
+
+
+string URN::SerializeToString() const {
+  uri_components components = Parse();
+
+  if (components.hash_data.size()) {
+    return aff4_sprintf(
+        "%s://%s%s#%s",
+        components.scheme.c_str(),
+        components.domain.c_str(),
+        _NormalizeComponent(components.path).c_str(),
+        components.hash_data.c_str());
+  };
+
+  if (components.path.size() && components.domain.size()) {
+    return aff4_sprintf(
+        "%s://%s%s",
+        components.scheme.c_str(),
+        components.domain.c_str(),
+        _NormalizeComponent(components.path).c_str());
+  };
+
+  if (components.domain.size()) {
+    return aff4_sprintf(
+        "%s://%s",
+        components.scheme.c_str(),
+        components.domain.c_str());
+  };
+
+  if (components.path.size()) {
+    return aff4_sprintf(
+        "%s://%s",
+        components.scheme.c_str(),
+        _NormalizeComponent(components.path).c_str());
+  };
+
+  return "";
+};
 
 string XSDInteger::SerializeToString() const {
     return aff4_sprintf("%ld", value);

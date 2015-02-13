@@ -26,6 +26,7 @@ DataStore::DataStore() {
   // By default suppress ZipFileSegment objects since all their metadata comes
   // directly from the ZIP container. This keeps the turtle files a bit cleaner.
   suppressed_rdftypes.insert(AFF4_ZIP_SEGMENT_TYPE);
+  suppressed_rdftypes.insert(AFF4_ZIP_TYPE);
 };
 
 
@@ -64,15 +65,19 @@ class RaptorSerializer {
   RaptorSerializer() {};
 
  public:
-  static unique_ptr<RaptorSerializer> NewRaptorSerializer() {
+  static unique_ptr<RaptorSerializer> NewRaptorSerializer(URN base) {
     unique_ptr<RaptorSerializer> result(new RaptorSerializer());
     raptor_uri *uri;
 
     result->world = raptor_new_world();
 
     result->serializer = raptor_new_serializer(result->world, "turtle");
+
+    uri = raptor_new_uri(
+        result->world, (const unsigned char *)base.SerializeToString().c_str());
     raptor_serializer_start_to_string(
-        result->serializer, NULL, &result->output, &result->length);
+        result->serializer, uri, &result->output, &result->length);
+    raptor_free_uri(uri);
 
     // Add the most common namespaces.
     uri = raptor_new_uri(
@@ -237,9 +242,10 @@ class RaptorParser {
 };
 
 
-AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
+AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream, URN base,
+                                         bool verbose) {
   unique_ptr<RaptorSerializer> serializer(
-      RaptorSerializer::NewRaptorSerializer());
+      RaptorSerializer::NewRaptorSerializer(base));
   if(!serializer) {
     return MEMORY_ERROR;
   };
@@ -250,7 +256,8 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
 
     // Skip this URN if it is in the suppressed_rdftypes set.
     if (Get(subject, AFF4_TYPE, type) == STATUS_OK) {
-      if(suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
+      if(!verbose &&
+         suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
         continue;
       };
     };
@@ -259,7 +266,7 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream) {
       URN predicate(attr_it.first);
 
       // Volatile predicates are suppressed.
-      if(0 == predicate.value.compare(
+      if(!verbose && 0 == predicate.value.compare(
              0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
         continue;
       };
@@ -368,7 +375,7 @@ MemoryDataStore::~MemoryDataStore() {
 void DataStore::Dump() {
   StringIO output;
 
-  DumpToTurtle(output);
+  DumpToTurtle(output, "", true);
 
   std::cout << output.buffer;
 };

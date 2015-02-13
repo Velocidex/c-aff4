@@ -179,7 +179,8 @@ class DataStore {
 
   // Dump ourselves to a yaml file.
   virtual AFF4Status DumpToYaml(AFF4Stream &output) = 0;
-  virtual AFF4Status DumpToTurtle(AFF4Stream &output) = 0;
+  virtual AFF4Status DumpToTurtle(AFF4Stream &output, URN base,
+                                  bool verbose=false) = 0;
 
   virtual AFF4Status LoadFromYaml(AFF4Stream &output) = 0;
   virtual AFF4Status LoadFromTurtle(AFF4Stream &output) = 0;
@@ -309,7 +310,13 @@ class DataStore {
     return AFF4ScopedPtr<T>(result, this);
   };
 
-
+  template<typename T>
+  AFF4Status Close(AFF4ScopedPtr<T> &object){
+    LOG(INFO) << "Closing object " << object->urn.value << "\n";
+    AFF4Status result = object->Flush();
+    ObjectCache.erase(object->urn.value);
+    return result;
+  };
 };
 
 
@@ -334,14 +341,16 @@ class MemoryDataStore: public DataStore {
    * @param value: The value.
    */
   virtual void Set(const URN &urn, const URN &attribute, RDFValue *value);
-  virtual void Set(const URN &urn, const URN &attribute, unique_ptr<RDFValue> value);
+  virtual void Set(const URN &urn, const URN &attribute,
+                   unique_ptr<RDFValue> value);
 
   AFF4Status Get(const URN &urn, const URN &attribute, RDFValue &value);
 
   virtual AFF4Status DeleteSubject(const URN &urn);
 
   virtual AFF4Status DumpToYaml(AFF4Stream &output);
-  virtual AFF4Status DumpToTurtle(AFF4Stream &output);
+  virtual AFF4Status DumpToTurtle(AFF4Stream &output, URN base,
+                                  bool verbose=false);
 
   virtual AFF4Status LoadFromYaml(AFF4Stream &output);
   virtual AFF4Status LoadFromTurtle(AFF4Stream &output);

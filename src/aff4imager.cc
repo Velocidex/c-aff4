@@ -88,33 +88,71 @@ AFF4Status parseOptions(int argc, char** argv) {
     SwitchArg verbose("v", "verbose", "Display more verbose logging", false);
     cmd.add(verbose);
 
-    SwitchArg truncate("t", "truncate", "Truncate the output file.", false);
+    SwitchArg truncate(
+        "t", "truncate", "Truncate the output file. Normally volumes and "
+        "images are appended to existing files, but this flag forces the "
+        "output file to be truncated first.", false);
     cmd.add(truncate);
 
-    ValueArg<string> input("i", "in", "File to Image", false, "",
-                           "string");
+    ValueArg<string> input(
+        "i", "in", "File to image. If specified we copy this file to the "
+        "output volume located at --output. If there is no AFF4 volume on "
+        "--output yet, we create a new volume on it.",
+        false, "",
+        "/path/to/file/or/device");
     cmd.add(input);
 
+    ValueArg<string> export_(
+        "e", "export", "Name of the stream to export. If specified we try "
+        "to open this stream and write it to the --output file. Note that "
+        "you will also need to specify an AFF4 volume path to load so we know "
+        "where to find the stream. If there is only one volume loaded then a "
+        "relative URN implies a stream residing in that volume.", false,
+        "", "string");
+    cmd.add(export_);
+
     ValueArg<string> output(
-        "o", "out", "Output Volume to write to. If the volume does not "
-        "exit we create it.", false, "",
-        "Output Volume.");
+        "o", "out", "Output file to write to. If the file does not "
+        "exist we create it.", false, "",
+        "/path/to/file");
     cmd.add(output);
 
-    UnlabeledMultiArg<string> filename(
+    UnlabeledMultiArg<string> aff4_volumes(
         "fileName", "These AFF4 Volumes will be loaded and their metadata will "
         "be parsed before the program runs.",
-        false, "AFF4 Volumes to pre-load.");
-    cmd.add(filename);
+        false, "/path/to/aff4/volume");
+    cmd.add(aff4_volumes);
 
     //
     // Parse the command line.
     //
     cmd.parse(argc,argv);
 
+    // Added debugging level.
     if(verbose.isSet()) {
       google::SetStderrLogging(google::GLOG_INFO);
     };
+
+
+    // Preload existing AFF4 Volumes.
+    if(aff4_volumes.isSet()) {
+      vector<string> v = aff4_volumes.getValue();
+      for (unsigned int i = 0; i < v.size(); i++) {
+        LOG(INFO) << "Preloading AFF4 Volume: " << v[i];
+        AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, v[i]);
+        if(zip->members.size() == 0) {
+          LOG(ERROR) << "Unable to load " << v[i]
+                     << " as an existing AFF4 Volume.";
+          return IO_ERROR;
+        };
+      };
+    };
+
+    // Dump all info.
+    if(view.isSet()) {
+      resolver.Dump();
+    };
+
 
     if(input.isSet()) {
       if(!output.isSet()) {
@@ -135,10 +173,6 @@ AFF4Status parseOptions(int argc, char** argv) {
 
       return ImageStream(resolver, input_urn, output_urn);
     };
-
-    vector<string> v = filename.getValue();
-    for (unsigned int i = 0; i < v.size(); i++)
-      cout << i << "  " <<  v[i] << endl;
 
   } catch (ArgException& e) {
     cout << "ERROR: " << e.error() << " " << e.argId() << endl;

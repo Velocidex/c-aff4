@@ -58,7 +58,7 @@ void test_MemoryDataStore() {
   cout << result.SerializeToString().data() << "\n";
 
   store->DumpToYaml(*output);
-  store->DumpToTurtle(*output);
+  store->DumpToTurtle(*output, "");
 
   cout << output->Tell() << "\n";
   output->Seek(0, 0);

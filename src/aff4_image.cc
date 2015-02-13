@@ -85,8 +85,8 @@ AFF4Status AFF4Image::_FlushBevy() {
   };
 
   // Create the new segments in this zip file.
-  AFF4ScopedPtr<AFF4Stream> bevy_index_stream = volume->CreateMember(bevy_index_urn.value);
-  AFF4ScopedPtr<AFF4Stream> bevy_stream = volume->CreateMember(bevy_urn.value);
+  AFF4ScopedPtr<AFF4Stream> bevy_index_stream = volume->CreateMember(bevy_index_urn);
+  AFF4ScopedPtr<AFF4Stream> bevy_stream = volume->CreateMember(bevy_urn);
 
   if(!bevy_index_stream || ! bevy_stream) {
     LOG(ERROR) << "Unable to create bevy URN";
@@ -96,8 +96,9 @@ AFF4Status AFF4Image::_FlushBevy() {
   bevy_index_stream->Write(bevy_index.buffer);
   bevy_stream->Write(bevy.buffer);
 
-  bevy_index_stream->Flush();
-  bevy_stream->Flush();
+  // These calls flush the bevies and removes them from the resolver cache.
+  resolver->Close(bevy_index_stream);
+  resolver->Close(bevy_stream);
 
   bevy_index.Truncate();
   bevy.Truncate();

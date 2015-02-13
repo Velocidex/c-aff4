@@ -214,18 +214,19 @@ AFF4Status FileBackedObject::LoadFromURN() {
 
 
 string FileBackedObject::Read(size_t length) {
-  char data[length];
+  string result(length, 0);
   int res;
 
   lseek(fd, readptr, SEEK_SET);
-  res = read(fd, data, length);
+  res = read(fd, &result[0], result.size());
   if (res < 0) {
     return "";
   };
 
   readptr += res;
+  result.resize(res);
 
-  return string(data, res);
+  return result;
 };
 
 int FileBackedObject::Write(const char *data, int length) {

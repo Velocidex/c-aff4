@@ -32,12 +32,18 @@ class ZipTest: public ::testing::Test {
 
     volume_urn = zip->urn;
 
-    AFF4ScopedPtr<AFF4Stream> segment = zip->CreateMember(segment_name);
+    // The full URN of the segment is relative to the volume URN. When using the
+    // generic AFF4Volume interface, we must always store fully qualified
+    // URNs. While the ZipFile interface zip->CreateZipSegment() only accepts
+    // zip member names.
+    URN segment_urn = volume_urn.Append(segment_name);
+
+    AFF4ScopedPtr<AFF4Stream> segment = zip->CreateMember(segment_urn);
     segment->Write(data1);
 
     // This is actually the same stream as above, we will simply get the same
     // pointer and so the new message will be appended to the old message.
-    AFF4ScopedPtr<AFF4Stream> segment2 = zip->CreateMember(segment_name);
+    AFF4ScopedPtr<AFF4Stream> segment2 = zip->CreateMember(segment_urn);
     segment2->Seek(0, SEEK_END);
     segment2->Write(data2);
   };
@@ -80,10 +86,20 @@ TEST_F(ZipTest, OpenMemberByURN) {
 
   ASSERT_TRUE(zip.get()) << "Unable to open zipfile: " << filename;
 
-  // TODO: Within the resolver segments should be known by their volume URN.
-  // i.e. as urn:volume_urn/segment_name.
+  {
+    // The generic AFF4Volume interface must refer to members by their full
+    // URNs. This should fail.
+    AFF4ScopedPtr<AFF4Stream> segment = resolver.AFF4FactoryOpen<AFF4Stream>(
+        segment_name);
+
+    ASSERT_TRUE(!segment) << "Wrong segment opened.";
+  };
+
+  // Try with the full URN.
   AFF4ScopedPtr<AFF4Stream> segment = resolver.AFF4FactoryOpen<AFF4Stream>(
-      segment_name);
+      zip->urn.Append(segment_name));
+
+  // Should work.
   ASSERT_TRUE(segment.get()) << "Failed to open segment by URN";
 
   string expected = data1 + data2;

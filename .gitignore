@@ -39,6 +39,7 @@ doxygen/
 # autoconf related files.
 Makefile
 config.log
+config.status
 .deps
 .libs
 autom4te.cache

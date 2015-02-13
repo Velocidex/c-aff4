@@ -239,6 +239,31 @@ class ZipFile: public AFF4Volume {
    */
   AFF4Status LoadTurtleMetadata();
 
+  /**
+   * Convert from a child URN to the zip member name.
+   *
+   * The AFF4 ZipFile stores AFF4 objects (with fully qualified URNs) in zip
+   * archives. The zip members name is based on the object's URN with the
+   * following rules:
+
+   1. If the object's URN is an extension of the volume's URN, the member's name
+   will be the relative name. So for example:
+
+   Object: aff4://9db79393-53fa-4147-b823-5c3e1d37544d/Foobar.txt
+   Volume: aff4://9db79393-53fa-4147-b823-5c3e1d37544d
+
+   Member name: Foobar.txt
+
+   2. All charaters outside the range [a-zA-Z0-9_] shall be escaped according to
+   their hex encoding.
+
+   * @param name
+   *
+   * @return The member name in the zip archive.
+   */
+  string _member_name_for_urn(const URN object) const;
+  URN _urn_from_member_name(const string member) const;
+
  public:
   ZipFile(DataStore *resolver);
 
@@ -254,7 +279,7 @@ class ZipFile: public AFF4Volume {
   static AFF4ScopedPtr<ZipFile> NewZipFile(DataStore *resolver, URN backing_store_urn);
 
   // Generic volume interface.
-  virtual AFF4ScopedPtr<AFF4Stream> CreateMember(string filename);
+  virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child);
 
   /**
    * Creates a new ZipFileSegment object. The new object is automatically added
@@ -273,7 +298,10 @@ class ZipFile: public AFF4Volume {
 
   virtual AFF4Status Flush();
 
-  // All the members of the zip file. Used to reconstruct the central directory.
+  // All the members of the zip file. Used to reconstruct the central
+  // directory. Note these store the members as the ZipFile sees them. The
+  // Segment URNs must be constructed from _urn_from_member_name(). Adding new
+  // objects to this must use the member names using _member_name_for_urn(URN).
   unordered_map<string, unique_ptr<ZipInfo>> members;
 };
 

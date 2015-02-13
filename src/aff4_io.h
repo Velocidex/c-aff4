@@ -151,7 +151,7 @@ class AFF4Volume: public AFF4Object {
   std::unordered_set<string> children;
 
   AFF4Volume(DataStore *resolver): AFF4Object(resolver) {};
-  virtual AFF4ScopedPtr<AFF4Stream> CreateMember(string filename) = 0;
+  virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
   //virtual AFF4Status Truncate() = 0;
 };
 

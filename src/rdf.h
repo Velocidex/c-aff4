@@ -214,6 +214,8 @@ struct uri_components {
   uri_components(const string &uri);
 
   string scheme;
+  string domain;
+  string hash_data;
   string path;
 
 };
@@ -231,7 +233,7 @@ class URN: public XSDString {
   URN(DataStore *resolver): XSDString(resolver) {};
   URN(){};
 
-  URN Append(const string &component);
+  URN Append(const string &component) const;
 
   raptor_term *GetRaptorTerm(raptor_world *world) const;
   uri_components Parse() const;
@@ -247,6 +249,8 @@ class URN: public XSDString {
    * @return A string representing the path.
    */
   string RelativePath(const URN urn) const;
+
+  string SerializeToString() const;
 };
 
 
