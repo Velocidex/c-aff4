@@ -78,6 +78,12 @@ class AFF4Object {
                                          * about the AFF4 universe. */
 
   AFF4Object(DataStore *resolver);
+  AFF4Object(DataStore *resolver, URN new_urn): AFF4Object(resolver) {
+    urn = new_urn;
+  };
+
+  // Return this object to the resolver.
+  void Return();
 
   // By defining a virtual destructor this allows the destructor of derived
   // objects to be called when deleting a pointer to a base object.

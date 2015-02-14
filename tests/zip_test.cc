@@ -22,13 +22,15 @@ class ZipTest: public ::testing::Test {
     // We are allowed to write on the output filename.
     resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
 
-    AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
-        filename);
+    {
+      AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
+          filename);
 
-    ASSERT_TRUE(file.get()) << "Unable to create zip file";
+      ASSERT_TRUE(file.get()) << "Unable to create zip file";
+    }
 
     // The backing file is given to the zip.
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, file->urn);
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
 
     volume_urn = zip->urn;
 
@@ -38,14 +40,18 @@ class ZipTest: public ::testing::Test {
     // zip member names.
     URN segment_urn = volume_urn.Append(segment_name);
 
-    AFF4ScopedPtr<AFF4Stream> segment = zip->CreateMember(segment_urn);
-    segment->Write(data1);
+    {
+      AFF4ScopedPtr<AFF4Stream> segment = zip->CreateMember(segment_urn);
+      segment->Write(data1);
+    }
 
-    // This is actually the same stream as above, we will simply get the same
-    // pointer and so the new message will be appended to the old message.
-    AFF4ScopedPtr<AFF4Stream> segment2 = zip->CreateMember(segment_urn);
-    segment2->Seek(0, SEEK_END);
-    segment2->Write(data2);
+    {
+      // This is actually the same stream as above, we will simply get the same
+      // pointer and so the new message will be appended to the old message.
+      AFF4ScopedPtr<AFF4Stream> segment2 = zip->CreateMember(segment_urn);
+      segment2->Seek(0, SEEK_END);
+      segment2->Write(data2);
+    };
   };
 
 };
@@ -80,11 +86,16 @@ TEST_F(ZipTest, CreateMember) {
  * Tests if we can open a segment by its URN alone.
  */
 TEST_F(ZipTest, OpenMemberByURN) {
-  // Open the resulting ZipFile.
   MemoryDataStore resolver;
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
+  URN segment_urn;
 
-  ASSERT_TRUE(zip.get()) << "Unable to open zipfile: " << filename;
+  // Open the resulting ZipFile.
+  {
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
+    segment_urn = zip->urn.Append(segment_name);
+
+    ASSERT_TRUE(zip.get()) << "Unable to open zipfile: " << filename;
+  };
 
   {
     // The generic AFF4Volume interface must refer to members by their full
@@ -97,7 +108,7 @@ TEST_F(ZipTest, OpenMemberByURN) {
 
   // Try with the full URN.
   AFF4ScopedPtr<AFF4Stream> segment = resolver.AFF4FactoryOpen<AFF4Stream>(
-      zip->urn.Append(segment_name));
+      segment_urn);
 
   // Should work.
   ASSERT_TRUE(segment.get()) << "Failed to open segment by URN";

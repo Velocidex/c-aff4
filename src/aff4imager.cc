@@ -18,6 +18,7 @@ specific language governing permissions and limitations under the License.
   images.
 */
 #include "libaff4.h"
+#include "aff4_imager_utils.h"
 #include <glog/logging.h>
 #include <iostream>
 #include <algorithm>
@@ -28,52 +29,6 @@ specific language governing permissions and limitations under the License.
 
 using namespace TCLAP;
 using namespace std;
-
-
-AFF4Status ImageStream(DataStore &resolver, URN input_urn,
-                       URN output_urn,
-                       unsigned int buffer_size=1024*1024) {
-  AFF4ScopedPtr<AFF4Stream> input = resolver.AFF4FactoryOpen<AFF4Stream>(input_urn);
-  AFF4ScopedPtr<AFF4Stream> output = resolver.AFF4FactoryOpen<AFF4Stream>(output_urn);
-
-  if(!input) {
-    LOG(ERROR) << "Failed to open input file: " << input_urn.value.c_str()
-               << ".\n";
-    return IO_ERROR;
-  };
-
-  if(!output) {
-    LOG(ERROR) << "Failed to create output file: " << output_urn.value.c_str()
-               << ".\n";
-    return IO_ERROR;
-  };
-
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, output->urn);
-  if(!zip) {
-    return IO_ERROR;
-  };
-
-  // Create a new image in this volume.
-  URN image_urn = zip->urn.Append(input_urn.Parse().path);
-
-  AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
-      &resolver, image_urn, zip->urn);
-
-  if(!image) {
-    return IO_ERROR;
-  };
-
-  while(1) {
-    string data = input->Read(buffer_size);
-    if(data.size() == 0) {
-      break;
-    };
-
-    image->Write(data);
-  };
-
-  return STATUS_OK;
-};
 
 
 AFF4Status parseOptions(int argc, char** argv) {
@@ -150,28 +105,40 @@ AFF4Status parseOptions(int argc, char** argv) {
 
     // Dump all info.
     if(view.isSet()) {
-      resolver.Dump();
+      resolver.Dump(verbose.getValue());
     };
 
+    // Handle output mode.
+    if(output.isSet()) {
+      // We are allowed to write on the output file.
+      if(truncate.isSet()) {
+        LOG(INFO) << "Truncating output file: " << output.getValue() << "\n";
+        resolver.Set(output.getValue(), AFF4_STREAM_WRITE_MODE,
+                     new XSDString("truncate"));
+      } else {
+        resolver.Set(output.getValue(), AFF4_STREAM_WRITE_MODE,
+                     new XSDString("append"));
+      };
+    };
 
+    // Imaging mode.
     if(input.isSet()) {
       if(!output.isSet()) {
         cout << "ERROR: Can not specify an input without an output\n";
         return INVALID_INPUT;
       };
 
-      URN output_urn(output.getValue());
-      URN input_urn(input.getValue());
+      return ImageStream(resolver, input.getValue(), output.getValue());
+    };
 
-      // We are allowed to write on the output file.
-      if(truncate.isSet()) {
-        LOG(INFO) << "Truncating output file: " << output_urn.value << "\n";
-        resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
-      } else {
-        resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+    // Extraction mode.
+    if(export_.isSet()) {
+      if(!output.isSet()) {
+        cout << "ERROR: Can not specify an export without an output\n";
+        return INVALID_INPUT;
       };
 
-      return ImageStream(resolver, input_urn, output_urn);
+      return ExtractStream(resolver, export_.getValue(), output.getValue());
     };
 
   } catch (ArgException& e) {

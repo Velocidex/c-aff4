@@ -134,14 +134,12 @@ class ZipFileSegment: public StringIO {
 
  public:
   ZipFileSegment(DataStore *resolver);
+  ZipFileSegment(string filename, ZipFile &zipfile);
 
   int compression_method = ZIP_STORED;  /**< Compression method. */
 
   virtual AFF4Status LoadFromURN();
   virtual AFF4Status LoadFromZipFile(ZipFile &owner);
-
-  ZipFileSegment(const string &filename, URN &owner);
-  ZipFileSegment(const string &filename, URN &owner, const string &data);
 
   virtual AFF4Status Flush();
 

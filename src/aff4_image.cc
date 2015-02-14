@@ -299,6 +299,7 @@ string AFF4Image::Read(size_t length) {
   };
 
   result.resize(length);
+  readptr += length;
 
   return result;
 };

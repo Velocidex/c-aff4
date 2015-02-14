@@ -50,6 +50,10 @@ AFF4Status AFF4Object::Flush() {
 };
 
 
+void AFF4Object::Return() {
+  resolver->Return(this);
+};
+
 void AFF4Stream::Seek(int offset, int whence) {
   if (whence == 0) {
     readptr = offset;

@@ -6,14 +6,14 @@
 
 class AFF4ImageTest: public ::testing::Test {
  protected:
-  string filename = "/tmp/aff4_test.aff4";
+  string filename = "/tmp/aff4_test.zip";
   string image_name = "image.dd";
   URN volume_urn;
   URN image_urn;
 
   // Remove the file on teardown.
   virtual void TearDown() {
-    //    unlink(filename.c_str());
+    unlink(filename.c_str());
   };
 
   // Create an AFF4Image stream with some data in it.
@@ -25,15 +25,9 @@ class AFF4ImageTest: public ::testing::Test {
     // We are allowed to write on the output filename.
     resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
 
-    // First create the backing file.
-    AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
-        filename);
-
-    ASSERT_TRUE(file.get()) << "Unable to create file";
-
     // The backing file is given to the volume.
     AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
-        &resolver, file->urn);
+        &resolver, filename);
 
     // Now an image is created inside the volume.
     AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(

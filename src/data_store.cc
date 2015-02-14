@@ -33,6 +33,7 @@ DataStore::DataStore() {
 DataStore::~DataStore() {
 };
 
+
 AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output) {
   YAML::Emitter out;
 
@@ -352,17 +353,13 @@ AFF4Status MemoryDataStore::DeleteSubject(const URN &urn) {
 };
 
 AFF4Status MemoryDataStore::Flush() {
-  for(auto it=ObjectCache.begin(); it!=ObjectCache.end(); it++) {
-    LOG(INFO) << "Flushing " << it->first.c_str();
-    it->second->Flush();
-  };
+  ObjectCache.Flush();
 
   return STATUS_OK;
 };
 
 AFF4Status MemoryDataStore::Clear() {
-  Flush();
-  ObjectCache.clear();
+  ObjectCache.Flush();
 
   store.clear();
   return STATUS_OK;
@@ -372,10 +369,208 @@ MemoryDataStore::~MemoryDataStore() {
   Flush();
 };
 
-void DataStore::Dump() {
+void DataStore::Dump(bool verbose) {
   StringIO output;
 
-  DumpToTurtle(output, "", true);
+  DumpToTurtle(output, "", verbose);
 
   std::cout << output.buffer;
+
+  ObjectCache.Dump();
+};
+
+
+AFF4Status AFF4ObjectCache::Flush() {
+  // It is an error to flush the object cache while there are still items in use.
+  if(in_use.size() > 0) {
+    Dump();
+    CHECK(in_use.size() == 0) << "ObjectCache flushed while some objects in use!";
+  };
+
+  // First flush all objects without deleting them since some flushed objects
+  // may still want to use other cached objects. It is also possible that new
+  // objects are added during object deletion. Therefore we keep doing it until
+  // all objects are clean.
+  while(1) {
+    bool dirty_objects_found = false;
+
+    for(AFF4ObjectCacheEntry *it=lru_list.next; it!=&lru_list; it=it->next) {
+      if (it->object->IsDirty()) {
+        dirty_objects_found = true;
+        it->object->Flush();
+      };
+    };
+
+    if(!dirty_objects_found)
+      break;
+  };
+
+  // Now delete all entries.
+  for(auto it: lru_map) {
+    delete it.second;
+  };
+
+  // Clear the map.
+  lru_map.clear();
+
+  return STATUS_OK;
+};
+
+
+void AFF4ObjectCache::Dump() {
+  // Now dump the objects in use.
+  std::cout << "Objects in use:\n";
+  for(auto it: in_use) {
+    std::cout << it.first << " - " << it.second->use_count << "\n";
+  };
+
+  std::cout << "Objects in cache:\n";
+  for(AFF4ObjectCacheEntry *it=lru_list.next; it!=&lru_list; it=it->next) {
+    std::cout << it->key << " - " << it->use_count << "\n";
+  };
+};
+
+
+void AFF4ObjectCache::Trim_() {
+  // First check that the cache is not full.
+  while(lru_map.size() > max_items) {
+    // The back of the list is the oldest one.
+    AFF4ObjectCacheEntry *older_item = lru_list.prev;
+
+    LOG(INFO) << "Trimming " << older_item->key << " from cache";
+
+    // Remove the map entry.
+    lru_map.erase(older_item->key);
+
+    // Remove from the list
+    delete older_item;
+  };
+};
+
+
+void AFF4ObjectCache::Put(AFF4Object *object, bool in_use_state) {
+  URN urn = object->urn;
+  string key = urn.SerializeToString();
+
+  CHECK(in_use.find(key) == in_use.end()) << "Object " <<
+      key << " Put in cache while already in use.";
+
+  CHECK(lru_map.find(key) == lru_map.end()) << "Object " <<
+      key << " Put in cache while already in cache.";
+
+  // Do we need to immediately put it in the in-use list? This should only be
+  // used for newly created objects which must be registered with the cache and
+  // immediately returned to be used outside the cache.
+  if(in_use_state) {
+    AFF4ObjectCacheEntry *entry = new AFF4ObjectCacheEntry(key, object);
+    entry->use_count = 1;
+    in_use[key] = entry;
+    return;
+  };
+
+  // Newest items go on the front.
+  AFF4ObjectCacheEntry *entry = new AFF4ObjectCacheEntry(key, object);
+  lru_list.append(entry);
+  lru_map[key] = entry;
+
+  Trim_();
+}
+
+
+AFF4Object *AFF4ObjectCache::Get(const URN urn) {
+  string key = urn.SerializeToString();
+
+  // Is it already in use? Ideally this should not happen because it means that
+  // the state of the object may suddenly change for its previous user. We allow
+  // it because it may be convenient but it is not generally recommended.
+  auto in_use_itr = in_use.find(key);
+  if(in_use_itr != in_use.end()) {
+    LOG(INFO) << "URN " << key << " is already in use.";
+
+    in_use_itr->second->use_count++;
+
+    return in_use_itr->second->object;
+  };
+
+  auto iter = lru_map.find(key);
+  if (iter == lru_map.end()) {
+    // Key not found.
+    return NULL;
+  };
+
+  // Hold onto the entry.
+  AFF4ObjectCacheEntry *entry = iter->second;
+  entry->use_count = 1;
+
+  // Remove it from the LRU list.
+  entry->unlink();
+  lru_map.erase(iter);
+
+  // Add it to the in use map.
+  in_use[key] = entry;
+
+  return entry->object;
+};
+
+AFF4Status AFF4ObjectCache::Return(AFF4Object *object) {
+  string key = object->urn.SerializeToString();
+  auto it = in_use.find(key);
+
+  // This should never happen - Only objects obtained from Get() should be
+  // Returnable.
+  CHECK(it != in_use.end()) <<
+      "Object " << key << " Returned to cache, but it is not in use!";
+
+  AFF4ObjectCacheEntry *entry = it->second;
+
+  CHECK(entry->use_count > 0) << "Returned object is not used.";
+
+  // Decrease the object's reference count.
+  entry->use_count--;
+
+  // Put it back in the LRU if it is no longer used.
+  if(entry->use_count == 0) {
+    // Add it to the front of the lru list.
+    lru_list.append(entry);
+    lru_map[key] = entry;
+
+    // Remove it from the in use map.
+    in_use.erase(it);
+
+    // The cache has grown - check we dont exceed the limit.
+    Trim_();
+  };
+
+  return STATUS_OK;
+};
+
+AFF4Status AFF4ObjectCache::Remove(AFF4Object *object) {
+  string key = object->urn.SerializeToString();
+  auto it = lru_map.find(key);
+  if(it != lru_map.end()) {
+    AFF4ObjectCacheEntry *entry = it->second;
+    delete entry;
+
+    lru_map.erase(it);
+
+    return STATUS_OK;
+  };
+
+  // Is the item in use?
+  auto in_use_it = in_use.find(key);
+  if (in_use_it != in_use.end()) {
+    AFF4ObjectCacheEntry *entry = in_use_it->second;
+    delete entry;
+
+    // Maybe its in use - remove it from there.
+    in_use.erase(in_use_it);
+
+    return STATUS_OK;
+  };
+
+  // This is a fatal error.
+  LOG(FATAL) << "Object " << key <<
+      " removed from cache, but was never there.";
+
+  return FATAL_ERROR;
 };

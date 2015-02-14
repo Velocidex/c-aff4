@@ -47,8 +47,7 @@ AFF4ScopedPtr<ZipFile> ZipFile::NewZipFile(
 
 AFF4Status ZipFile::LoadTurtleMetadata() {
   // Try to load the RDF metadata file.
-  AFF4ScopedPtr<ZipFileSegment> turtle_stream(
-      OpenZipSegment("information.turtle"));
+  AFF4ScopedPtr<ZipFileSegment> turtle_stream = OpenZipSegment("information.turtle");
 
   if (turtle_stream.get()) {
     AFF4Status res = resolver->LoadFromTurtle(*turtle_stream);
@@ -236,18 +235,16 @@ AFF4Status ZipFile::parse_cd() {
 };
 
 AFF4Status ZipFile::Flush() {
-  for (auto it: children) {
-    AFF4ScopedPtr<AFF4Object> obj = resolver->AFF4FactoryOpen<AFF4Object>(
-        URN(it));
-    if(obj.get()) {
-      obj->Flush();
-    };
-  };
-
   // If the zip file was changed, re-write the central directory.
   if (IsDirty()) {
-    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(
-        backing_store_urn);
+    // First Flush all our children.
+    for (auto it: children) {
+      AFF4ScopedPtr<AFF4Object> obj = resolver->AFF4FactoryOpen<AFF4Object>(
+          URN(it));
+      if(obj.get()) {
+        obj->Flush();
+      };
+    };
 
     // Update the resolver into the zip file.
     AFF4ScopedPtr <ZipFileSegment> turtle_segment = CreateZipSegment(
@@ -263,9 +260,10 @@ AFF4Status ZipFile::Flush() {
     resolver->DumpToYaml(*yaml_segment);
     yaml_segment->Flush();
 
-    write_zip64_CD(*backing_store);
+    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(
+        backing_store_urn);
 
-    backing_store->Flush();
+    write_zip64_CD(*backing_store);
   };
 
   return AFF4Volume::Flush();
@@ -329,16 +327,30 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::OpenZipSegment(string filename) {
     return AFF4ScopedPtr<ZipFileSegment>();
   };
 
-  AFF4ScopedPtr<ZipFileSegment> result(new ZipFileSegment(resolver), resolver);
-  result->urn = urn.Append(filename);
+  // Is it already in the cache?
+  URN segment_urn = _urn_from_member_name(filename);
+  auto res = resolver->CacheGet<ZipFileSegment>(segment_urn);
+  if(res.get()) {
+    return res;
+  };
 
-  result->LoadFromZipFile(*this);
+  ZipFileSegment *result = new ZipFileSegment(filename, *this);
 
-  return result;
+  LOG(INFO) << "Openning ZipFileSegment " << result->urn.SerializeToString();
+
+  return resolver->CachePut<ZipFileSegment>(result);
 };
 
 AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
+  MarkDirty();
+
   URN segment_urn = urn.Append(filename);
+
+  // Is it in the cache?
+  auto res = resolver->CacheGet<ZipFileSegment>(segment_urn);
+  if(res.get()) {
+    return res;
+  };
 
   resolver->Set(segment_urn, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
   resolver->Set(segment_urn, AFF4_STORED, new URN(urn));
@@ -346,26 +358,24 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
   // Keep track of all the segments we issue.
   children.insert(segment_urn.value);
 
+  ZipFileSegment *result = new ZipFileSegment(filename, *this);
+  result->Truncate();
+
+  LOG(INFO) << "Creating ZipFileSegment " << result->urn.SerializeToString();
+
   // Add the new object to the object cache.
-  return resolver->AFF4FactoryOpen<ZipFileSegment>(segment_urn);
+  return resolver->CachePut<ZipFileSegment>(result);
 };
 
 
 ZipFileSegment::ZipFileSegment(DataStore *resolver): StringIO(resolver) {};
+ZipFileSegment::ZipFileSegment(string filename, ZipFile &owner) {
+  resolver = owner.resolver;
+  owner_urn = owner.urn;
+  urn = owner._urn_from_member_name(filename);
 
-ZipFileSegment::ZipFileSegment(const string &filename, URN &owner_urn):
-    owner_urn(owner_urn) {
-
-  urn.Set(filename);
+  LoadFromZipFile(owner);
 };
-
-// Initializer with knwon data.
-ZipFileSegment::ZipFileSegment(
-    const string &filename, URN &owner_urn, const string &data):
-    ZipFileSegment::ZipFileSegment(filename, owner_urn) {
-  buffer = data;
-};
-
 
 AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
   string member_name = owner._member_name_for_urn(urn);
@@ -512,12 +522,12 @@ static unsigned int DecompressBuffer(
 
 
 AFF4Status ZipFileSegment::Flush() {
-  AFF4ScopedPtr<ZipFile> owner = resolver->AFF4FactoryOpen<ZipFile>(
-      owner_urn);
-
-  if(!owner) return GENERIC_ERROR;
-
   if (IsDirty()) {
+    AFF4ScopedPtr<ZipFile> owner = resolver->AFF4FactoryOpen<ZipFile>(
+        owner_urn);
+
+    if(!owner) return GENERIC_ERROR;
+
     AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(
         owner->backing_store_urn);
 

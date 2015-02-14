@@ -130,7 +130,8 @@ libaff4_la_DEPENDENCIES =
 am_libaff4_la_OBJECTS = libaff4_la-aff4_image.lo \
 	libaff4_la-aff4_init.lo libaff4_la-data_store.lo \
 	libaff4_la-libaff4.lo libaff4_la-rdf.lo \
-	libaff4_la-stream_test.lo libaff4_la-zip.lo
+	libaff4_la-stream_test.lo libaff4_la-zip.lo \
+	libaff4_la-aff4_imager_utils.lo
 libaff4_la_OBJECTS = $(am_libaff4_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -353,12 +354,13 @@ libaff4_include_HEADERS = \
 	aff4_base.h    aff4_image.h  aff4_io.h\
         aff4_simple.h  config.h      lexicon.h  rdf.h\
 	aff4_errors.h  aff4_init.h   aff4_registry.h \
-	aff4_utils.h   data_store.h  libaff4.h  zip.h
+	aff4_utils.h   data_store.h  libaff4.h  zip.h \
+        aff4_imager_utils.h
 
 libaff4_la_CXXFLAGS = -std=c++11 -g -Wall -O0
 libaff4_la_SOURCES = \
 	aff4_image.cc aff4_init.cc data_store.cc libaff4.cc \
-	rdf.cc stream_test.cc zip.cc
+	rdf.cc stream_test.cc zip.cc aff4_imager_utils.cc
 
 libaff4_la_LIBADD = -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog -lgflags
 aff4imager_LDADD = libaff4.la
@@ -514,6 +516,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4imager-aff4imager.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-aff4_image.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-aff4_imager_utils.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-aff4_init.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-data_store.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4_la-libaff4.Plo@am__quote@
@@ -590,6 +593,13 @@ libaff4_la-zip.lo: zip.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='zip.cc' object='libaff4_la-zip.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libaff4_la_CXXFLAGS) $(CXXFLAGS) -c -o libaff4_la-zip.lo `test -f 'zip.cc' || echo '$(srcdir)/'`zip.cc
+
+libaff4_la-aff4_imager_utils.lo: aff4_imager_utils.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libaff4_la_CXXFLAGS) $(CXXFLAGS) -MT libaff4_la-aff4_imager_utils.lo -MD -MP -MF $(DEPDIR)/libaff4_la-aff4_imager_utils.Tpo -c -o libaff4_la-aff4_imager_utils.lo `test -f 'aff4_imager_utils.cc' || echo '$(srcdir)/'`aff4_imager_utils.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libaff4_la-aff4_imager_utils.Tpo $(DEPDIR)/libaff4_la-aff4_imager_utils.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='aff4_imager_utils.cc' object='libaff4_la-aff4_imager_utils.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libaff4_la_CXXFLAGS) $(CXXFLAGS) -c -o libaff4_la-aff4_imager_utils.lo `test -f 'aff4_imager_utils.cc' || echo '$(srcdir)/'`aff4_imager_utils.cc
 
 aff4imager-aff4imager.o: aff4imager.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4imager_CXXFLAGS) $(CXXFLAGS) -MT aff4imager-aff4imager.o -MD -MP -MF $(DEPDIR)/aff4imager-aff4imager.Tpo -c -o aff4imager-aff4imager.o `test -f 'aff4imager.cc' || echo '$(srcdir)/'`aff4imager.cc

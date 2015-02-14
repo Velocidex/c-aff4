@@ -19,6 +19,153 @@ specific language governing permissions and limitations under the License.
 #include "aff4_base.h"
 #include <glog/logging.h>
 
+#include <unordered_map>
+#include <unordered_set>
+#include <string>
+#include <memory>
+#include <fstream>
+#include "aff4_utils.h"
+#include <string.h>
+#include "rdf.h"
+
+using std::string;
+using std::unordered_map;
+using std::unordered_set;
+
+// Forward declerations for basic AFF4 types.
+class AFF4Object;
+class AFF4Stream;
+class AFF4Volume;
+
+
+// AFF4_Attributes are a collection of RDFValue objects, keyed by attributes.
+typedef unordered_map<string, unique_ptr<RDFValue> > AFF4_Attributes;
+
+struct AFF4ObjectCacheEntry {
+ public:
+  string key;
+  AFF4Object *object=NULL;
+  int use_count=0;
+
+  AFF4ObjectCacheEntry *next, *prev;
+
+  AFF4ObjectCacheEntry() {
+    next = prev = this;
+  };
+
+  AFF4ObjectCacheEntry(string key, AFF4Object *object):
+      key(key), object(object) {
+    next = prev = this;
+  };
+
+  void unlink() {
+    next->prev = prev;
+    prev->next = next;
+    next = prev = this;
+  };
+
+  void append(AFF4ObjectCacheEntry *entry) {
+    // The entry must not exist on the list already.
+    CHECK(entry->next == entry->prev) << "Appending an element alredy in the list";
+
+    entry->next = next;
+    next->prev = entry;
+
+    entry->prev = this;
+    next = entry;
+  };
+
+  ~AFF4ObjectCacheEntry() {
+    unlink();
+
+    if(object) {
+      object->Flush();
+
+      delete object;
+    };
+  };
+};
+
+/**
+ * This is the AFF4 object cache. We maintain an LRU cache of AFF4 objects so we
+ * do not need to recreate them all the time.
+ *
+ * @param max_items
+ */
+class AFF4ObjectCache {
+ protected:
+  AFF4ObjectCacheEntry lru_list;
+
+  // When objects are returned from Get() they are placed on this map. This
+  // ensures that they can not be deleted while in use. When objects are
+  // returned to the cache with Return() they are placed in the normal lru.
+  unordered_map<string, AFF4ObjectCacheEntry *> in_use;
+  unordered_map<string, AFF4ObjectCacheEntry *> lru_map;
+  size_t max_items = 10;
+
+  // Trim the size of the cache if needed.
+  void Trim_();
+
+ public:
+  AFF4ObjectCache(){};
+
+  AFF4ObjectCache(int max_items): max_items(max_items) {};
+
+  virtual ~AFF4ObjectCache() {Flush();};
+
+  /**
+   * Remove all objects from the cache.
+   *
+   * @return
+   */
+  AFF4Status Flush();
+
+  /**
+   * Store a new object in the cache. The cache will own it from now on.
+   *
+   * @param urn
+   * @param object
+   */
+  void Put(AFF4Object *object, bool in_use=false);
+
+  /**
+   * Get an AFF4 object from the cache. The cache will always own the object,
+   * only the reference is passed. The object is marked as in use in the cache
+   * and will not be deleted until it returned with the Return() method. Callers
+   * may not maintain external references or delete the object themselves.
+   *
+   * @param urn
+   *
+   * @return
+   */
+  AFF4Object *Get(const URN urn);
+
+  /**
+   * Objects are returned to the cache by calling this method. If the object is
+   * not in the cache yet, we call Put() automatically. After this function
+   * returns, references to object are no longer valid.
+   *
+   * @param object
+   *
+   * @return
+   */
+  AFF4Status Return(AFF4Object *object);
+
+
+  /**
+   * Remove the object from the cache.
+   *
+   * @param urn
+   *
+   * @return
+   */
+  AFF4Status Remove(AFF4Object *object);
+
+  void Dump();
+
+};
+
+
 /**
  * AFF4 objects returned from a resolver remain owned by the resolver. When the
  * caller no longer uses them, they will be returned to the resolver. This
@@ -43,6 +190,10 @@ class AFF4ScopedPtr {
   };
 
   ~AFF4ScopedPtr() {
+    // When we destruct we return the underlying pointer to the DataStore.
+    if(ptr_) {
+      ptr_->Return();
+    };
   }
 
   template<class AFF4ObjectOtherType>
@@ -127,32 +278,6 @@ class AFF4ScopedPtr {
 
  */
 
-#include <unordered_map>
-#include <unordered_set>
-#include <string>
-#include <memory>
-#include <fstream>
-#include "aff4_utils.h"
-#include <string.h>
-#include "rdf.h"
-
-using std::string;
-using std::unique_ptr;
-using std::unordered_map;
-using std::ofstream;
-using std::ifstream;
-using std::unordered_set;
-
-// Forward declerations for basic AFF4 types.
-class AFF4Object;
-class AFF4Stream;
-class AFF4Volume;
-
-
-// AFF4_Attributes are a collection of RDFValue objects, keyed by attributes.
-typedef unordered_map<string, unique_ptr<RDFValue> > AFF4_Attributes;
-
-
 /** The abstract data store.
 
     Data stores know how to serialize RDF statements of the type:
@@ -163,8 +288,45 @@ typedef unordered_map<string, unique_ptr<RDFValue> > AFF4_Attributes;
     a serialized RDFValue.
 */
 class DataStore {
+  friend class AFF4Object;
+
+ protected:
+  /**
+   * Returns the AFF4 object to the cache.
+   *
+   *
+   * @param object
+   */
+  void Return(AFF4Object *object) {
+    LOG(INFO) << "Returning: " << object->urn.SerializeToString();
+    ObjectCache.Return(object);
+  };
+
+  /**
+   * An object cache for objects created via the AFF4FactoryOpen()
+   * interface. Note that the cache owns all objects at all times.
+   *
+   */
+  AFF4ObjectCache ObjectCache;
+
+  unordered_set<string> suppressed_rdftypes; /**< These types will not be dumped
+                                              * to turtle files. */
+
  public:
   DataStore();
+  virtual ~DataStore();
+
+  template<typename T>
+  AFF4ScopedPtr<T> CachePut(AFF4Object *object) {
+    ObjectCache.Put(object, true);
+    return AFF4ScopedPtr<T>(dynamic_cast<T *>(object), this);
+  };
+
+  template<typename T>
+  AFF4ScopedPtr<T> CacheGet(const URN urn) {
+    AFF4Object *object = ObjectCache.Get(urn);
+    return AFF4ScopedPtr<T>(dynamic_cast<T *>(object), this);
+  };
 
   virtual void Set(const URN &urn, const URN &attribute,
                    RDFValue *value) = 0;
@@ -203,23 +365,10 @@ class DataStore {
   virtual AFF4Status Flush() = 0;
 
   /**
-   * An object cache for objects created via the AFF4FactoryOpen()
-   * interface. Note that the cache owns all objects at all times.
-   *
-   */
-  unordered_map<string, unique_ptr<AFF4Object> > ObjectCache;
-
-  virtual ~DataStore();
-
-  /**
    * Prints out the contents of the resolver to STDOUT. Used for debugging.
    *
    */
-  void Dump();
-
-
-  unordered_set<string> suppressed_rdftypes; /**< These types will not be dumped
-                                              * to turtle files. */
+  void Dump(bool verbose=true);
 
   /**
      This is the main entry point into the AFF4 library. Callers use this factory
@@ -268,11 +417,14 @@ class DataStore {
      */
   template<typename T>
   AFF4ScopedPtr<T> AFF4FactoryOpen(const URN &urn) {
-    // Search the object cache first.
-    auto it = ObjectCache.find(urn.value);
-    if (it != ObjectCache.end()) {
-      it->second->Prepare();
-      return AFF4ScopedPtr<T>(dynamic_cast<T *>(it->second.get()), this);
+    // It is in the cache, just return it.
+    AFF4Object *cached_obj = ObjectCache.Get(urn);
+    if(cached_obj) {
+      LOG(INFO) << "AFF4FactoryOpen (cached): " <<
+          cached_obj->urn.SerializeToString();
+
+      cached_obj->Prepare();
+      return AFF4ScopedPtr<T>(dynamic_cast<T *>(cached_obj), this);
     };
 
     URN type_urn;
@@ -296,8 +448,8 @@ class DataStore {
     // Have the object load and initialize itself.
     obj->urn = urn;
     if(obj->LoadFromURN() != STATUS_OK) {
-      LOG(WARNING) << "Failed to load " << urn.value.c_str() << " as " <<
-          type_urn.value.c_str();
+      LOG(WARNING) << "Failed to load " << urn.value << " as " <<
+          type_urn.value;
 
       return AFF4ScopedPtr<T>();
     };
@@ -305,17 +457,22 @@ class DataStore {
     // Cache the object for next time.
     T *result = dynamic_cast<T *>(obj.get());
 
-    ObjectCache[urn.value] = std::move(obj);
+    // Store the object in the cache but place it immediate in the in_use list.
+    ObjectCache.Put(obj.release(), true);
 
+    LOG(INFO) << "AFF4FactoryOpen (new instance): " <<
+        result->urn.SerializeToString();
+
+    result->Prepare();
     return AFF4ScopedPtr<T>(result, this);
   };
 
+  // Closing an object means to flush it and remove it from the cache so it no
+  // longer exists in memory.
   template<typename T>
   AFF4Status Close(AFF4ScopedPtr<T> &object){
     LOG(INFO) << "Closing object " << object->urn.value << "\n";
-    AFF4Status result = object->Flush();
-    ObjectCache.erase(object->urn.value);
-    return result;
+    return ObjectCache.Remove(object.release());
   };
 };
 
@@ -331,6 +488,8 @@ class MemoryDataStore: public DataStore {
   unordered_map<string, AFF4_Attributes> store;
 
  public:
+  virtual ~MemoryDataStore();
+
   /**
    * Set the RDFValue in the data store. Note that the data store will retain
    * ownership of the value, and therefore callers may not use it after this
@@ -357,8 +516,6 @@ class MemoryDataStore: public DataStore {
 
   virtual AFF4Status Clear();
   virtual AFF4Status Flush();
-
-  virtual ~MemoryDataStore();
 };
 
 #endif //  _AFF4_DATA_STORE_H_
