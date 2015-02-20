@@ -65,5 +65,8 @@ specific language governing permissions and limitations under the License.
 #define AFF4_IMAGE_COMPRESSION (AFF4_NAMESPACE "compression")
 #define AFF4_IMAGE_COMPRESSION_DEFLATE "https://www.ietf.org/rfc/rfc1951.txt"
 
+//AFF4Map - stores a mapping from one stream to another.
+#define AFF4_MAP_TYPE (AFF4_NAMESPACE "map")
+
 
 #endif

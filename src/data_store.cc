@@ -458,18 +458,17 @@ void AFF4ObjectCache::Put(AFF4Object *object, bool in_use_state) {
   CHECK(lru_map.find(key) == lru_map.end()) << "Object " <<
       key << " Put in cache while already in cache.";
 
+  AFF4ObjectCacheEntry *entry = new AFF4ObjectCacheEntry(key, object);
   // Do we need to immediately put it in the in-use list? This should only be
   // used for newly created objects which must be registered with the cache and
   // immediately returned to be used outside the cache.
   if(in_use_state) {
-    AFF4ObjectCacheEntry *entry = new AFF4ObjectCacheEntry(key, object);
     entry->use_count = 1;
     in_use[key] = entry;
     return;
   };
 
   // Newest items go on the front.
-  AFF4ObjectCacheEntry *entry = new AFF4ObjectCacheEntry(key, object);
   lru_list.append(entry);
   lru_map[key] = entry;
 

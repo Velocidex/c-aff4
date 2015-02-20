@@ -251,6 +251,9 @@ AFF4Status ZipFile::Flush() {
         "information.turtle");
 
     turtle_segment->compression_method = ZIP_DEFLATE;
+
+    // Overwrite the old turtle file with the newer data.
+    turtle_segment->Truncate();
     resolver->DumpToTurtle(*turtle_segment, urn);
     turtle_segment->Flush();
 
@@ -317,7 +320,9 @@ AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(URN child) {
   // child is
   // "aff4://e21659ea-c7d6-4f4d-8070-919178aa4c7b/bin/ls/00000000/index" then
   // the zip member will be simply "/bin/ls/00000000/index".
-  AFF4ScopedPtr<ZipFileSegment> result = CreateZipSegment(urn.RelativePath(child));
+  string member_filename = _member_name_for_urn(child);
+  AFF4ScopedPtr<ZipFileSegment> result = CreateZipSegment(member_filename);
+
   return result.cast<AFF4Stream>();
 };
 

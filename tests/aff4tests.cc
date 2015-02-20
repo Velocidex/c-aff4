@@ -20,7 +20,8 @@ int main(int argc, char* argv[]) {
   ::testing::InitGoogleTest(&argc, argv);
 
   // Turn this on for verbose logging.
-  // FLAGS_logtostderr = 1;
+  google::LogToStderr();
+  google::SetStderrLogging(google::GLOG_ERROR);
 
   return RUN_ALL_TESTS();
 }

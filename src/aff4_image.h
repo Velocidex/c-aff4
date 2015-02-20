@@ -18,8 +18,6 @@ specific language governing permissions and limitations under the License.
 
 #include "aff4_io.h"
 
-using std::shared_ptr;
-
 /**
  * An AFF4Image is an object which stores an image inside an AFF4Volume.
  *

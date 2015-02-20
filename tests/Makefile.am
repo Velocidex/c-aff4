@@ -36,7 +36,7 @@ bin_PROGRAMS = aff4-test
 
 aff4_test_SOURCES =  \
 	aff4tests.cc  data_store_test.cc stream_test.cc zip_test.cc	\
-	aff4_image_test.cc rdf_tests.cc
+	aff4_image_test.cc rdf_tests.cc aff4_map_tests.cc
 
 aff4_test_LDADD = libgtest.la ../src/libaff4.la
 aff4_test_CXXFLAGS = -std=c++11 -g -Wall -O0

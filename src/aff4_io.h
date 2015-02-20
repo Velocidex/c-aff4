@@ -152,7 +152,6 @@ class AFF4Volume: public AFF4Object {
 
   AFF4Volume(DataStore *resolver): AFF4Object(resolver) {};
   virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
-  //virtual AFF4Status Truncate() = 0;
 };
 
 

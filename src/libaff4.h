@@ -20,6 +20,7 @@ specific language governing permissions and limitations under the License.
 #include "rdf.h"
 #include "aff4_io.h"
 #include "aff4_image.h"
+#include "aff4_map.h"
 #include "data_store.h"
 #include "zip.h"
 #include "lexicon.h"
