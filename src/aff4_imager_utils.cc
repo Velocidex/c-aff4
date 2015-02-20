@@ -9,17 +9,12 @@
 
 using std::cout;
 
-AFF4Status ImageStream(DataStore &resolver, URN input_urn,
+AFF4Status ImageStream(DataStore &resolver, vector<URN> &input_urns,
                        URN output_urn,
                        size_t buffer_size) {
-  AFF4ScopedPtr<AFF4Stream> input = resolver.AFF4FactoryOpen<AFF4Stream>(input_urn);
-  AFF4ScopedPtr<AFF4Stream> output = resolver.AFF4FactoryOpen<AFF4Stream>(output_urn);
+  AFF4Status result = STATUS_OK;
 
-  if(!input) {
-    LOG(ERROR) << "Failed to open input file: " << input_urn.value.c_str()
-               << ".\n";
-    return IO_ERROR;
-  };
+  AFF4ScopedPtr<AFF4Stream> output = resolver.AFF4FactoryOpen<AFF4Stream>(output_urn);
 
   if(!output) {
     LOG(ERROR) << "Failed to create output file: " << output_urn.value.c_str()
@@ -32,26 +27,38 @@ AFF4Status ImageStream(DataStore &resolver, URN input_urn,
     return IO_ERROR;
   };
 
-  // Create a new image in this volume.
-  URN image_urn = zip->urn.Append(input_urn.Parse().path);
+  for(URN input_urn: input_urns) {
+    cout << "Adding " << input_urn.value.c_str() << "\n";
 
-  AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
-      &resolver, image_urn, zip->urn);
-
-  if(!image) {
-    return IO_ERROR;
-  };
-
-  while(1) {
-    string data = input->Read(buffer_size);
-    if(data.size() == 0) {
-      break;
+    AFF4ScopedPtr<AFF4Stream> input = resolver.AFF4FactoryOpen<AFF4Stream>(input_urn);
+    if(!input) {
+      LOG(ERROR) << "Failed to open input file: " << input_urn.value.c_str()
+                 << ".\n";
+      result = IO_ERROR;
+      continue;
     };
 
-    image->Write(data);
+    // Create a new image in this volume.
+    URN image_urn = zip->urn.Append(input_urn.Parse().path);
+
+    AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
+        &resolver, image_urn, zip->urn);
+
+    if(!image) {
+      return IO_ERROR;
+    };
+
+    while(1) {
+      string data = input->Read(buffer_size);
+      if(data.size() == 0) {
+        break;
+      };
+
+      image->Write(data);
+    };
   };
 
-  return STATUS_OK;
+  return result;
 };
 
 

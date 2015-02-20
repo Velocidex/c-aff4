@@ -29,3 +29,8 @@ What is not yet supported:
 5. Map streams.
 6. Support for signed statements or Bill of Materials.
 7. Logical file acquisition.
+
+# Notice
+
+This is not an official Google product (experimental or otherwise), it is just
+code that happens to be owned by Google.

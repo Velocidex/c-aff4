@@ -229,7 +229,7 @@ class URN: public XSDString {
  public:
 
   URN(const char * data): XSDString(data) {};
-  URN(string data): XSDString(data) {};
+  URN(const string data): XSDString(data) {};
   URN(DataStore *resolver): XSDString(resolver) {};
   URN(){};
 

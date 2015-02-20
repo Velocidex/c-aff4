@@ -247,24 +247,26 @@ AFF4Status ZipFile::Flush() {
     };
 
     // Update the resolver into the zip file.
-    AFF4ScopedPtr <ZipFileSegment> turtle_segment = CreateZipSegment(
-        "information.turtle");
+    {
+      AFF4ScopedPtr <ZipFileSegment> turtle_segment = CreateZipSegment(
+          "information.turtle");
 
-    turtle_segment->compression_method = ZIP_DEFLATE;
+      turtle_segment->compression_method = ZIP_DEFLATE;
 
-    // Overwrite the old turtle file with the newer data.
-    turtle_segment->Truncate();
-    resolver->DumpToTurtle(*turtle_segment, urn);
-    turtle_segment->Flush();
+      // Overwrite the old turtle file with the newer data.
+      turtle_segment->Truncate();
+      resolver->DumpToTurtle(*turtle_segment, urn);
+      turtle_segment->Flush();
 
-    AFF4ScopedPtr<ZipFileSegment> yaml_segment = CreateZipSegment(
-        "information.yaml");
-    yaml_segment->compression_method = ZIP_DEFLATE;
-    resolver->DumpToYaml(*yaml_segment);
-    yaml_segment->Flush();
+      AFF4ScopedPtr<ZipFileSegment> yaml_segment = CreateZipSegment(
+          "information.yaml");
+      yaml_segment->compression_method = ZIP_DEFLATE;
+      resolver->DumpToYaml(*yaml_segment);
+      yaml_segment->Flush();
+    };
 
-    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(
-        backing_store_urn);
+    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
+      AFF4Stream>(backing_store_urn);
 
     write_zip64_CD(*backing_store);
   };
@@ -288,7 +290,7 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
 
   for(auto it=members.begin(); it != members.end(); it++) {
     ZipInfo *zip_info = it->second.get();
-
+    LOG(INFO) << "Writing CD entry for " << it->first.c_str() ;
     WriteCDFileHeader(*zip_info, backing_store);
   };
 
@@ -565,7 +567,8 @@ AFF4Status ZipFileSegment::Flush() {
     };
 
     // Replace ourselves in the members map.
-    owner->members[urn.value] = std::move(zip_info);
+    string member_name = owner->_member_name_for_urn(urn);
+    owner->members[member_name] = std::move(zip_info);
 
     // Mark the owner as dirty.
     LOG(INFO) << owner->urn.value.c_str() << " is dirtied by segment " <<
