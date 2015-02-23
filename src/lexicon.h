@@ -63,7 +63,7 @@ specific language governing permissions and limitations under the License.
 #define AFF4_IMAGE_CHUNK_SIZE (AFF4_NAMESPACE "chunk_size")
 #define AFF4_IMAGE_CHUNKS_PER_SEGMENT (AFF4_NAMESPACE "chunks_per_segment")
 #define AFF4_IMAGE_COMPRESSION (AFF4_NAMESPACE "compression")
-#define AFF4_IMAGE_COMPRESSION_DEFLATE "https://www.ietf.org/rfc/rfc1951.txt"
+#define AFF4_IMAGE_COMPRESSION_ZLIB "https://www.ietf.org/rfc/rfc1950.txt"
 
 //AFF4Map - stores a mapping from one stream to another.
 #define AFF4_MAP_TYPE (AFF4_NAMESPACE "map")

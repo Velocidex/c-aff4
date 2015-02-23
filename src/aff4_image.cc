@@ -324,7 +324,7 @@ AFF4Status AFF4Image::Flush() {
 
     resolver->Set(urn, AFF4_STREAM_SIZE, new XSDInteger(size));
     resolver->Set(urn, AFF4_IMAGE_COMPRESSION,
-                  new URN(AFF4_IMAGE_COMPRESSION_DEFLATE));
+                  new URN(AFF4_IMAGE_COMPRESSION_ZLIB));
 
   };
 

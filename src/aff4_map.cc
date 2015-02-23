@@ -26,7 +26,7 @@ AFF4ScopedPtr<AFF4Map> AFF4Map::NewAFF4Map(
   // Inform the volume that we have a new image stream contained within it.
   volume->children.insert(object_urn.value);
 
-  resolver->Set(object_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
+  resolver->Set(object_urn, AFF4_TYPE, new URN(AFF4_MAP_TYPE));
   resolver->Set(object_urn, AFF4_STORED, new URN(volume_urn));
 
   return resolver->AFF4FactoryOpen<AFF4Map>(object_urn);
@@ -40,13 +40,13 @@ AFF4Status AFF4Map::LoadFromURN() {
   AFF4ScopedPtr<AFF4Stream> map_idx = resolver->AFF4FactoryOpen<AFF4Stream>(
       map_idx_urn);
 
-  if(!map_idx) {
-    return IO_ERROR;
+  // Parse the map out of the map stream. If the stream does not exist yet we
+  // just start with an empty map.
+  if(map_idx.get()) {
+
   };
 
-
-
-
+  return STATUS_OK;
 };
 
 string AFF4Map::Read(size_t length) {
@@ -54,26 +54,227 @@ string AFF4Map::Read(size_t length) {
 }
 
 
+static std::vector<Range> _MergeRanges(std::vector<Range> &ranges) {
+  vector<Range> result;
+  Range last_range;
+  last_range.target_id = -1;
+
+  bool last_range_set = false;
+
+  for(Range range: ranges) {
+
+    // This range should be merged with the last one.
+    if (last_range.target_id == range.target_id &&
+        last_range.map_end() == range.map_offset &&
+        last_range.target_end() == range.target_offset) {
+
+      // Just extend the last range to include this range.
+      last_range.length += range.length;
+      continue;
+    }
+
+    // Flush the last range and start counting again.
+    if (last_range_set) {
+      result.push_back(last_range);
+    }
+
+    last_range_set = true;
+    last_range = range;
+  };
+
+  // Flush the last range and start counting again.
+  if (last_range_set) {
+    result.push_back(last_range);
+  }
+
+  return result;
+};
+
+
+/**
+ * Add the new range into the map. If the new range can be merged with existing
+ * ranges, the map is adjusted so that the new range overrides the existing
+ * ranges - i.e. existing ranges are shrunk as needed to not overlap with the
+ * new range. Ultimately no ranges may overlap in the map because that will
+ * create an ambiguous situation.
+ *
+
+The algorithm is in two stages:
+
+Phase 1: A splitting phase - in this step the new range is split into subranges
+such that a subrange is either not contained by an existing range or contained
+in the existing range.
+
+For subranges which are not already covered by an existing range, they can be
+immediately added to the map.
+
+If a subrange is already covered by an existing range, the existing range is
+split into three: The subrange of the old range before the new subrange (pre old
+range), the new subrange itself, and the subrange of the old range after the new
+subrange's end (post old range). The old complete range is removed, and the new
+subranges are added. Note that either or both of the old subranges may have a
+length of 0 in which case they are not added.
+
+Diagram:
+         |<----------------->|       Old range
+   |-------------------|   New range.
+
+After splitting:
+   |--1--|------2------|  Subranges
+
+Subrange 1 can be immediately added to the map since it does not conflict with
+exiting ranges. Subrange 2 goes through the merge procedure:
+
+      |<--------------------->|    Old range
+              |-----|              Subrange
+
+After split we have 3 subranges (2 is the new subrange):
+      |<--1-->|--2--|<---3--->|
+
+Note that either subrange 1 or 3 can have a length == 0 which means they do not
+get added to the map.
+
+Phase 2: the merge phase. In this phase we iterate over the map and merge
+neighbouring ranges if possible (i.e. they effectively point at the same
+mapping).
+
+ * @param map_offset
+ * @param target_offset
+ * @param length
+ * @param target
+ *
+ * @return
+ */
 AFF4Status AFF4Map::AddRange(size_t map_offset, size_t target_offset,
                              size_t length, URN target) {
   string key = target.SerializeToString();
   auto it = target_idx_map.find(key);
-  Range range;
+  Range subrange;
 
-  range.map_offset = map_offset;
-  range.target_offset = target_offset;
-  range.length = length;
+  // Since it is difficult to modify the map while iterating over it, we collect
+  // modifications in this vector and then apply them directly.
+  vector<Range> to_remove;
+  vector<Range> to_add;
 
   if (it == target_idx_map.end()) {
     target_idx_map[key] = targets.size();
-    range.target_id = targets.size();
+    subrange.target_id = targets.size();
 
     targets.push_back(key);
   } else {
-    range.target_id = it->second;
+    subrange.target_id = it->second;
   };
 
-  map[map_offset] = range;
+  // We want to merge with the previous range. Therefore we add it to both the
+  // remove and add lists. If merging is possible it will be modified in the
+  // to_add list, otherwise it will simply be removed and re-added.
+  {
+    auto map_it = map.upper_bound(map_offset);
+    if(map_it != map.begin()) {
+      map_it--;
+      to_remove.push_back(map_it->second);
+      to_add.push_back(map_it->second);
+    };
+  };
+
+  // Phase 1: Split new range into subranges.
+  while (length > 0) {
+    auto map_it = map.upper_bound(map_offset);
+
+    subrange.map_offset = map_offset;
+    subrange.target_offset = target_offset;
+
+    // Range not found in map - there are no more old ranges after the start of
+    // this range. We can just add the entire range and return.
+    if(map_it == map.end()) {
+      subrange.length = length;
+
+      to_add.push_back(subrange);
+
+      length = 0;
+      continue;
+    };
+
+    Range old_range = map_it->second;
+
+    // Old range starts after the begining of this range. This means this
+    // subrange is not covered by the old range.
+    if(old_range.map_offset > map_offset) {
+      subrange.length = std::min(subrange.length,
+                                 old_range.map_offset - map_offset);
+
+      // Subrange is not covered by old range, just add it to the map.
+      to_add.push_back(subrange);
+
+      // Consume the subrange and continue splitting the next subrange.
+      map_offset += subrange.length;
+      target_offset += subrange.length;
+      length -= subrange.length;
+      continue;
+    };
+
+    // If we get here, the next subrange overlaps with the old range. First
+    // split the subrange to consume as much as the old range as possible but
+    // not exceed it. Then we split the old range into three subranges.
+    subrange.length = std::min(length,
+                               old_range.map_end() - subrange.map_offset);
+
+    map_offset += subrange.length;
+    target_offset += subrange.length;
+    length -= subrange.length;
+
+    Range pre_old_range = old_range;
+    Range post_old_range = old_range;
+
+    pre_old_range.length = subrange.map_offset - old_range.map_offset;
+
+    post_old_range.length = std::min(post_old_range.length,
+                                     old_range.map_end() - subrange.map_end());
+
+    post_old_range.map_offset = old_range.map_end() - post_old_range.length;
+    post_old_range.target_offset = (old_range.target_end() -
+                                    post_old_range.length);
+
+    // Remove the old range and insert the three new ones.
+    to_remove.push_back(map_it->second);
+
+    if(pre_old_range.length > 0) {
+      to_add.push_back(pre_old_range);
+    };
+
+    to_add.push_back(subrange);
+
+    if(post_old_range.length > 0) {
+      to_add.push_back(post_old_range);
+    };
+  };
+
+  // We want to merge with the next range after the new subranges. We add and
+  // remove the next existing range in the map found after the last sub range to
+  // be added.
+  {
+    Range last_range = to_add.back();
+
+    auto map_it = map.upper_bound(last_range.map_end());
+    if(map_it != map.end()) {
+      to_remove.push_back(map_it->second);
+      to_add.push_back(map_it->second);
+    };
+  };
+
+  // Phase 2: Merge subranges together. All the newly added ranges will be
+  // merged into the smallest number of ranges possible. We then update the map
+  // atomically.
+  {
+    to_add = _MergeRanges(to_add);
+    for(Range it: to_remove) {
+      map.erase(it.map_end());
+    };
+
+    for(Range it: to_add) {
+      map[it.map_end()] = it;
+    };
+  };
 
   MarkDirty();
 
@@ -121,5 +322,30 @@ AFF4Status AFF4Map::Flush() {
   return AFF4Stream::Flush();
 };
 
+
+void AFF4Map::Dump() {
+  for(auto it: map) {
+    LOG(INFO) << "Key:" << it.first << " map_offset=" << it.second.map_offset <<
+        " target_offset=" << it.second.target_offset << " length=" << it.second.length <<
+        " target_id=" << it.second.target_id;
+  };
+};
+
+
+std::vector<Range> AFF4Map::GetRanges() {
+  vector<Range> result;
+  for(auto it: map) {
+    result.push_back(it.second);
+  };
+
+  return result;
+};
+
+
+void AFF4Map::Clear() {
+  map.clear();
+  target_idx_map.clear();
+  targets.clear();
+};
 
 static AFF4Registrar<AFF4Map> r1(AFF4_MAP_TYPE);

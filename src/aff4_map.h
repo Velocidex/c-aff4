@@ -19,12 +19,28 @@ specific language governing permissions and limitations under the License.
 #include "aff4_io.h"
 #include <map>
 
-struct Range {
+// This is the type written to the map stream in this exact binary layout.
+struct BinaryRange {
   uint64_t map_offset;
   uint64_t target_offset;
   uint64_t length;
-  uint64_t target_id;
+  uint32_t target_id;
 }__attribute__((packed));
+
+
+class Range: public BinaryRange {
+
+ public:
+  uint64_t map_end() {
+    return map_offset + length;
+  };
+
+  uint64_t target_end() {
+    return target_offset + length;
+  };
+
+
+};
 
 
 class AFF4Map: public AFF4Stream {
@@ -49,6 +65,11 @@ class AFF4Map: public AFF4Stream {
   AFF4Status AddRange(size_t map_offset, size_t target_offset,
                       size_t length, URN target);
 
+  void Dump();
+
+  std::vector<Range> GetRanges();
+
+  void Clear();
 };
 
 
