@@ -7,7 +7,6 @@ class AFF4MapTest: public ::testing::Test {
  protected:
   string filename = "/tmp/aff4_test.zip";
   string image_name = "image.dd";
-  string map_name = "test_map";
 
   URN volume_urn;
   URN image_urn;
@@ -33,14 +32,16 @@ class AFF4MapTest: public ::testing::Test {
 
     image->MarkDirty();
 
-    if(0) {
-      // Maps are written in random order.
-      image->Seek(50, SEEK_SET);
-      image->Write("50 - This is the position.");
+    // Maps are written in random order.
+    image->Seek(50, SEEK_SET);
+    image->Write("XX - This is the position.");
 
-      image->Seek(0, SEEK_SET);
-      image->Write("00 - This is the position.");
-    };
+    image->Seek(0, SEEK_SET);
+    image->Write("00 - This is the position.");
+
+    // We can "overwrite" data by writing the same range again.
+    image->Seek(50, SEEK_SET);
+    image->Write("50");
 
     // Store the URN for the test to use.
     image_urn = image->urn;
@@ -59,7 +60,7 @@ TEST_F(AFF4MapTest, TestAddRange) {
   ASSERT_TRUE(zip.get());
 
   AFF4ScopedPtr<AFF4Map> map = AFF4Map::NewAFF4Map(
-      &resolver, volume_urn.Append(map_name), volume_urn);
+      &resolver, volume_urn.Append(image_name), volume_urn);
 
   ASSERT_TRUE(map.get());
 
@@ -154,7 +155,7 @@ TEST_F(AFF4MapTest, CreateMapStream) {
   ASSERT_TRUE(zip.get());
 
   AFF4ScopedPtr<AFF4Map> map = AFF4Map::NewAFF4Map(
-      &resolver, volume_urn.Append(map_name), volume_urn);
+      &resolver, volume_urn.Append(image_name), volume_urn);
 
   ASSERT_TRUE(map.get());
 
@@ -163,4 +164,28 @@ TEST_F(AFF4MapTest, CreateMapStream) {
 
   map->Seek(0, SEEK_SET);
   EXPECT_STREQ(map->Read(2).c_str(), "00");
+
+  vector<Range> ranges = map->GetRanges();
+  EXPECT_EQ(ranges.size(), 3);
+  EXPECT_EQ(ranges[0].length, 26);
+  EXPECT_EQ(ranges[0].map_offset, 0);
+  EXPECT_EQ(ranges[0].target_offset, 26);
+
+  // This is the extra "overwritten" 2 bytes which were appended to the end of
+  // the target stream and occupy the map range from 50-52.
+  EXPECT_EQ(ranges[1].length, 2);
+  EXPECT_EQ(ranges[1].map_offset, 50);
+  EXPECT_EQ(ranges[1].target_offset, 52);
+
+  EXPECT_EQ(ranges[2].length, 24);
+  EXPECT_EQ(ranges[2].map_offset, 52);
+  EXPECT_EQ(ranges[2].target_offset, 2);
+
+  // Test that reads outside the ranges null pad correctly.
+  map->Seek(48, SEEK_SET);
+  string read_string = map->Read(4);
+  EXPECT_EQ(read_string[0], 0);
+  EXPECT_EQ(read_string[1], 0);
+  EXPECT_EQ(read_string[2], '5');
+  EXPECT_EQ(read_string[3], '0');
 };

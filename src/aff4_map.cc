@@ -14,6 +14,8 @@ specific language governing permissions and limitations under the License.
 */
 #include "lexicon.h"
 #include "aff4_map.h"
+#include "aff4_image.h"
+
 
 AFF4ScopedPtr<AFF4Map> AFF4Map::NewAFF4Map(
     DataStore *resolver, const URN &object_urn, const URN &volume_urn) {
@@ -43,16 +45,96 @@ AFF4Status AFF4Map::LoadFromURN() {
   // Parse the map out of the map stream. If the stream does not exist yet we
   // just start with an empty map.
   if(map_idx.get()) {
+    // We assume the idx stream is not too large so it can fit in memory.
+    std::istringstream f(map_idx->Read(map_idx->Size()));
+    std::string line;
+    while (std::getline(f, line)) {
+      target_idx_map[line] = targets.size();
+      targets.push_back(line);
+    }
 
+    AFF4ScopedPtr<AFF4Stream> map_stream = resolver->AFF4FactoryOpen<AFF4Stream>(
+        map_urn);
+    if(!map_stream) {
+      LOG(INFO) << "Unable to open map data.";
+      // Clear the map so we start with a fresh map.
+      Clear();
+    } else {
+      Range range;
+      while (map_stream->ReadIntoBuffer(
+                 &range, sizeof(range)) == sizeof(range)) {
+        map[range.map_end()] = range;
+      };
+    };
   };
 
   return STATUS_OK;
 };
 
 string AFF4Map::Read(size_t length) {
+  string result;
+  length = std::min(length, Size() - readptr);
 
+  while(length > 0) {
+    auto map_it = map.upper_bound(readptr);
+
+    // No range contains the current readptr - just pad it.
+    if(map_it == map.end()) {
+      result.resize(length);
+      return result;
+    };
+
+    Range range = map_it->second;
+    size_t length_to_start_of_range = range.map_offset - readptr;
+    if(length_to_start_of_range > 0) {
+      // Null pad it.
+      result.resize(result.size() + length_to_start_of_range);
+      length -= length_to_start_of_range;
+      readptr += length_to_start_of_range;
+      continue;
+    };
+
+    // The readptr is inside a range.
+    URN target = targets[range.target_id];
+    size_t length_to_read_in_target = std::min(
+        length, range.map_end() - readptr);
+
+    size_t offset_in_target = range.target_offset + (
+        readptr - range.map_offset);
+
+    AFF4ScopedPtr<AFF4Stream> target_stream = resolver->AFF4FactoryOpen<
+      AFF4Stream>(target);
+
+    if(!target_stream) {
+      LOG(INFO) << "Unable to open target stream " << target.value <<
+          " For map " << urn.value << " (Offset " << readptr << " )";
+
+      // Null pad
+      result.resize(result.size() + length_to_read_in_target);
+      length -= length_to_read_in_target;
+      readptr += length_to_read_in_target;
+      continue;
+    }
+
+    target_stream->Seek(offset_in_target, SEEK_SET);
+    result += target_stream->Read(length_to_read_in_target);
+    readptr += length_to_read_in_target;
+    length -= length_to_read_in_target;
+  };
+
+  return result;
 }
 
+size_t AFF4Map::Size() {
+  // The size of the stream is the end of the last range.
+  auto it = map.end();
+  if(it == map.begin()) {
+    return 0;
+  };
+
+  it --;
+  return it->second.map_end();
+}
 
 static std::vector<Range> _MergeRanges(std::vector<Range> &ranges) {
   vector<Range> result;
@@ -150,6 +232,8 @@ AFF4Status AFF4Map::AddRange(size_t map_offset, size_t target_offset,
   string key = target.SerializeToString();
   auto it = target_idx_map.find(key);
   Range subrange;
+
+  last_target = target;
 
   // Since it is difficult to modify the map while iterating over it, we collect
   // modifications in this vector and then apply them directly.
@@ -298,7 +382,7 @@ AFF4Status AFF4Map::Flush() {
     };
 
     AFF4ScopedPtr<AFF4Stream> map_stream = volume->CreateMember(
-        volume_urn.Append("map"));
+        urn.Append("map"));
     if(!map_stream)
       return IO_ERROR;
 
@@ -308,15 +392,13 @@ AFF4Status AFF4Map::Flush() {
     };
 
     AFF4ScopedPtr<AFF4Stream> idx_stream = volume->CreateMember(
-        volume_urn.Append("idx"));
+        urn.Append("idx"));
     if(!idx_stream)
       return IO_ERROR;
 
     for(auto it: targets) {
-      map_stream->sprintf("%s\n", it.SerializeToString().c_str());
+      idx_stream->sprintf("%s\n", it.SerializeToString().c_str());
     };
-
-
   };
 
   return AFF4Stream::Flush();
@@ -347,5 +429,45 @@ void AFF4Map::Clear() {
   target_idx_map.clear();
   targets.clear();
 };
+
+
+int AFF4Map::Write(const char *data, int length) {
+  URN target;
+
+  // Using the write API we automatically select the last target used.
+  if(targets.size() == 0) {
+    target = urn.Append("data");
+  } else {
+    target = last_target;
+  };
+
+  AFF4ScopedPtr<AFF4Stream> stream = resolver->AFF4FactoryOpen<AFF4Stream>(
+      target);
+
+  // If the backing stream does not already exist, we make one.
+  if(!stream) {
+    URN volume_urn;
+    if(resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
+      LOG(INFO) << "Map not stored in a volume.";
+      return IO_ERROR;
+    };
+
+    // Create a new stream and assign to the scoped pointer.
+    stream.reset(AFF4Image::NewAFF4Image(resolver, target, volume_urn).release());
+    if(!stream) {
+      LOG(INFO) << "Unable to create backing stream.";
+      return IO_ERROR;
+    };
+  };
+
+  AddRange(readptr, stream->Size(), length, target);
+
+  // Append the data on the end of the stream.
+  stream->Seek(0, SEEK_END);
+  stream->Write(data, length);
+
+  return length;
+};
+
 
 static AFF4Registrar<AFF4Map> r1(AFF4_MAP_TYPE);

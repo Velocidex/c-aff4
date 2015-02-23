@@ -50,6 +50,9 @@ class AFF4Map: public AFF4Stream {
   std::map<string, int> target_idx_map;
   std::map<size_t, Range> map;
 
+  // The URN that will be used as the target of the next Write() operation.
+  URN last_target;
+
  public:
   AFF4Map(DataStore *resolver): AFF4Stream(resolver) {};
 
@@ -59,6 +62,7 @@ class AFF4Map: public AFF4Stream {
   virtual AFF4Status LoadFromURN();
 
   virtual string Read(size_t length);
+  virtual int Write(const char *data, int length);
 
   AFF4Status Flush();
 
@@ -70,6 +74,10 @@ class AFF4Map: public AFF4Stream {
   std::vector<Range> GetRanges();
 
   void Clear();
+
+  virtual size_t Size();
+
+  using AFF4Stream::Write;
 };
 
 
