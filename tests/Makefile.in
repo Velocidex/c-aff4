@@ -511,7 +511,7 @@ ACLOCAL_AMFLAGS = -I m4
 # This is so we can #include <package/foo>
 AM_CPPFLAGS = -I$(top_srcdir)/src \
   -I$(top_srcdir)/tests \
-  -I$(top_srcdir)/gtest/ -I$(top_srcdir)/gtest/include
+  -I$(top_srcdir)/third_party/gtest/ -I$(top_srcdir)/third_party/gtest/include
 
 
 # These are good warnings to turn on by default
@@ -531,7 +531,7 @@ noinst_SCRIPTS =
 
 # Libraries that are built but not installed.
 noinst_LTLIBRARIES = libgtest.la
-libgtest_la_SOURCES = $(top_srcdir)/gtest/src/gtest-all.cc
+libgtest_la_SOURCES = $(top_srcdir)/third_party/gtest/src/gtest-all.cc
 libgtest_la_CXXFLAGS = -g -Wall -O0 -pthread
 libgtest_la_LIBADD = -lpthread
 aff4_test_SOURCES = \
@@ -678,12 +678,12 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LTCXXCOMPILE) -c -o $@ $<
 
-libgtest_la-gtest-all.lo: $(top_srcdir)/gtest/src/gtest-all.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libgtest_la_CXXFLAGS) $(CXXFLAGS) -MT libgtest_la-gtest-all.lo -MD -MP -MF $(DEPDIR)/libgtest_la-gtest-all.Tpo -c -o libgtest_la-gtest-all.lo `test -f '$(top_srcdir)/gtest/src/gtest-all.cc' || echo '$(srcdir)/'`$(top_srcdir)/gtest/src/gtest-all.cc
+libgtest_la-gtest-all.lo: $(top_srcdir)/third_party/gtest/src/gtest-all.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libgtest_la_CXXFLAGS) $(CXXFLAGS) -MT libgtest_la-gtest-all.lo -MD -MP -MF $(DEPDIR)/libgtest_la-gtest-all.Tpo -c -o libgtest_la-gtest-all.lo `test -f '$(top_srcdir)/third_party/gtest/src/gtest-all.cc' || echo '$(srcdir)/'`$(top_srcdir)/third_party/gtest/src/gtest-all.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libgtest_la-gtest-all.Tpo $(DEPDIR)/libgtest_la-gtest-all.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='$(top_srcdir)/gtest/src/gtest-all.cc' object='libgtest_la-gtest-all.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='$(top_srcdir)/third_party/gtest/src/gtest-all.cc' object='libgtest_la-gtest-all.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libgtest_la_CXXFLAGS) $(CXXFLAGS) -c -o libgtest_la-gtest-all.lo `test -f '$(top_srcdir)/gtest/src/gtest-all.cc' || echo '$(srcdir)/'`$(top_srcdir)/gtest/src/gtest-all.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libgtest_la_CXXFLAGS) $(CXXFLAGS) -c -o libgtest_la-gtest-all.lo `test -f '$(top_srcdir)/third_party/gtest/src/gtest-all.cc' || echo '$(srcdir)/'`$(top_srcdir)/third_party/gtest/src/gtest-all.cc
 
 aff4_test-aff4tests.o: aff4tests.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4_test_CXXFLAGS) $(CXXFLAGS) -MT aff4_test-aff4tests.o -MD -MP -MF $(DEPDIR)/aff4_test-aff4tests.Tpo -c -o aff4_test-aff4tests.o `test -f 'aff4tests.cc' || echo '$(srcdir)/'`aff4tests.cc

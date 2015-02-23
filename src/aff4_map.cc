@@ -1,5 +1,5 @@
 /*
-Copyright 2014 Google Inc. All rights reserved.
+Copyright 2015 Google Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use
 this file except in compliance with the License.  You may obtain a copy of the
@@ -284,7 +284,7 @@ AFF4Status AFF4Map::AddRange(size_t map_offset, size_t target_offset,
     // Old range starts after the begining of this range. This means this
     // subrange is not covered by the old range.
     if(old_range.map_offset > map_offset) {
-      subrange.length = std::min(subrange.length,
+      subrange.length = std::min(length,
                                  old_range.map_offset - map_offset);
 
       // Subrange is not covered by old range, just add it to the map.

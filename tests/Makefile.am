@@ -3,7 +3,7 @@ ACLOCAL_AMFLAGS = -I m4
 # This is so we can #include <package/foo>
 AM_CPPFLAGS = -I$(top_srcdir)/src \
   -I$(top_srcdir)/tests \
-  -I$(top_srcdir)/gtest/ -I$(top_srcdir)/gtest/include
+  -I$(top_srcdir)/third_party/gtest/ -I$(top_srcdir)/third_party/gtest/include
 
 # These are good warnings to turn on by default
 if GCC
@@ -28,7 +28,7 @@ noinst_SCRIPTS =
 # Libraries that are built but not installed.
 noinst_LTLIBRARIES = libgtest.la
 
-libgtest_la_SOURCES = $(top_srcdir)/gtest/src/gtest-all.cc
+libgtest_la_SOURCES = $(top_srcdir)/third_party/gtest/src/gtest-all.cc
 libgtest_la_CXXFLAGS = -g -Wall -O0 -pthread
 libgtest_la_LIBADD = -lpthread
 
