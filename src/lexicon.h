@@ -32,14 +32,14 @@ specific language governing permissions and limitations under the License.
 #define AFF4_VERSION "0.1"
 
 
-#define AFF4_NAMESPACE "http://afflib.org/2009/aff4#"
+#define AFF4_NAMESPACE "http://aff4.org/Schema#"
 #define XSD_NAMESPACE "http://www.w3.org/2001/XMLSchema#"
 #define RDF_NAMESPACE "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
 // Attributes in this namespace will never be written to persistant
 // storage. They are simply used as a way for storing metadata about an AFF4
 // object internally.
-#define AFF4_VOLATILE_NAMESPACE "Volatile:"
+#define AFF4_VOLATILE_NAMESPACE "http://aff4.org/VolatileSchema#"
 
 /// Attribute names for different AFF4 objects.
 /// Base AFF4Object

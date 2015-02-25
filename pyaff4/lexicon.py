@@ -16,14 +16,14 @@
 #define AFF4_VERSION "0.1"
 
 
-AFF4_NAMESPACE = "http://afflib.org/2009/aff4#"
+AFF4_NAMESPACE = "http://aff4.org/Schema#"
 XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema#"
 RDF_NAMESPACE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
 # Attributes in this namespace will never be written to persistant
 # storage. They are simply used as a way for storing metadata about an AFF4
 # object internally.
-AFF4_VOLATILE_NAMESPACE = "Volatile:"
+AFF4_VOLATILE_NAMESPACE = "http://aff4.org/VolatileSchema#"
 
 # Attribute names for different AFF4 objects.
 # Base AFF4Object
@@ -47,7 +47,7 @@ AFF4_IMAGE_TYPE = (AFF4_NAMESPACE + "image")
 AFF4_IMAGE_CHUNK_SIZE = (AFF4_NAMESPACE + "chunk_size")
 AFF4_IMAGE_CHUNKS_PER_SEGMENT = (AFF4_NAMESPACE + "chunks_per_segment")
 AFF4_IMAGE_COMPRESSION = (AFF4_NAMESPACE + "compression")
-AFF4_IMAGE_COMPRESSION_DEFLATE = "https://www.ietf.org/rfc/rfc1951.txt"
+AFF4_IMAGE_COMPRESSION_DEFLATE = "https://www.ietf.org/rfc/rfc1950.txt"
 
 # AFF4Map - stores a mapping from one stream to another.
 AFF4_MAP_TYPE = (AFF4_NAMESPACE + "map")

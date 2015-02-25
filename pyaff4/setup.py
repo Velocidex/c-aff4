@@ -41,5 +41,6 @@ setup(
     cmdclass={'test': NoseTestCommand},
     install_requires=[
         "rdflib >= 4.1",
+        "intervaltree >= 2.0.4",
     ],
 )

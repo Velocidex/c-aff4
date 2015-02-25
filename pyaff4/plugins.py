@@ -14,4 +14,5 @@
 
 from pyaff4 import aff4
 from pyaff4 import aff4_image
+from pyaff4 import aff4_map
 from pyaff4 import zip

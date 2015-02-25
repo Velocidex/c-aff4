@@ -30,8 +30,6 @@ class AFF4MapTest: public ::testing::Test {
     AFF4ScopedPtr<AFF4Map> image = AFF4Map::NewAFF4Map(
         &resolver, zip->urn.Append(image_name), zip->urn);
 
-    image->MarkDirty();
-
     // Maps are written in random order.
     image->Seek(50, SEEK_SET);
     image->Write("XX - This is the position.");
@@ -154,8 +152,7 @@ TEST_F(AFF4MapTest, CreateMapStream) {
 
   ASSERT_TRUE(zip.get());
 
-  AFF4ScopedPtr<AFF4Map> map = AFF4Map::NewAFF4Map(
-      &resolver, volume_urn.Append(image_name), volume_urn);
+  AFF4ScopedPtr<AFF4Map> map = resolver.AFF4FactoryOpen<AFF4Map>(image_urn);
 
   ASSERT_TRUE(map.get());
 
