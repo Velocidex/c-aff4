@@ -12,9 +12,6 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if you have the `gflags' library (-lgflags). */
-#undef HAVE_LIBGFLAGS
-
 /* Define to 1 if you have the `glog' library (-lglog). */
 #undef HAVE_LIBGLOG
 

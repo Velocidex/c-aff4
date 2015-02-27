@@ -25,4 +25,8 @@ specific language governing permissions and limitations under the License.
 #include "zip.h"
 #include "lexicon.h"
 
+extern "C" {
+  char *AFF4_version();
+}
+
 #endif    //AFF4_LIBAFF4_H_

@@ -20,43 +20,43 @@ AC_PROG_CC
 # Checks for libraries.
 AC_CHECK_LIB([raptor2], [raptor_new_term_from_counted_uri_string], [], [
   echo raptor RDF library not found. On debian systems this is provided by
-  echp apt-get install libraptor2-dev
+  echo apt-get install libraptor2-dev
   exit -1
 ])
 
 AC_CHECK_LIB([uuid], [uuid_generate], [], [
   echo uuid library not found. On debian systems this is provided by
-  echp apt-get install uuid-dev
+  echo apt-get install uuid-dev
   exit -1
 ])
 
 AC_CHECK_LIB([z], [compress], [], [
   echo zlib not found. On debian systems this is provided by
-  echp apt-get install zlib1g-dev
+  echo apt-get install zlib1g-dev
   exit -1
 ])
 
 AC_CHECK_LIB([yaml-cpp], [main], [], [
   echo libyaml-cpp not found. On debian systems this is provided by
-  echp apt-get install libyaml-cpp-dev
+  echo apt-get install libyaml-cpp-dev
   exit -1
 ])
 
 AC_CHECK_LIB([pcre++], [main]. [], [
   echo Libpcre++ not found. On debian systems this is provided by
-  echp apt-get install libpcre++-dev
+  echo apt-get install libpcre++-dev
   exit -1
 ])
 
 AC_CHECK_LIB([glog], [main], [], [
   echo Google logging library not found. On debian systems this is provided by
-  echp apt-get install libgoogle-glog-dev
+  echo apt-get install libgoogle-glog-dev
   exit -1
 ])
 
-AC_CHECK_LIB([gflags], [main], [], [
-  echo Google flags library not found. On debian systems this is provided by
-  echp apt-get install libgflags-dev
+AC_CHECK_HEADER([tclap/CmdLine.h], [main], [], [
+  echo The TCLAP flag parsing library is not found. On Debian systems this is provided by
+  echo apt-get install libtclap-dev
   exit -1
 ])
 
@@ -76,7 +76,18 @@ AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 
 AM_PROG_AR
+LT_INIT
 AM_CONDITIONAL(GCC, test "$GCC" = yes)   # let the Makefile know if we're gcc
+
+AC_ARG_ENABLE([enable-static-binaries],
+[  --enable-static-binaries    Builds binaries statically.],
+[case "${enableval}" in
+  yes) enable_static_binaries=true ;;
+  no)  enable_static_binaries=false ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --enable-static-binaries]) ;;
+esac],[debug=false])
+
+AM_CONDITIONAL([STATIC_BUILD], [test x$enable_static_binaries = xyes])
 
 # Checks for library functions.
 AC_CHECK_FUNCS([ftruncate localtime_r memset setenv])

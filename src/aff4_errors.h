@@ -41,7 +41,8 @@ typedef enum {
   NOT_IMPLEMENTED = -7,                 /**< This function is not yet
                                          * implemented. */
   IO_ERROR = -8,                        /**< Unable to open URN for IO. */
-  FATAL_ERROR = -9
+  FATAL_ERROR = -9,
+  CONTINUE = -10
 } AFF4Status;
 
 

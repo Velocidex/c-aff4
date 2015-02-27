@@ -52,8 +52,12 @@ class AFF4Stream: public AFF4Object {
   string ReadCString(size_t length);
   int ReadIntoBuffer(void *buffer, size_t length);
 
+  // Copies length bytes from this stream to the output stream.
+  AFF4Status CopyToStream(AFF4Stream &output, size_t length,
+                          size_t buffer_size=10*1024*1024);
+
   // The following should be overriden by derived classes.
-  virtual void Seek(int offset, int whence);
+  virtual void Seek(size_t offset, int whence);
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
   virtual size_t Tell();

@@ -23,6 +23,8 @@ specific language governing permissions and limitations under the License.
 #include <unistd.h>
 #include <stdarg.h>
 #include <string.h>
+#include <cstring>
+#include <iostream>
 
 
 #define O_BINARY 0
@@ -54,7 +56,7 @@ void AFF4Object::Return() {
   resolver->Return(this);
 };
 
-void AFF4Stream::Seek(int offset, int whence) {
+void AFF4Stream::Seek(size_t offset, int whence) {
   if (whence == 0) {
     readptr = offset;
   } else if(whence == 1) {
@@ -99,6 +101,36 @@ size_t AFF4Stream::Tell() {
 size_t AFF4Stream::Size() {
   return size;
 }
+
+AFF4Status AFF4Stream::CopyToStream(AFF4Stream &output, size_t length,
+                                    size_t buffer_size) {
+  time_t last_time = 0;
+  size_t start = Tell();
+  size_t length_remaining = length;
+
+  while(length_remaining > 0) {
+    size_t to_read = std::min(buffer_size, length_remaining);
+    string data = Read(to_read);
+    if(data.size() == 0) {
+      break;
+    };
+
+    output.Write(data);
+    length_remaining -= data.size();
+
+    time_t now = time(NULL);
+
+    if (now > last_time) {
+      std::cout << " Reading 0x" << std::hex << readptr << "  " <<
+          std::dec << (readptr - start)/1024/1024 << "MiB / " <<
+          length/1024/1024 << "MiB \r";
+      std::cout.flush();
+      last_time = now;
+    };
+  };
+
+  return STATUS_OK;
+};
 
 
 string aff4_sprintf(string fmt, ...) {
@@ -210,6 +242,8 @@ AFF4Status FileBackedObject::LoadFromURN() {
             S_IRWXU | S_IRWXG | S_IRWXO);
 
   if(fd < 0){
+    LOG(ERROR) << "Can not open file " << components.path.c_str() << " :" <<
+        std::strerror(errno);
     return IO_ERROR;
   };
 
@@ -286,3 +320,14 @@ ClassFactory<AFF4Object> *GetAFF4ClassFactory() {
 
 // The FileBackedObject will be invoked for file:// style urns.
 static AFF4Registrar<FileBackedObject> r1("file");
+
+
+extern "C" {
+
+char *AFF4_version() {
+  static char version[] = "libaff4 version " AFF4_VERSION;
+
+  return version;
+};
+
+}

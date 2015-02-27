@@ -638,6 +638,10 @@ LTLIBOBJS
 LIBOBJS
 SO_VERSION
 LIBTOOL_DEPS
+STATIC_BUILD_FALSE
+STATIC_BUILD_TRUE
+GCC_FALSE
+GCC_TRUE
 OTOOL64
 OTOOL
 LIPO
@@ -663,8 +667,6 @@ build_vendor
 build_cpu
 build
 LIBTOOL
-GCC_FALSE
-GCC_TRUE
 ac_ct_AR
 AR
 EGREP
@@ -770,6 +772,7 @@ enable_fast_install
 with_gnu_ld
 with_sysroot
 enable_libtool_lock
+enable_enable_static_binaries
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1412,6 +1415,7 @@ Optional Features:
   --enable-fast-install[=PKGS]
                           optimize for fast installation [default=yes]
   --disable-libtool-lock  avoid locking (might break parallel builds)
+  --enable-static-binaries    Builds binaries statically.
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
@@ -1636,6 +1640,37 @@ fi
 
 } # ac_fn_cxx_try_link
 
+# ac_fn_cxx_check_header_compile LINENO HEADER VAR INCLUDES
+# ---------------------------------------------------------
+# Tests whether HEADER exists and can be compiled using the include files in
+# INCLUDES, setting the cache variable VAR accordingly.
+ac_fn_cxx_check_header_compile ()
+{
+  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $2" >&5
+$as_echo_n "checking for $2... " >&6; }
+if eval \${$3+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$4
+#include <$2>
+_ACEOF
+if ac_fn_cxx_try_compile "$LINENO"; then :
+  eval "$3=yes"
+else
+  eval "$3=no"
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+eval ac_res=\$$3
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+
+} # ac_fn_cxx_check_header_compile
+
 # ac_fn_cxx_try_cpp LINENO
 # ------------------------
 # Try to preprocess conftest.$ac_ext, and return whether this succeeded.
@@ -1805,37 +1840,6 @@ fi
   as_fn_set_status $ac_retval
 
 } # ac_fn_cxx_try_run
-
-# ac_fn_cxx_check_header_compile LINENO HEADER VAR INCLUDES
-# ---------------------------------------------------------
-# Tests whether HEADER exists and can be compiled using the include files in
-# INCLUDES, setting the cache variable VAR accordingly.
-ac_fn_cxx_check_header_compile ()
-{
-  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $2" >&5
-$as_echo_n "checking for $2... " >&6; }
-if eval \${$3+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-$4
-#include <$2>
-_ACEOF
-if ac_fn_cxx_try_compile "$LINENO"; then :
-  eval "$3=yes"
-else
-  eval "$3=no"
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-fi
-eval ac_res=\$$3
-	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
-$as_echo "$ac_res" >&6; }
-  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
-
-} # ac_fn_cxx_check_header_compile
 
 # ac_fn_cxx_check_type LINENO TYPE VAR INCLUDES
 # ---------------------------------------------
@@ -2021,73 +2025,6 @@ $as_echo "$ac_res" >&6; }
 
 } # ac_fn_c_find_uintX_t
 
-# ac_fn_cxx_check_func LINENO FUNC VAR
-# ------------------------------------
-# Tests whether FUNC exists, setting the cache variable VAR accordingly
-ac_fn_cxx_check_func ()
-{
-  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $2" >&5
-$as_echo_n "checking for $2... " >&6; }
-if eval \${$3+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-/* Define $2 to an innocuous variant, in case <limits.h> declares $2.
-   For example, HP-UX 11i <limits.h> declares gettimeofday.  */
-#define $2 innocuous_$2
-
-/* System header to define __stub macros and hopefully few prototypes,
-    which can conflict with char $2 (); below.
-    Prefer <limits.h> to <assert.h> if __STDC__ is defined, since
-    <limits.h> exists even on freestanding compilers.  */
-
-#ifdef __STDC__
-# include <limits.h>
-#else
-# include <assert.h>
-#endif
-
-#undef $2
-
-/* Override any GCC internal prototype to avoid an error.
-   Use char because int might match the return type of a GCC
-   builtin and then its argument prototype would still apply.  */
-#ifdef __cplusplus
-extern "C"
-#endif
-char $2 ();
-/* The GNU C library defines this for functions which it implements
-    to always fail with ENOSYS.  Some functions are actually named
-    something starting with __ and the normal name is an alias.  */
-#if defined __stub_$2 || defined __stub___$2
-choke me
-#endif
-
-int
-main ()
-{
-return $2 ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_cxx_try_link "$LINENO"; then :
-  eval "$3=yes"
-else
-  eval "$3=no"
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-fi
-eval ac_res=\$$3
-	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
-$as_echo "$ac_res" >&6; }
-  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
-
-} # ac_fn_cxx_check_func
-
 # ac_fn_c_try_link LINENO
 # -----------------------
 # Try to link conftest.$ac_ext, and return whether this succeeded.
@@ -2231,6 +2168,73 @@ $as_echo "$ac_res" >&6; }
   eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
 
 } # ac_fn_c_check_func
+
+# ac_fn_cxx_check_func LINENO FUNC VAR
+# ------------------------------------
+# Tests whether FUNC exists, setting the cache variable VAR accordingly
+ac_fn_cxx_check_func ()
+{
+  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $2" >&5
+$as_echo_n "checking for $2... " >&6; }
+if eval \${$3+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+/* Define $2 to an innocuous variant, in case <limits.h> declares $2.
+   For example, HP-UX 11i <limits.h> declares gettimeofday.  */
+#define $2 innocuous_$2
+
+/* System header to define __stub macros and hopefully few prototypes,
+    which can conflict with char $2 (); below.
+    Prefer <limits.h> to <assert.h> if __STDC__ is defined, since
+    <limits.h> exists even on freestanding compilers.  */
+
+#ifdef __STDC__
+# include <limits.h>
+#else
+# include <assert.h>
+#endif
+
+#undef $2
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char $2 ();
+/* The GNU C library defines this for functions which it implements
+    to always fail with ENOSYS.  Some functions are actually named
+    something starting with __ and the normal name is an alias.  */
+#if defined __stub_$2 || defined __stub___$2
+choke me
+#endif
+
+int
+main ()
+{
+return $2 ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  eval "$3=yes"
+else
+  eval "$3=no"
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+fi
+eval ac_res=\$$3
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+
+} # ac_fn_cxx_check_func
 cat >config.log <<_ACEOF
 This file contains any messages produced by compilers while
 running configure, to aid debugging if configure makes a mistake.
@@ -4679,7 +4683,7 @@ _ACEOF
 else
 
   echo raptor RDF library not found. On debian systems this is provided by
-  echp apt-get install libraptor2-dev
+  echo apt-get install libraptor2-dev
   exit -1
 
 fi
@@ -4731,7 +4735,7 @@ _ACEOF
 else
 
   echo uuid library not found. On debian systems this is provided by
-  echp apt-get install uuid-dev
+  echo apt-get install uuid-dev
   exit -1
 
 fi
@@ -4783,7 +4787,7 @@ _ACEOF
 else
 
   echo zlib not found. On debian systems this is provided by
-  echp apt-get install zlib1g-dev
+  echo apt-get install zlib1g-dev
   exit -1
 
 fi
@@ -4829,7 +4833,7 @@ _ACEOF
 else
 
   echo libyaml-cpp not found. On debian systems this is provided by
-  echp apt-get install libyaml-cpp-dev
+  echo apt-get install libyaml-cpp-dev
   exit -1
 
 fi
@@ -4874,7 +4878,7 @@ $as_echo "$ac_cv_lib_pcrepp_main__" >&6; }
 if test "x$ac_cv_lib_pcrepp_main__" = xyes; then :
 
   echo Libpcre++ not found. On debian systems this is provided by
-  echp apt-get install libpcre++-dev
+  echo apt-get install libpcre++-dev
   exit -1
 
 fi
@@ -4920,56 +4924,22 @@ _ACEOF
 else
 
   echo Google logging library not found. On debian systems this is provided by
-  echp apt-get install libgoogle-glog-dev
+  echo apt-get install libgoogle-glog-dev
   exit -1
 
 fi
 
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lgflags" >&5
-$as_echo_n "checking for main in -lgflags... " >&6; }
-if ${ac_cv_lib_gflags_main+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  ac_check_lib_save_LIBS=$LIBS
-LIBS="-lgflags  $LIBS"
-cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-
-int
-main ()
-{
-return main ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_cxx_try_link "$LINENO"; then :
-  ac_cv_lib_gflags_main=yes
-else
-  ac_cv_lib_gflags_main=no
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-LIBS=$ac_check_lib_save_LIBS
-fi
-{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_gflags_main" >&5
-$as_echo "$ac_cv_lib_gflags_main" >&6; }
-if test "x$ac_cv_lib_gflags_main" = xyes; then :
-  cat >>confdefs.h <<_ACEOF
-#define HAVE_LIBGFLAGS 1
-_ACEOF
-
-  LIBS="-lgflags $LIBS"
-
-else
-
-  echo Google flags library not found. On debian systems this is provided by
-  echp apt-get install libgflags-dev
+ac_fn_cxx_check_header_compile "$LINENO" "tclap/CmdLine.h" "ac_cv_header_tclap_CmdLine_h" "
+  echo The TCLAP flag parsing library is not found. On Debian systems this is provided by
+  echo apt-get install libtclap-dev
   exit -1
 
+"
+if test "x$ac_cv_header_tclap_CmdLine_h" = xyes; then :
+  main
 fi
+
 
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for pthread_create in -lpthread" >&5
@@ -5770,29 +5740,6 @@ unknown)
   as_fn_error $? "could not determine $AR interface" "$LINENO" 5
   ;;
 esac
-
- if test "$GCC" = yes; then
-  GCC_TRUE=
-  GCC_FALSE='#'
-else
-  GCC_TRUE='#'
-  GCC_FALSE=
-fi
-   # let the Makefile know if we're gcc
-
-# Checks for library functions.
-for ac_func in ftruncate localtime_r memset setenv
-do :
-  as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
-ac_fn_cxx_check_func "$LINENO" "$ac_func" "$as_ac_var"
-if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
-  cat >>confdefs.h <<_ACEOF
-#define `$as_echo "HAVE_$ac_func" | $as_tr_cpp` 1
-_ACEOF
-
-fi
-done
-
 
 case `pwd` in
   *\ * | *\	*)
@@ -16192,6 +16139,51 @@ ac_compiler_gnu=$ac_cv_cxx_compiler_gnu
 # Only expand once:
 
 
+ if test "$GCC" = yes; then
+  GCC_TRUE=
+  GCC_FALSE='#'
+else
+  GCC_TRUE='#'
+  GCC_FALSE=
+fi
+   # let the Makefile know if we're gcc
+
+# Check whether --enable-enable-static-binaries was given.
+if test "${enable_enable_static_binaries+set}" = set; then :
+  enableval=$enable_enable_static_binaries; case "${enableval}" in
+  yes) enable_static_binaries=true ;;
+  no)  enable_static_binaries=false ;;
+  *) as_fn_error $? "bad value ${enableval} for --enable-static-binaries" "$LINENO" 5 ;;
+esac
+else
+  debug=false
+fi
+
+
+ if test x$enable_static_binaries = xyes; then
+  STATIC_BUILD_TRUE=
+  STATIC_BUILD_FALSE='#'
+else
+  STATIC_BUILD_TRUE='#'
+  STATIC_BUILD_FALSE=
+fi
+
+
+# Checks for library functions.
+for ac_func in ftruncate localtime_r memset setenv
+do :
+  as_ac_var=`$as_echo "ac_cv_func_$ac_func" | $as_tr_sh`
+ac_fn_cxx_check_func "$LINENO" "$ac_func" "$as_ac_var"
+if eval test \"x\$"$as_ac_var"\" = x"yes"; then :
+  cat >>confdefs.h <<_ACEOF
+#define `$as_echo "HAVE_$ac_func" | $as_tr_cpp` 1
+_ACEOF
+
+fi
+done
+
+
+
 
 
 
@@ -16336,6 +16328,10 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${GCC_TRUE}" && test -z "${GCC_FALSE}"; then
   as_fn_error $? "conditional \"GCC\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${STATIC_BUILD_TRUE}" && test -z "${STATIC_BUILD_FALSE}"; then
+  as_fn_error $? "conditional \"STATIC_BUILD\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 

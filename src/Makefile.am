@@ -11,6 +11,12 @@ if GCC
 AM_CXXFLAGS = -Wall -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare
 endif
 
+# Support static builds.
+if STATIC_BUILD
+STATIC_LIB_LDFLAGS = -static -static-libstdc++ -static-libgcc
+STATIC_LDFLAGS = -all-static
+endif
+
 # The -no-undefined flag allows libtool to generate shared libraries for
 # Cygwin and MinGW.  LIBSTDCXX_LA_LINKER_FLAG is used to fix a Solaris bug.
 # -version-info tells libtool what to put after the '.so' in the filename.
@@ -26,7 +32,7 @@ libaff4_include_HEADERS = \
         aff4_simple.h  config.h      lexicon.h  rdf.h\
 	aff4_errors.h  aff4_init.h   aff4_registry.h \
 	aff4_utils.h   data_store.h  libaff4.h  zip.h \
-	aff4_map.h \
+	aff4_map.h tclap_parsers.h \
         aff4_imager_utils.h
 
 libaff4_la_CXXFLAGS = -std=c++11 -g -Wall -O0
@@ -35,9 +41,12 @@ libaff4_la_SOURCES = \
 	rdf.cc stream_test.cc zip.cc aff4_imager_utils.cc \
 	aff4_map.cc
 
-libaff4_la_LIBADD =  -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog -lgflags
+libaff4_la_LDFLAGS = $(STATIC_LIB_LDFLAGS)
+libaff4_la_LIBADD =  -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog
 
 bin_PROGRAMS = aff4imager
 aff4imager_LDADD = libaff4.la
+
+aff4imager_LDFLAGS = $(STATIC_LDFLAGS)
 aff4imager_CXXFLAGS = -std=c++11 -g -Wall -O0
 aff4imager_SOURCES = aff4imager.cc

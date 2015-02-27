@@ -123,7 +123,7 @@ AFF4Status AFF4Image::FlushChunk(const char *data, int length) {
   uLongf c_length = compressBound(length) + 1;
   Bytef c_buffer[c_length];
 
-  if(compress(c_buffer, &c_length, (Bytef *)data, length) != Z_OK) {
+  if(compress2(c_buffer, &c_length, (Bytef *)data, length, 2) != Z_OK) {
     LOG(ERROR) << "Unable to compress chunk " << urn.value.c_str();
     return MEMORY_ERROR;
   };
