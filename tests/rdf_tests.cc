@@ -24,12 +24,18 @@ TEST(URNTest, SerializeURN) {
   URNVerifySerialization("ftp://www.google.com");
   URNVerifySerialization("");
 
+  // Absolute paths.
   EXPECT_EQ(URN("/etc/passwd").SerializeToString(),
             "file:///etc/passwd");
 
-  EXPECT_EQ(URN("etc/passwd").SerializeToString(),
-            "file:///etc/passwd");
+  // Relative paths are relative to the current working directory.
+  {
+    char cwd[1024];
+    getcwd(cwd, sizeof(cwd));
 
+    EXPECT_EQ(URN("etc/passwd").SerializeToString(),
+              string("file://") + cwd + "/etc/passwd");
+  };
   components = URN("http:www.google.com").Parse();
 
   // Some unusual and incorrect forms.

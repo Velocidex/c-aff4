@@ -36,8 +36,8 @@ using std::ifstream;
 
 class AFF4Stream: public AFF4Object {
  protected:
-  ssize_t readptr;
-  ssize_t size;             // How many bytes are used in the stream?
+  off_t readptr;
+  off_t size;             // How many bytes are used in the stream?
 
  public:
   AFF4Stream(DataStore *result): AFF4Object(result), readptr(0), size(0) {};
@@ -57,11 +57,11 @@ class AFF4Stream: public AFF4Object {
                           size_t buffer_size=10*1024*1024);
 
   // The following should be overriden by derived classes.
-  virtual void Seek(size_t offset, int whence);
+  virtual void Seek(off_t offset, int whence);
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
-  virtual size_t Tell();
-  virtual size_t Size();
+  virtual off_t Tell();
+  virtual off_t Size();
 
   /**
    * Streams are always reset to their begining when returned from the cache.
@@ -102,7 +102,7 @@ class StringIO: public AFF4Stream {
 
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
-  virtual size_t Size();
+  virtual off_t Size();
 
   virtual AFF4Status Truncate();
   using AFF4Stream::Write;
@@ -118,7 +118,7 @@ class FileBackedObject: public AFF4Stream {
 
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
-  virtual size_t Size();
+  virtual off_t Size();
 
   /**
    * Load the file from a file:/ URN.

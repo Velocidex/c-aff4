@@ -75,6 +75,9 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 
+AC_CHECK_SIZEOF([off_t])
+AC_CHECK_SIZEOF([size_t])
+
 AM_PROG_AR
 LT_INIT
 AM_CONDITIONAL(GCC, test "$GCC" = yes)   # let the Makefile know if we're gcc

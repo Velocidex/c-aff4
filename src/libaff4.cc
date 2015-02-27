@@ -56,7 +56,7 @@ void AFF4Object::Return() {
   resolver->Return(this);
 };
 
-void AFF4Stream::Seek(size_t offset, int whence) {
+void AFF4Stream::Seek(off_t offset, int whence) {
   if (whence == 0) {
     readptr = offset;
   } else if(whence == 1) {
@@ -94,18 +94,18 @@ int AFF4Stream::ReadIntoBuffer(void *buffer, size_t length) {
   return result.size();
 };
 
-size_t AFF4Stream::Tell() {
+off_t AFF4Stream::Tell() {
   return readptr;
 }
 
-size_t AFF4Stream::Size() {
+off_t AFF4Stream::Size() {
   return size;
 }
 
 AFF4Status AFF4Stream::CopyToStream(AFF4Stream &output, size_t length,
                                     size_t buffer_size) {
   time_t last_time = 0;
-  size_t start = Tell();
+  off_t start = Tell();
   size_t length_remaining = length;
 
   while(length_remaining > 0) {
@@ -204,7 +204,7 @@ string StringIO::Read(size_t length) {
   return result;
 };
 
-size_t StringIO::Size() {
+off_t StringIO::Size() {
   return buffer.size();
 }
 
@@ -278,7 +278,7 @@ int FileBackedObject::Write(const char *data, int length) {
   return res;
 };
 
-size_t FileBackedObject::Size() {
+off_t FileBackedObject::Size() {
   off_t result = lseek(fd, 0, SEEK_END);
 
   return result;

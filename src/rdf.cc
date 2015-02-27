@@ -16,6 +16,10 @@ specific language governing permissions and limitations under the License.
 #include <pcre++.h>
 #include "lexicon.h"
 #include "rdf.h"
+#include <unistd.h>
+
+static string _NormalizeComponent(const string &component);
+
 
 string RDFBytes::SerializeToString() const {
   string result;
@@ -108,10 +112,6 @@ uri_components::uri_components(const string &uri) {
       scheme = uri_regex[1];
       domain = uri_regex[3];
       path = uri_regex[4];
-      if (path.size() && path[0] != '/') {
-        path = "/" + path;
-      };
-
       hash_data = uri_regex[8];
 
       // Not all subexpression need match. In that case we catch the exception
@@ -121,7 +121,15 @@ uri_components::uri_components(const string &uri) {
 
   if (scheme == "") {
     scheme = "file";
+    // Relative path to current working directory.
+    if(path.size() > 0 && path[0] != '/') {
+      char cwd[1024];
+      if(getcwd(cwd, sizeof(cwd)))
+        path = string(cwd) + "/" + path;
+    };
   };
+
+  path = _NormalizeComponent(path);
 };
 
 

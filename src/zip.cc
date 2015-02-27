@@ -93,7 +93,7 @@ AFF4Status ZipFile::parse_cd() {
   // an archive comment appended to the end.
   backing_store->Seek(-BUFF_SIZE, SEEK_END);
 
-  size_t ecd_offset = backing_store->Tell();
+  off_t ecd_offset = backing_store->Tell();
   string buffer = backing_store->Read(BUFF_SIZE);
 
   // Not enough data to contain an EndCentralDirectory
@@ -138,14 +138,14 @@ AFF4Status ZipFile::parse_cd() {
 
   };
 
-  ssize_t directory_offset = end_cd->offset_of_cd;
+  off_t directory_offset = end_cd->offset_of_cd;
   directory_number_of_entries = end_cd->total_entries_in_cd;
 
   // This is a 64 bit archive, find the Zip64EndCD.
   if (directory_offset < 0) {
     Zip64CDLocator locator;
     uint32_t magic = locator.magic;
-    int locator_offset = ecd_offset - sizeof(Zip64CDLocator);
+    off_t locator_offset = ecd_offset - sizeof(Zip64CDLocator);
     backing_store->Seek(locator_offset, 0);
     backing_store->ReadIntoBuffer(&locator, sizeof(locator));
 
@@ -167,7 +167,7 @@ AFF4Status ZipFile::parse_cd() {
   };
 
   // Now iterate over the directory and read all the ZipInfo structs.
-  ssize_t entry_offset = directory_offset;
+  off_t entry_offset = directory_offset;
   for(int i=0; i<directory_number_of_entries; i++) {
     CDFileHeader entry;
     uint32_t magic = entry.magic;
@@ -196,7 +196,7 @@ AFF4Status ZipFile::parse_cd() {
     if (zip_info->local_header_offset < 0) {
       // Parse all the extra field records.
       Zip64FileHeaderExtensibleField extra;
-      size_t end_of_extra = backing_store->Tell() + entry.extra_field_len;
+      off_t end_of_extra = backing_store->Tell() + entry.extra_field_len;
 
       while(backing_store->Tell() < end_of_extra) {
         backing_store->ReadIntoBuffer(&extra, entry.extra_field_len);
@@ -284,7 +284,7 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   // Append a new central directory to the end of the zip file.
   backing_store.Seek(0, SEEK_END);
 
-  ssize_t directory_offset = backing_store.Tell();
+  off_t directory_offset = backing_store.Tell();
 
   int total_entries = members.size();
 

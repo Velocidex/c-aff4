@@ -271,7 +271,10 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
 };
 
 string AFF4Image::Read(size_t length) {
-  length = std::min(length, Size() - readptr);
+  if(length > AFF4_MAX_READ_LEN)
+    return "";
+
+  length = std::min((off_t)length, Size() - readptr);
 
   int initial_chunk_offset = readptr % chunk_size;
   // We read this many full chunks at once.

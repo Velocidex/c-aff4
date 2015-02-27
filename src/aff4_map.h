@@ -48,7 +48,7 @@ class AFF4Map: public AFF4Stream {
   // The target list.
   vector<URN> targets;
   std::map<string, int> target_idx_map;
-  std::map<size_t, Range> map;
+  std::map<off_t, Range> map;
 
   // The URN that will be used as the target of the next Write() operation.
   URN last_target;
@@ -66,7 +66,7 @@ class AFF4Map: public AFF4Stream {
 
   AFF4Status Flush();
 
-  AFF4Status AddRange(size_t map_offset, size_t target_offset,
+  AFF4Status AddRange(off_t map_offset, off_t target_offset,
                       size_t length, URN target);
 
   void Dump();
@@ -75,7 +75,7 @@ class AFF4Map: public AFF4Stream {
 
   void Clear();
 
-  virtual size_t Size();
+  virtual off_t Size();
 
   using AFF4Stream::Write;
 };

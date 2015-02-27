@@ -161,7 +161,7 @@ class ZipInfo {
   uint64_t compress_size = 0;
   uint64_t file_size = 0;
   string filename;
-  ssize_t local_header_offset = 0;
+  off_t local_header_offset = 0;
   int crc32;
   int lastmoddate;
   int lastmodtime;

@@ -99,10 +99,15 @@ class AFF4ObjectCacheMock: public AFF4ObjectCache {
 TEST(AFF4ObjectCacheTest, TestLRU) {
   AFF4ObjectCacheMock cache(3);
   MemoryDataStore resolver;
-  AFF4Object *obj1 = new AFF4Object(&resolver, "a");
-  AFF4Object *obj2 = new AFF4Object(&resolver, "b");
-  AFF4Object *obj3 = new AFF4Object(&resolver, "c");
-  AFF4Object *obj4 = new AFF4Object(&resolver, "d");
+  URN a("a");
+  URN b("b");
+  URN c("c");
+  URN d("d");
+
+  AFF4Object *obj1 = new AFF4Object(&resolver, a);
+  AFF4Object *obj2 = new AFF4Object(&resolver, b);
+  AFF4Object *obj3 = new AFF4Object(&resolver, c);
+  AFF4Object *obj4 = new AFF4Object(&resolver, d);
 
   cache.Put(obj1);
   cache.Put(obj2);
@@ -111,23 +116,23 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   {
     vector<string> result = cache.GetKeys();
 
-    EXPECT_EQ(result[0], "file:///c");
-    EXPECT_EQ(result[1], "file:///b");
-    EXPECT_EQ(result[2], "file:///a");
+    EXPECT_EQ(result[0], c.SerializeToString());
+    EXPECT_EQ(result[1], b.SerializeToString());
+    EXPECT_EQ(result[2], a.SerializeToString());
   };
 
   // This removes the object from the cache and places it in the in_use
   // list.
-  EXPECT_EQ(cache.Get("file:///a"), obj1);
+  EXPECT_EQ(cache.Get(a), obj1);
   {
     vector<string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 2);
-    EXPECT_EQ(result[0], "file:///c");
-    EXPECT_EQ(result[1], "file:///b");
+    EXPECT_EQ(result[0], c.SerializeToString());
+    EXPECT_EQ(result[1], b.SerializeToString());
 
     vector<string> in_use = cache.GetInUse();
     EXPECT_EQ(in_use.size(), 1);
-    EXPECT_EQ(in_use[0], "file:///a");
+    EXPECT_EQ(in_use[0], a.SerializeToString());
 
     // Now we return the object. It should now appear in the lru lists.
     cache.Return(obj1);
@@ -137,9 +142,9 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
     vector<string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 3);
 
-    EXPECT_EQ(result[0], "file:///a");
-    EXPECT_EQ(result[1], "file:///c");
-    EXPECT_EQ(result[2], "file:///b");
+    EXPECT_EQ(result[0], a.SerializeToString());
+    EXPECT_EQ(result[1], c.SerializeToString());
+    EXPECT_EQ(result[2], b.SerializeToString());
 
     vector<string> in_use = cache.GetInUse();
     EXPECT_EQ(in_use.size(), 0);
@@ -152,19 +157,19 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
     vector<string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 3);
 
-    EXPECT_EQ(result[0], "file:///d");
-    EXPECT_EQ(result[1], "file:///a");
-    EXPECT_EQ(result[2], "file:///c");
+    EXPECT_EQ(result[0], d.SerializeToString());
+    EXPECT_EQ(result[1], a.SerializeToString());
+    EXPECT_EQ(result[2], c.SerializeToString());
   };
 
   // b is now expired so not in cache.
-  EXPECT_EQ(cache.Get("file:///b"), (AFF4Object *)NULL);
+  EXPECT_EQ(cache.Get(b), (AFF4Object *)NULL);
 
   // Check that remove works
   cache.Remove(obj4);
 
   {
-    EXPECT_EQ(cache.Get("file:///d"), (AFF4Object *)NULL);
+    EXPECT_EQ(cache.Get(d), (AFF4Object *)NULL);
 
     vector<string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 2);

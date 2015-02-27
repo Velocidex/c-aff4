@@ -31,6 +31,7 @@ specific language governing permissions and limitations under the License.
 
 #define AFF4_VERSION "0.1"
 
+#define AFF4_MAX_READ_LEN 1024*1024*100
 
 #define AFF4_NAMESPACE "http://aff4.org/Schema#"
 #define XSD_NAMESPACE "http://www.w3.org/2001/XMLSchema#"
