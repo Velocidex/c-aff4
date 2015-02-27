@@ -56,13 +56,33 @@ specific language governing permissions and limitations under the License.
  */
 
 class AFF4Image: public AFF4Stream {
- private:
-  AFF4Status FlushChunk(const char *data, int length);
+ protected:
+  // Delegates to the workers for support compression methods.
+  AFF4Status FlushChunk(const char *data, size_t length);
+
+  // Compression methods we support.
+  AFF4Status CompressZlib_(const char *data, size_t length,
+                           string *output);
+
+  AFF4Status DeCompressZlib_(const char *data, size_t length,
+                             string *output);
+
+  AFF4Status CompressSnappy_(const char *data, size_t length,
+                             string *output);
+
+  AFF4Status DeCompressSnappy_(const char *data, size_t length,
+                               string *output);
+
   AFF4Status _FlushBevy();
-  int _ReadPartial(unsigned int chunk_id, int chunks_to_read, string &result);
-  AFF4Status _ReadChunkFromBevy(string &result, unsigned int chunk_id,
-                                AFF4ScopedPtr<AFF4Stream> &bevy, uint32_t bevy_index[],
-                                uint32_t index_size);
+
+  int _ReadPartial(
+      unsigned int chunk_id, int chunks_to_read, string &result);
+
+  AFF4Status _ReadChunkFromBevy(
+      string &result, unsigned int chunk_id,
+      AFF4ScopedPtr<AFF4Stream> &bevy, uint32_t bevy_index[],
+      uint32_t index_size);
+
   string buffer;
 
   // The current bevy we write into.
@@ -73,15 +93,17 @@ class AFF4Image: public AFF4Stream {
                                            * writing. */
   unsigned int chunk_count_in_bevy = 0;
 
- protected:
   URN volume_urn;                       /**< The Volume we are stored on. */
 
  public:
-  AFF4Image(DataStore *resolver): AFF4Stream(resolver){};
+  AFF4Image(DataStore *resolver): AFF4Stream(resolver) {};
 
   unsigned int chunk_size = 32*1024;    /**< The number of bytes in each chunk. */
   unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
                                            * Bevy. */
+
+  // Which compression should we use.
+  AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
 
   /**
    * Create a new AFF4Image instance.

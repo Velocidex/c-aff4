@@ -16,6 +16,8 @@ specific language governing permissions and limitations under the License.
 #include "lexicon.h"
 #include "aff4_image.h"
 #include <zlib.h>
+#include <snappy.h>
+
 
 AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
     DataStore *resolver, const URN &image_urn, const URN &volume_urn) {
@@ -59,6 +61,19 @@ AFF4Status AFF4Image::LoadFromURN() {
 
   if(resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
     size = value.value;
+  };
+
+  // Load the compression scheme. If it is not set we just default to ZLIB.
+  URN compression_urn;
+  if(STATUS_OK ==
+     resolver->Get(urn, AFF4_IMAGE_COMPRESSION, compression_urn)) {
+    compression = CompressionMethodFromURN(compression_urn);
+    if (compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
+      LOG(ERROR) << "Compression method " <<
+          compression_urn.SerializeToString().c_str() <<
+          " is not supported by this implementation.";
+      return NOT_IMPLEMENTED;
+    };
   };
 
   return STATUS_OK;
@@ -118,18 +133,32 @@ AFF4Status AFF4Image::_FlushBevy() {
  *
  * @return Status.
  */
-AFF4Status AFF4Image::FlushChunk(const char *data, int length) {
+AFF4Status AFF4Image::FlushChunk(const char *data, size_t length) {
   uint32_t bevy_offset = bevy.Tell();
-  uLongf c_length = compressBound(length) + 1;
-  Bytef c_buffer[c_length];
+  string output;
 
-  if(compress2(c_buffer, &c_length, (Bytef *)data, length, 2) != Z_OK) {
-    LOG(ERROR) << "Unable to compress chunk " << urn.value.c_str();
-    return MEMORY_ERROR;
+  AFF4Status result;
+
+  switch(compression) {
+    case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
+      result = CompressZlib_(data, length, &output);
+    } break;
+
+    case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
+      result = CompressSnappy_(data, length, &output);
+    } break;
+
+    case AFF4_IMAGE_COMPRESSION_ENUM_STORED: {
+      output.assign(data, length);
+      result = STATUS_OK;
+    } break;
+
+    default:
+      return IO_ERROR;
   };
 
   bevy_index.Write((char *)&bevy_offset, sizeof(bevy_offset));
-  bevy.Write((char *)c_buffer, c_length);
+  bevy.Write(output);
 
   chunk_count_in_bevy++;
 
@@ -137,22 +166,76 @@ AFF4Status AFF4Image::FlushChunk(const char *data, int length) {
     return _FlushBevy();
   };
 
+  return result;
+};
+
+AFF4Status AFF4Image::CompressZlib_(const char *data, size_t length,
+                                      string *output) {
+  uLongf c_length = compressBound(length) + 1;
+  output->resize(c_length);
+
+  if(compress2((Bytef *)output->data(), &c_length, (Bytef *)data, length,
+               1) != Z_OK) {
+    LOG(ERROR) << "Unable to compress chunk " << urn.value.c_str();
+    return MEMORY_ERROR;
+  };
+
+  output->resize(c_length);
+
   return STATUS_OK;
 };
+
+AFF4Status AFF4Image::DeCompressZlib_(const char *data, size_t length,
+                                      string *buffer) {
+  uLongf buffer_size = buffer->size();
+
+  if(uncompress((Bytef *)buffer->data(), &buffer_size,
+                (const Bytef *)data, length) == Z_OK) {
+
+    buffer->resize(buffer_size);
+    return STATUS_OK;
+  };
+
+  return IO_ERROR;
+};
+
+
+AFF4Status AFF4Image::CompressSnappy_(const char *data, size_t length,
+                                        string *output) {
+  snappy::Compress(data, length, output);
+
+  return STATUS_OK;
+};
+
+
+AFF4Status AFF4Image::DeCompressSnappy_(const char *data, size_t length,
+                                        string *output) {
+  if(!snappy::Uncompress(data, length, output)) {
+    return GENERIC_ERROR;
+  };
+
+  return STATUS_OK;
+};
+
 
 int AFF4Image::Write(const char *data, int length) {
   // This object is now dirty.
   MarkDirty();
 
   buffer.append(data, length);
+  size_t offset = 0;
+  const char *chunk_ptr = buffer.data();
 
-  // Consume full chunks.
-  while (buffer.length() > chunk_size) {
-    string chunk = buffer.substr(0, chunk_size);
-    buffer.erase(0, chunk_size);
+  // Consume full chunks from the buffer.
+  while (buffer.length() - offset >= chunk_size) {
+    if(FlushChunk(chunk_ptr + offset, chunk_size) != STATUS_OK)
+      return 0;
 
-    FlushChunk(chunk.c_str(), chunk.length());
+    offset += chunk_size;
   };
+
+  // Keep the last part of the buffer which is smaller than a chunk size.
+  buffer.erase(0, offset);
 
   readptr += length;
   if (readptr > size) {
@@ -208,18 +291,38 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
   string buffer;
   buffer.resize(chunk_size);
 
-  uLongf buffer_size = chunk_size;
+  AFF4Status res;
 
-  if(uncompress((Bytef *)buffer.data(), &buffer_size,
-                (const Bytef *)cbuffer.data(), cbuffer.size()) == Z_OK) {
+  switch(compression) {
+    case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
+      res = DeCompressZlib_(cbuffer.data(), cbuffer.length(),
+                            &buffer);
+    }; break;
 
-    result += buffer;
-    return STATUS_OK;
+    case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
+      res = DeCompressSnappy_(cbuffer.data(), cbuffer.length(),
+                              &buffer);
+    }; break;
+
+    case AFF4_IMAGE_COMPRESSION_ENUM_STORED: {
+      buffer = cbuffer;
+      res = STATUS_OK;
+    }; break;
+
+      // Should never happen because the object should never accept this
+      // compression URN.
+    default:
+      LOG(FATAL) << "Unexpected compression type set";
   };
 
-  LOG(ERROR) << urn.value.c_str() << ": Unable to uncompress chunk "
-             << chunk_id;
-  return IO_ERROR;
+  if(res != STATUS_OK) {
+    LOG(ERROR) << urn.value.c_str() << ": Unable to uncompress chunk "
+               << chunk_id;
+    return res;
+  };
+
+  result += buffer;
+  return STATUS_OK;
 };
 
 int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
@@ -326,9 +429,9 @@ AFF4Status AFF4Image::Flush() {
                   new XSDInteger(chunks_per_segment));
 
     resolver->Set(urn, AFF4_STREAM_SIZE, new XSDInteger(size));
-    resolver->Set(urn, AFF4_IMAGE_COMPRESSION,
-                  new URN(AFF4_IMAGE_COMPRESSION_ZLIB));
 
+    resolver->Set(urn, AFF4_IMAGE_COMPRESSION, new URN(
+        CompressionMethodToURN(compression)));
   };
 
   // Always call the baseclass to ensure the object is marked non dirty.

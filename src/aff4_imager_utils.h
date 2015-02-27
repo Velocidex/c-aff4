@@ -57,6 +57,9 @@ protected:
 
   URN output_volume_urn;
 
+  // Type of compression we should use.
+  AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
+
   virtual string GetName() {
     return "AFF4 Imager";
   };
@@ -74,7 +77,9 @@ protected:
   virtual AFF4Status handle_view();
   virtual AFF4Status handle_input();
   virtual AFF4Status handle_export();
+  virtual AFF4Status handle_compression();
 
+  // Dispatch handlers based on the parsed config options.
   virtual AFF4Status HandlerDispatch();
 
   // We use a list here to preserve insertion order.
@@ -133,6 +138,10 @@ public:
         "o", "output", "Output file to write to. If the file does not "
         "exist we create it.", false, "",
         "/path/to/file"));
+
+    AddArg(new TCLAP::ValueArg<string>(
+        "c", "compression", "Type of compression to use (default zlib).",
+        false, "", "zlib, snappy, none"));
 
     AddArg(new TCLAP::UnlabeledMultiArg<string>(
         "aff4_volumes",

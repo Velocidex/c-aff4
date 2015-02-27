@@ -16,10 +16,16 @@ specific language governing permissions and limitations under the License.
 #ifndef AFF4_UTILS_H
 #define AFF4_UTILS_H
 #include "config.h"
-
+#include <sys/time.h>
 #include <vector>
 #include <string>
 
 std::string aff4_sprintf(std::string fmt, ...);
+
+inline uint64_t time_from_epoch() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return tv.tv_sec * 1000000 + tv.tv_usec;
+};
 
 #endif

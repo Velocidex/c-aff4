@@ -40,7 +40,9 @@ AFF4Status ImageStream(DataStore &resolver, vector<URN> &input_urns,
   for(URN input_urn: input_urns) {
     cout << "Adding " << input_urn.value.c_str() << "\n";
 
-    AFF4ScopedPtr<AFF4Stream> input = resolver.AFF4FactoryOpen<AFF4Stream>(input_urn);
+    AFF4ScopedPtr<AFF4Stream> input = resolver.AFF4FactoryOpen<AFF4Stream>(
+        input_urn);
+
     if(!input) {
       LOG(ERROR) << "Failed to open input file: " << input_urn.value.c_str()
                  << ".\n";
@@ -95,29 +97,6 @@ AFF4Status ExtractStream(DataStore &resolver, URN input_urn,
   };
 
   return input->CopyToStream(*output, input->Size());
-
-  // TODO: implement progress.
-#if 0
-  time_t last_time = 0;
-  while(1) {
-    string data = input->Read(buffer_size);
-    if(data.size() == 0) {
-      break;
-    };
-
-    output->Write(data);
-
-    time_t now = time(NULL);
-
-    if (now > last_time) {
-      cout << output->Size()/1024/1024 << "MiB / " << input->Size()/1024/1024
-           << "MiB (" << 100 * output->Size() / input->Size() << "%) \r";
-      cout.flush();
-      last_time = now;
-    };
-  };
-#endif
-
   return STATUS_OK;
 };
 
@@ -128,7 +107,6 @@ AFF4Status BasicImager::ParseArgs(int argc, char** argv)  {
   TCLAP::CmdLine cmd(GetName(), ' ', GetVersion());
 
   for(auto it=args.rbegin(); it != args.rend(); it++) {
-    std::cout << (*it)->getName() << "\n";
     cmd.add(it->get());
   };
 
@@ -151,6 +129,9 @@ AFF4Status BasicImager::HandlerDispatch() {
         "Please select only one.\n";
     return INCOMPATIBLE_TYPES;
   };
+
+  if(result==CONTINUE && Get("compression")->isSet())
+    result = handle_compression();
 
   if(result==CONTINUE && Get("verbose")->isSet())
     result = handle_Verbose();
@@ -202,24 +183,49 @@ AFF4Status BasicImager::handle_view() {
 }
 
 AFF4Status BasicImager::handle_input() {
-  if(!Get("output")->isSet()) {
-    cout << "ERROR: Can not specify an input without an output\n";
-    return INVALID_INPUT;
-  };
+  // Get the output volume.
+  URN volume_urn;
+  AFF4Status res = GetOutputVolumeURN(volume_urn);
+  if(res != STATUS_OK)
+    return res;
 
-  string output = GetArg<TCLAP::ValueArg<string>>("output")->getValue();
   vector<string> inputs = GetArg<TCLAP::MultiArgToNextFlag<string>>(
       "input")->getValue();
 
-  vector<URN> input_urns;
-  for(string it: inputs) {
-    input_urns.push_back(URN(it));
-  };
+  res = CONTINUE;
+  for(string input: inputs) {
+    URN input_urn(input);
 
-  AFF4Status res = ImageStream(
-      resolver, input_urns, output, Get("truncate")->isSet());
-  if(res == STATUS_OK)
-    return CONTINUE;
+    std::cout << "Adding " << input.c_str() << "\n";
+
+    // Try to open the input.
+    AFF4ScopedPtr<AFF4Stream> input_stream = resolver.AFF4FactoryOpen<
+      AFF4Stream>(input);
+
+    // Not valid - skip it.
+    if(!input_stream) {
+      LOG(ERROR) << "Failed to open input file: " << input.c_str();
+      res = IO_ERROR;
+      continue;
+    };
+
+    // Create a new AFF4Image in this volume.
+    URN image_urn = volume_urn.Append(input_urn.Parse().path);
+
+    AFF4ScopedPtr<AFF4Image> image_stream = AFF4Image::NewAFF4Image(
+        &resolver, image_urn, volume_urn);
+
+    // Cant write to the output stream at all, this is considered fatal.
+    if(!image_stream) {
+      return IO_ERROR;
+    };
+
+    // Set the output compression according to the user's wishes.
+    image_stream->compression = compression;
+
+    // Copy the input stream to the output stream.
+    input_stream->CopyToStream(*image_stream, input_stream->Size());
+  };
 
   return res;
 }
@@ -287,7 +293,9 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN &volume_urn) {
     return IO_ERROR;
   };
 
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, output_stream->urn);
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
+      &resolver, output_stream->urn);
+
   if(!zip) {
     return IO_ERROR;
   };
@@ -296,4 +304,27 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN &volume_urn) {
   output_volume_urn = zip->urn;
 
   return STATUS_OK;
+};
+
+
+AFF4Status BasicImager::handle_compression() {
+  string compression_setting = GetArg<TCLAP::ValueArg<string>>(
+      "compression")->getValue();
+
+  if(compression_setting == "zlib") {
+    compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
+  } else if(compression_setting == "snappy") {
+    compression = AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
+
+  } else if(compression_setting == "none") {
+    compression = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
+
+  } else {
+    LOG(ERROR) << "Unknown compression scheme " << compression;
+    return INVALID_INPUT;
+  };
+
+  std::cout << "Setting compression " << compression_setting.c_str() << "\n";
+
+  return CONTINUE;
 };

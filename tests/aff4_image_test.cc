@@ -10,6 +10,7 @@ class AFF4ImageTest: public ::testing::Test {
   string image_name = "image.dd";
   URN volume_urn;
   URN image_urn;
+  URN image_urn_2;
 
   // Remove the file on teardown.
   virtual void TearDown() {
@@ -41,7 +42,16 @@ class AFF4ImageTest: public ::testing::Test {
       image->sprintf("Hello world %02d!", i);
     };
 
+    // Now test snappy compression in images.
+    AFF4ScopedPtr<AFF4Image> image_2 = AFF4Image::NewAFF4Image(
+        &resolver, image->urn.Append("2"), zip->urn);
+
+    // Make the second image use snappy for compression.
+    image_2->compression = AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
+    image_2->Write("This is a test");
+
     image_urn = image->urn;
+    image_urn_2 = image_2->urn;
     volume_urn = zip->urn;
   };
 };
@@ -105,4 +115,19 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
     EXPECT_STREQ(expected_data.c_str(), read_data.c_str());
   };
 
+  // Now test snappy decompression.
+  AFF4ScopedPtr<AFF4Image> image_2 = resolver.AFF4FactoryOpen<AFF4Image>(
+      image_urn_2);
+
+  ASSERT_TRUE(image_2.get()) << "Unable to open the image urn!";
+
+  URN compression_urn;
+  EXPECT_EQ(resolver.Get(image_2->urn, AFF4_IMAGE_COMPRESSION, compression_urn),
+            STATUS_OK);
+
+  EXPECT_STREQ(compression_urn.SerializeToString().c_str(),
+               AFF4_IMAGE_COMPRESSION_SNAPPY);
+
+  string data = image_2->Read(100);
+  EXPECT_STREQ(data.c_str(), "This is a test");
 };

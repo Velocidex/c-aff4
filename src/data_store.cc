@@ -147,20 +147,37 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
   };
 
   if (term->type == RAPTOR_TERM_TYPE_LITERAL) {
-    char *uri = (char *)raptor_uri_to_string(term->value.literal.datatype);
+    // Does it have a special data type?
+    if(term->value.literal.datatype) {
+      char *uri = (char *)raptor_uri_to_string(term->value.literal.datatype);
 
-    unique_ptr<RDFValue> result = RDFValueRegistry.CreateInstance(uri, resolver);
-    raptor_free_memory(uri);
+      unique_ptr<RDFValue> result = RDFValueRegistry.CreateInstance(uri, resolver);
+      // If we do not know how to handle this type we skip it.
+      if(!result) {
+        LOG(INFO) << "Unable to handle RDF type " << uri;
+        raptor_free_memory(uri);
+        return NULL;
+      };
 
-    string value_string((char *)term->value.literal.string,
-                        term->value.literal.string_len);
+      raptor_free_memory(uri);
 
-    if(result->UnSerializeFromString(value_string) != STATUS_OK) {
-      LOG(ERROR) << "Unable to parse " << value_string.c_str();
-      return NULL;
+      string value_string((char *)term->value.literal.string,
+                          term->value.literal.string_len);
+
+      if(result->UnSerializeFromString(value_string) != STATUS_OK) {
+        LOG(ERROR) << "Unable to parse " << value_string.c_str();
+        return NULL;
+      };
+
+      return result;
+
+      // No special type - this is just a string.
+    } else {
+      string value_string((char *)term->value.literal.string,
+                          term->value.literal.string_len);
+
+      return unique_ptr<RDFValue>(new XSDString(value_string));
     };
-
-    return result;
   };
   return NULL;
 };
@@ -180,7 +197,9 @@ static void statement_handler(void *user_data,
     unique_ptr<RDFValue> object(RDFValueFromRaptorTerm(
         resolver, statement->object));
 
-    resolver->Set(URN(subject), URN(predicate), std::move(object));
+    if(object.get()) {
+      resolver->Set(URN(subject), URN(predicate), std::move(object));
+    };
 
     raptor_free_memory(subject);
     raptor_free_memory(predicate);
@@ -312,6 +331,8 @@ AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream &stream) {
 
 void MemoryDataStore::Set(const URN &urn, const URN &attribute,
                           RDFValue *value) {
+  CHECK(value != NULL) << "RDF value is NULL";
+
   unique_ptr<RDFValue> unique_value(value);
   // Automatically create needed keys.
   store[urn.SerializeToString()][attribute.SerializeToString()] = (

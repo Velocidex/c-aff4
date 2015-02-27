@@ -240,7 +240,7 @@ string URN::SerializeToString() const {
 };
 
 string XSDInteger::SerializeToString() const {
-    return aff4_sprintf("%ld", value);
+    return aff4_sprintf("%lld", value);
 };
 
 AFF4Status XSDInteger::UnSerializeFromString(const char *data, int length) {

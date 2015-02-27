@@ -164,7 +164,7 @@ class XSDInteger: public RDFValue {
  public:
   unsigned long long int value;
 
-  XSDInteger(int data):
+  XSDInteger(off_t data):
       RDFValue(NULL), value(data) {};
 
   XSDInteger(DataStore *resolver):
@@ -251,6 +251,12 @@ class URN: public XSDString {
   string RelativePath(const URN urn) const;
 
   string SerializeToString() const;
+
+  AFF4Status Set(const URN data) {
+    value = data.SerializeToString();
+    return STATUS_OK;
+  };
+
 };
 
 

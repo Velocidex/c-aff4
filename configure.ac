@@ -54,6 +54,12 @@ AC_CHECK_LIB([glog], [main], [], [
   exit -1
 ])
 
+AC_CHECK_LIB([snappy], [main], [], [
+  echo Google snappy compression library not found. On debian systems this is provided by
+  echo apt-get install libsnappy-dev
+  exit -1
+])
+
 AC_CHECK_HEADER([tclap/CmdLine.h], [main], [], [
   echo The TCLAP flag parsing library is not found. On Debian systems this is provided by
   echo apt-get install libtclap-dev

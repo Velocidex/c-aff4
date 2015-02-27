@@ -21,6 +21,9 @@
 /* Define to 1 if you have the `raptor2' library (-lraptor2). */
 #undef HAVE_LIBRAPTOR2
 
+/* Define to 1 if you have the `snappy' library (-lsnappy). */
+#undef HAVE_LIBSNAPPY
+
 /* Define to 1 if you have the `uuid' library (-luuid). */
 #undef HAVE_LIBUUID
 

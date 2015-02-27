@@ -33,7 +33,8 @@ specific language governing permissions and limitations under the License.
 
 #define AFF4_MAX_READ_LEN 1024*1024*100
 
-#define AFF4_NAMESPACE "http://aff4.org/Schema#"
+//#define AFF4_NAMESPACE "http://aff4.org/Schema#"
+#define AFF4_NAMESPACE "http://afflib.org/2009/aff4#"
 #define XSD_NAMESPACE "http://www.w3.org/2001/XMLSchema#"
 #define RDF_NAMESPACE "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
@@ -65,9 +66,22 @@ specific language governing permissions and limitations under the License.
 #define AFF4_IMAGE_CHUNKS_PER_SEGMENT (AFF4_NAMESPACE "chunks_per_segment")
 #define AFF4_IMAGE_COMPRESSION (AFF4_NAMESPACE "compression")
 #define AFF4_IMAGE_COMPRESSION_ZLIB "https://www.ietf.org/rfc/rfc1950.txt"
+#define AFF4_IMAGE_COMPRESSION_SNAPPY "https://github.com/google/snappy"
+#define AFF4_IMAGE_COMPRESSION_STORED (AFF4_NAMESPACE "compression/stored")
 
 //AFF4Map - stores a mapping from one stream to another.
 #define AFF4_MAP_TYPE (AFF4_NAMESPACE "map")
 
+// If is more efficient to use an enum for setting the compression type rather
+// than compare URNs all the time.
+typedef enum AFF4_IMAGE_COMPRESSION_ENUM_t {
+  AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN,
+  AFF4_IMAGE_COMPRESSION_ENUM_STORED,
+  AFF4_IMAGE_COMPRESSION_ENUM_ZLIB,
+  AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY
+} AFF4_IMAGE_COMPRESSION_ENUM;
+
+AFF4_IMAGE_COMPRESSION_ENUM CompressionMethodFromURN(URN method);
+URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method);
 
 #endif

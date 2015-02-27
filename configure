@@ -5113,6 +5113,52 @@ else
 fi
 
 
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for main in -lsnappy" >&5
+$as_echo_n "checking for main in -lsnappy... " >&6; }
+if ${ac_cv_lib_snappy_main+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_check_lib_save_LIBS=$LIBS
+LIBS="-lsnappy  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+int
+main ()
+{
+return main ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_cxx_try_link "$LINENO"; then :
+  ac_cv_lib_snappy_main=yes
+else
+  ac_cv_lib_snappy_main=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_snappy_main" >&5
+$as_echo "$ac_cv_lib_snappy_main" >&6; }
+if test "x$ac_cv_lib_snappy_main" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_LIBSNAPPY 1
+_ACEOF
+
+  LIBS="-lsnappy $LIBS"
+
+else
+
+  echo Google snappy compression library not found. On debian systems this is provided by
+  echo apt-get install libsnappy-dev
+  exit -1
+
+fi
+
+
 ac_fn_cxx_check_header_compile "$LINENO" "tclap/CmdLine.h" "ac_cv_header_tclap_CmdLine_h" "
   echo The TCLAP flag parsing library is not found. On Debian systems this is provided by
   echo apt-get install libtclap-dev

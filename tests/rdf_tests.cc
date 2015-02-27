@@ -82,3 +82,23 @@ TEST(URNTest, RelativePath) {
 
   EXPECT_EQ(parent.RelativePath(child), "/bin/ls/00000000/index");
 };
+
+// Test that XSDInteger can accomodate very large values.
+TEST(XSDIntegerTest, SerializeToString) {
+  XSDInteger value(0xfff880000000000ULL);
+
+  EXPECT_EQ(value.SerializeToString(), "1152789563211513856");
+  EXPECT_EQ(STATUS_OK,
+            value.UnSerializeFromString("1152789563211503856", 19));
+
+  EXPECT_EQ(value.value, 1152789563211503856);
+
+  EXPECT_NE(STATUS_OK,
+            value.UnSerializeFromString("sdffsdfsdsdf", 12));
+
+  // Can also read hex data.
+  EXPECT_EQ(STATUS_OK,
+            value.UnSerializeFromString("0xfff880000000000", 17));
+
+  EXPECT_EQ(value.value, 0xfff880000000000);
+};

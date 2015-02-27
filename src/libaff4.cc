@@ -104,7 +104,8 @@ off_t AFF4Stream::Size() {
 
 AFF4Status AFF4Stream::CopyToStream(AFF4Stream &output, size_t length,
                                     size_t buffer_size) {
-  time_t last_time = 0;
+  uint64_t last_time = 0;
+  off_t last_offset = 0;
   off_t start = Tell();
   size_t length_remaining = length;
 
@@ -118,14 +119,19 @@ AFF4Status AFF4Stream::CopyToStream(AFF4Stream &output, size_t length,
     output.Write(data);
     length_remaining -= data.size();
 
-    time_t now = time(NULL);
+    uint64_t now = time_from_epoch();
 
-    if (now > last_time) {
+    if (now > last_time + 1000000/4) {
+      // Rate in MB/s.
+      off_t rate = (readptr - last_offset) / (now - last_time) * 1000000 /
+          1024/1024 ;
+
       std::cout << " Reading 0x" << std::hex << readptr << "  " <<
           std::dec << (readptr - start)/1024/1024 << "MiB / " <<
-          length/1024/1024 << "MiB \r";
+          length/1024/1024 << "MiB " << rate << "MiB/s\r";
       std::cout.flush();
       last_time = now;
+      last_offset = readptr;
     };
   };
 
@@ -274,7 +280,6 @@ int FileBackedObject::Write(const char *data, int length) {
   if (res > 0) {
     readptr += res;
   };
-
   return res;
 };
 
@@ -331,3 +336,30 @@ char *AFF4_version() {
 };
 
 }
+
+AFF4_IMAGE_COMPRESSION_ENUM CompressionMethodFromURN(URN method) {
+  if(method.value == AFF4_IMAGE_COMPRESSION_ZLIB) {
+    return AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
+  } else if(method.value == AFF4_IMAGE_COMPRESSION_SNAPPY) {
+    return AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
+  } else if(method.value == AFF4_IMAGE_COMPRESSION_STORED) {
+    return AFF4_IMAGE_COMPRESSION_ENUM_STORED;
+  } else {
+    return AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN;
+  };
+};
+
+URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method) {
+  switch(method) {
+    case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB:
+      return AFF4_IMAGE_COMPRESSION_ZLIB;
+
+    case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:
+      return AFF4_IMAGE_COMPRESSION_SNAPPY;
+
+    case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
+      return AFF4_IMAGE_COMPRESSION_STORED;
+  };
+
+  return "";
+};
