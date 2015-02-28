@@ -469,6 +469,8 @@ int AFF4Map::Write(const char *data, int length) {
   stream->Seek(0, SEEK_END);
   stream->Write(data, length);
 
+  readptr += length;
+
   return length;
 };
 

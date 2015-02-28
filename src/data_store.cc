@@ -34,15 +34,34 @@ DataStore::~DataStore() {
 };
 
 
-AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output) {
+AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
   YAML::Emitter out;
 
   out << YAML::BeginMap;
   for(const auto &it: store) {
+    URN subject(it.first);
+    URN type;
+
+    // Skip this URN if it is in the suppressed_rdftypes set.
+    if (Get(subject, AFF4_TYPE, type) == STATUS_OK) {
+      if(!verbose &&
+         suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
+        continue;
+      };
+    };
+
     out << YAML::Key << it.first;
 
     out << YAML::Value << YAML::BeginMap;
     for(const auto &attr_it: it.second) {
+      URN predicate(attr_it.first);
+
+      // Volatile predicates are suppressed.
+      if(!verbose && 0 == predicate.value.compare(
+             0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
+        continue;
+      };
+
       out << YAML::Key << attr_it.first;
       out << YAML::Value << attr_it.second->SerializeToString();
     };

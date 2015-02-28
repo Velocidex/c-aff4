@@ -42,5 +42,6 @@ setup(
     install_requires=[
         "rdflib >= 4.1",
         "intervaltree >= 2.0.4",
+        "python-snappy >= 0.5",
     ],
 )

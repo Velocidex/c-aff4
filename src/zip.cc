@@ -237,10 +237,9 @@ AFF4Status ZipFile::parse_cd() {
 AFF4Status ZipFile::Flush() {
   // If the zip file was changed, re-write the central directory.
   if (IsDirty()) {
-    // First Flush all our children.
+    // First Flush all our children, but only if they are still in the cache.
     for (auto it: children) {
-      AFF4ScopedPtr<AFF4Object> obj = resolver->AFF4FactoryOpen<AFF4Object>(
-          URN(it));
+      AFF4ScopedPtr<AFF4Object> obj = resolver->CacheGet<AFF4Object>(it);
       if(obj.get()) {
         obj->Flush();
       };
@@ -277,6 +276,10 @@ AFF4Status ZipFile::Flush() {
 /** This writes a zip64 end of central directory and a central
     directory locator */
 void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
+  // We write to a memory stream first, and then copy it into the backing_store
+  // at once. This really helps when we have lots of members in the zip archive.
+  StringIO cd_stream;
+
   struct Zip64CDLocator locator;
   struct Zip64EndCD end_cd;
   struct EndCentralDirectory end;
@@ -291,10 +294,10 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   for(auto it=members.begin(); it != members.end(); it++) {
     ZipInfo *zip_info = it->second.get();
     LOG(INFO) << "Writing CD entry for " << it->first.c_str() ;
-    WriteCDFileHeader(*zip_info, backing_store);
+    WriteCDFileHeader(*zip_info, cd_stream);
   };
 
-  locator.offset_of_end_cd = backing_store.Tell();
+  locator.offset_of_end_cd = cd_stream.Tell() + directory_offset;
 
   end_cd.size_of_header = sizeof(end_cd)-12;
   end_cd.number_of_entries_in_volume = total_entries;
@@ -307,13 +310,21 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   string urn_string = urn.SerializeToString();
   end.comment_len = urn_string.size();
 
-  LOG(INFO) << "Writing Zip64EndCD at " << std::hex << backing_store.Tell();
-  backing_store.Write((char *)&end_cd, sizeof(end_cd));
-  backing_store.Write((char *)&locator, sizeof(locator));
+  LOG(INFO) << "Writing Zip64EndCD at " << std::hex <<
+      cd_stream.Tell() + directory_offset;
 
-  LOG(INFO) << "Writing ECD at " << std::hex << backing_store.Tell();
-  backing_store.Write((char *)&end, sizeof(end));
-  backing_store.Write(urn_string);
+  cd_stream.Write((char *)&end_cd, sizeof(end_cd));
+  cd_stream.Write((char *)&locator, sizeof(locator));
+
+  LOG(INFO) << "Writing ECD at " << std::hex <<
+      cd_stream.Tell() + directory_offset;
+
+  cd_stream.Write((char *)&end, sizeof(end));
+  cd_stream.Write(urn_string);
+
+  // Now copy the cd_stream into the backing_store in one write operation.
+  cd_stream.Seek(0, SEEK_SET);
+  cd_stream.CopyToStream(backing_store, cd_stream.Size());
 };
 
 AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(URN child) {

@@ -307,3 +307,14 @@ class MemoryDataStore(object):
     def Dump(self, verbose=False):
         print self.DumpToTurtle(verbose=verbose)
         self.ObjectCache.Dump()
+
+    def QuerySubject(self, subject_regex=None):
+        for subject in self.store:
+            if subject_regex is not None and subject_regex.match(subject):
+                yield subject
+
+    def QueryPredicate(self, predicate):
+        for subject, data in self.store.iteritems():
+            for pred, value in data.iteritems():
+                if pred == predicate:
+                    yield subject, predicate, value

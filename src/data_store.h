@@ -340,7 +340,9 @@ class DataStore {
   virtual AFF4Status DeleteSubject(const URN &urn) = 0;
 
   // Dump ourselves to a yaml file.
-  virtual AFF4Status DumpToYaml(AFF4Stream &output) = 0;
+  virtual AFF4Status DumpToYaml(AFF4Stream &output,
+                                bool verbose=false) = 0;
+
   virtual AFF4Status DumpToTurtle(AFF4Stream &output, URN base,
                                   bool verbose=false) = 0;
 
@@ -507,7 +509,9 @@ class MemoryDataStore: public DataStore {
 
   virtual AFF4Status DeleteSubject(const URN &urn);
 
-  virtual AFF4Status DumpToYaml(AFF4Stream &output);
+  virtual AFF4Status DumpToYaml(AFF4Stream &output,
+                                bool verbose=false);
+
   virtual AFF4Status DumpToTurtle(AFF4Stream &output, URN base,
                                   bool verbose=false);
 

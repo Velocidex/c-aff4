@@ -47,7 +47,23 @@ AFF4_IMAGE_TYPE = (AFF4_NAMESPACE + "image")
 AFF4_IMAGE_CHUNK_SIZE = (AFF4_NAMESPACE + "chunk_size")
 AFF4_IMAGE_CHUNKS_PER_SEGMENT = (AFF4_NAMESPACE + "chunks_per_segment")
 AFF4_IMAGE_COMPRESSION = (AFF4_NAMESPACE + "compression")
-AFF4_IMAGE_COMPRESSION_DEFLATE = "https://www.ietf.org/rfc/rfc1950.txt"
+AFF4_IMAGE_COMPRESSION_ZLIB = "https://www.ietf.org/rfc/rfc1950.txt"
+AFF4_IMAGE_COMPRESSION_SNAPPY = "https://github.com/google/snappy"
+AFF4_IMAGE_COMPRESSION_STORED = (AFF4_NAMESPACE + "compression/stored")
 
 # AFF4Map - stores a mapping from one stream to another.
 AFF4_MAP_TYPE = (AFF4_NAMESPACE + "map")
+
+
+# Categories describe the general type of an image.
+AFF4_CATEGORY = (AFF4_NAMESPACE + "category")
+
+# These represent standard attributes to describe memory forensics images.
+AFF4_MEMORY_NAMESPACE = AFF4_NAMESPACE + "memory/"
+AFF4_DISK_NAMESPACE = AFF4_NAMESPACE + "disk/"
+
+AFF4_MEMORY_PHYSICAL = (AFF4_MEMORY_NAMESPACE + "physical")
+AFF4_MEMORY_VIRTUAL = (AFF4_MEMORY_NAMESPACE + "virtual")
+
+AFF4_DISK_RAW = (AFF4_DISK_NAMESPACE + "raw")
+AFF4_DISK_PARTITION = (AFF4_DISK_NAMESPACE + "partition")

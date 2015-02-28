@@ -34,10 +34,10 @@ class Range(collections.namedtuple(
 
     @classmethod
     def FromSerialized(cls, string):
-        return cls(struct.unpack(cls.format_str, string))
+        return cls(*struct.unpack(cls.format_str, string))
 
     def Serialize(self):
-        return struct.pack(self.format_str)
+        return struct.pack(self.format_str, *self)
 
     @property
     def map_end(self):
@@ -124,8 +124,11 @@ class AFF4Map(aff4.AFF4Stream):
                 self.targets = map_idx.Read(map_idx.Size()).splitlines()
 
             with self.resolver.AFF4FactoryOpen(map_urn) as map_stream:
+                read_length = struct.calcsize(Range.format_str)
                 while 1:
-                    data = map_stream.Read(struct.calcsize(Range.format_str))
+                    data = map_stream.Read(read_length)
+                    if not data:
+                        break
                     range = Range.FromSerialized(data)
                     self.tree.addi(range.map_offset, range.map_end, range)
 
@@ -134,7 +137,9 @@ class AFF4Map(aff4.AFF4Stream):
 
     def Read(self, length):
         result = ""
-        for range in sorted(self.tree[self.readptr:self.readptr+length]):
+        for interval in sorted(self.tree[self.readptr:self.readptr+length]):
+            range = interval.data
+
             if range.map_offset > self.readptr:
                 padding = range.map_offset - self.readptr
                 result += "\x00" * padding
@@ -146,6 +151,9 @@ class AFF4Map(aff4.AFF4Stream):
 
             try:
                 with self.resolver.AFF4FactoryOpen(target) as target_stream:
+                    target_stream.Seek(
+                        range.target_offset_at_map_offset(self.readptr))
+
                     result += target_stream.Read(length_to_read_in_target)
             except IOError:
                 result += "\x00" * length_to_read_in_target
@@ -153,7 +161,10 @@ class AFF4Map(aff4.AFF4Stream):
                 length -= length_to_read_in_target
                 self.readptr += length_to_read_in_target
 
-        return result
+        if result:
+            return result
+
+        return "\x00" * length
 
     def Size(self):
         return self.tree.end()
@@ -235,6 +246,9 @@ class AFF4Map(aff4.AFF4Stream):
                 # Append the data on the end of the stream.
                 stream.Seek(stream.Size())
                 stream.Write(data)
+
+                self.readptr += len(data)
+
         except IOError:
             # If the backing stream does not already exist, we make one.
             volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
@@ -246,6 +260,7 @@ class AFF4Map(aff4.AFF4Stream):
                 # Append the data on the end of the stream.
                 stream.Seek(stream.Size())
                 stream.Write(data)
+                self.readptr += len(data)
 
     def GetRanges(self):
         return sorted([x.data for x in self.tree])

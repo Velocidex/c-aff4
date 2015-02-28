@@ -20,6 +20,7 @@ from pyaff4 import data_store
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import zip
+
 from pyaff4 import plugins
 
 
@@ -51,6 +52,12 @@ class AFF4ImageTest(unittest.TestCase):
                         image.Write("Hello world %02d!" % i)
                     self.image_urn = image.urn
 
+                self.image_urn_2 = self.image_urn.Append("2")
+                with aff4_image.AFF4Image.NewAFF4Image(
+                    resolver, self.image_urn_2, self.volume_urn) as image_2:
+                    image_2.compression = lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY
+                    image_2.Write("This is a test")
+
     def testOpenImageByURN(self):
         resolver = data_store.MemoryDataStore()
 
@@ -68,6 +75,16 @@ class AFF4ImageTest(unittest.TestCase):
                 image.Read(100))
 
             self.assertEquals(1500, image.Size())
+
+        # Now test snappy decompression.
+        with resolver.AFF4FactoryOpen(self.image_urn_2) as image_2:
+            self.assertEquals(
+                resolver.Get(image_2.urn, lexicon.AFF4_IMAGE_COMPRESSION),
+                lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY)
+
+            data = image_2.Read(100)
+            self.assertEquals(data, "This is a test")
+
 
 
 if __name__ == '__main__':

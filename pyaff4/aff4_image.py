@@ -13,6 +13,7 @@
 # the License.
 
 """This module implements the standard AFF4 Image."""
+import snappy
 import struct
 import zlib
 
@@ -22,8 +23,8 @@ from pyaff4 import rdfvalue
 from pyaff4 import registry
 
 
-
 class AFF4Image(aff4.AFF4Stream):
+
     @staticmethod
     def NewAFF4Image(resolver, image_urn, volume_urn):
         with resolver.AFF4FactoryOpen(volume_urn) as volume:
@@ -46,10 +47,16 @@ class AFF4Image(aff4.AFF4Stream):
 
         self.chunk_size = int(self.resolver.Get(
             self.urn, lexicon.AFF4_IMAGE_CHUNK_SIZE) or 32*1024)
+
         self.chunks_per_segment = int(self.resolver.Get(
             self.urn, lexicon.AFF4_IMAGE_CHUNKS_PER_SEGMENT) or 1024)
+
         self.size = int(
             self.resolver.Get(self.urn, lexicon.AFF4_STREAM_SIZE) or 0)
+
+        self.compression = str(self.resolver.Get(
+            self.urn, lexicon.AFF4_IMAGE_COMPRESSION) or
+                               lexicon.AFF4_IMAGE_COMPRESSION_ZLIB)
 
         self.buffer = ""
         self.bevy = ""
@@ -74,7 +81,13 @@ class AFF4Image(aff4.AFF4Stream):
 
     def FlushChunk(self, chunk):
         bevy_offset = len(self.bevy)
-        compressed_chunk = zlib.compress(chunk)
+        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
+            compressed_chunk = zlib.compress(chunk)
+        elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
+            compressed_chunk = snappy.compress(chunk)
+        elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
+            compressed_chunk = chunk
+
         self.bevy_index += struct.pack("<I", bevy_offset)
         self.bevy += compressed_chunk
         self.chunk_count_in_bevy += 1
@@ -130,7 +143,7 @@ class AFF4Image(aff4.AFF4Stream):
 
             self.resolver.Set(
                 self.urn, lexicon.AFF4_IMAGE_COMPRESSION,
-                rdfvalue.URN(lexicon.AFF4_IMAGE_COMPRESSION_DEFLATE))
+                rdfvalue.URN(self.compression))
 
         return super(AFF4Image, self).Flush()
 
@@ -212,8 +225,14 @@ class AFF4Image(aff4.AFF4Stream):
 
         bevy.Seek(bevy_index[chunk_id_in_bevy], 0)
         cbuffer = bevy.Read(compressed_chunk_size)
+        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
+            return zlib.decompress(cbuffer)
 
-        return zlib.decompress(cbuffer)
+        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
+            return snappy.decompress(cbuffer)
+
+        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
+            return cbuffer
 
 
 registry.AFF4_TYPE_MAP[lexicon.AFF4_IMAGE_TYPE] = AFF4Image
