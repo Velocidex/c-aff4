@@ -14,7 +14,11 @@ class StreamTest : public ::testing::Test {
 
     stream.Seek(0, 0);
     EXPECT_EQ(0, stream.Tell());
+    EXPECT_STREQ("hello",
+                 stream.Read(5).c_str());
+    EXPECT_EQ(5, stream.Tell());
 
+    stream.Seek(0, 0);
     EXPECT_STREQ("hello world",
                  stream.Read(1000).c_str());
 
@@ -71,12 +75,14 @@ class FileBackedStreamTest: public StreamTest {
 
 TEST_F(FileBackedStreamTest, FileBackedObjectIOTest) {
   MemoryDataStore resolver;
+  URN filename_urn = URN::NewURNFromFilename(filename);
 
   // We are allowed to write on the output filename.
-  resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+  resolver.Set(filename_urn, AFF4_STREAM_WRITE_MODE,
+               new XSDString("truncate"));
 
   AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
-      filename);
+      filename_urn);
 
   EXPECT_NE((AFF4Stream *)NULL, file.get());
 

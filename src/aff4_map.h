@@ -21,9 +21,9 @@ specific language governing permissions and limitations under the License.
 
 // This is the type written to the map stream in this exact binary layout.
 struct BinaryRange {
-  uint64_t map_offset;
-  uint64_t target_offset;
-  uint64_t length;
+  int64_t map_offset;
+  int64_t target_offset;
+  int64_t length;
   uint32_t target_id;
 }__attribute__((packed));
 
@@ -31,11 +31,11 @@ struct BinaryRange {
 class Range: public BinaryRange {
 
  public:
-  uint64_t map_end() {
+  int64_t map_end() {
     return map_offset + length;
   };
 
-  uint64_t target_end() {
+  int64_t target_end() {
     return target_offset + length;
   };
 
@@ -48,7 +48,7 @@ class AFF4Map: public AFF4Stream {
   // The target list.
   vector<URN> targets;
   std::map<string, int> target_idx_map;
-  std::map<off_t, Range> map;
+  std::map<aff4_off_t, Range> map;
 
   // The URN that will be used as the target of the next Write() operation.
   URN last_target;
@@ -66,7 +66,7 @@ class AFF4Map: public AFF4Stream {
 
   AFF4Status Flush();
 
-  AFF4Status AddRange(off_t map_offset, off_t target_offset,
+  AFF4Status AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
                       size_t length, URN target);
 
   void Dump();
@@ -75,7 +75,7 @@ class AFF4Map: public AFF4Stream {
 
   void Clear();
 
-  virtual off_t Size();
+  virtual aff4_off_t Size();
 
   using AFF4Stream::Write;
 };

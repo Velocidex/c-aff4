@@ -39,6 +39,7 @@ TEST_F(MemoryDataStoreTest, StorageTest) {
 };
 
 
+#if defined(HAVE_LIBYAML_CPP)
 TEST_F(MemoryDataStoreTest, YamlSerializationTest) {
   MemoryDataStore new_store;
   unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
@@ -51,7 +52,7 @@ TEST_F(MemoryDataStoreTest, YamlSerializationTest) {
   EXPECT_EQ(NOT_IMPLEMENTED,
             new_store.LoadFromYaml(*output));
 }
-
+#endif
 
 TEST_F(MemoryDataStoreTest, TurtleSerializationTest) {
   MemoryDataStore new_store;
@@ -99,10 +100,10 @@ class AFF4ObjectCacheMock: public AFF4ObjectCache {
 TEST(AFF4ObjectCacheTest, TestLRU) {
   AFF4ObjectCacheMock cache(3);
   MemoryDataStore resolver;
-  URN a("a");
-  URN b("b");
-  URN c("c");
-  URN d("d");
+  URN a = URN::NewURNFromFilename("a");
+  URN b = URN::NewURNFromFilename("b");
+  URN c = URN::NewURNFromFilename("c");
+  URN d = URN::NewURNFromFilename("d");
 
   AFF4Object *obj1 = new AFF4Object(&resolver, a);
   AFF4Object *obj2 = new AFF4Object(&resolver, b);

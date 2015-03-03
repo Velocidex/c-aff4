@@ -33,13 +33,23 @@ using std::ofstream;
 using std::ifstream;
 
 
+struct AFF4StreamProperties {
+  bool seekable = true;                 /**< Set if the stream is non seekable
+                                         * (e.g. a pipe). */
+  bool sizeable = true;                 /**< Do we know the size of this file? */
+
+  bool writable = false;                /**< Can we write to this file. */
+};
+
 
 class AFF4Stream: public AFF4Object {
  protected:
-  off_t readptr;
-  off_t size;             // How many bytes are used in the stream?
+  aff4_off_t readptr;
+  aff4_off_t size;             // How many bytes are used in the stream?
 
  public:
+  AFF4StreamProperties properties;
+
   AFF4Stream(DataStore *result): AFF4Object(result), readptr(0), size(0) {};
 
   // Convenience methods.
@@ -57,11 +67,11 @@ class AFF4Stream: public AFF4Object {
                           size_t buffer_size=10*1024*1024);
 
   // The following should be overriden by derived classes.
-  virtual void Seek(off_t offset, int whence);
+  virtual AFF4Status Seek(aff4_off_t offset, int whence);
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
-  virtual off_t Tell();
-  virtual off_t Size();
+  virtual aff4_off_t Tell();
+  virtual aff4_off_t Size();
 
   /**
    * Streams are always reset to their begining when returned from the cache.
@@ -102,23 +112,28 @@ class StringIO: public AFF4Stream {
 
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
-  virtual off_t Size();
 
   virtual AFF4Status Truncate();
+  virtual aff4_off_t Size();
+
   using AFF4Stream::Write;
 };
 
 
 class FileBackedObject: public AFF4Stream {
  protected:
+#if defined(_WIN32)
+  HANDLE fd;
+#else
   int fd;
+#endif
 
  public:
   FileBackedObject(DataStore *resolver): AFF4Stream(resolver) {};
+  virtual ~FileBackedObject();
 
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
-  virtual off_t Size();
 
   /**
    * Load the file from a file:/ URN.

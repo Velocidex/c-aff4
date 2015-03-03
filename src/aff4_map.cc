@@ -76,7 +76,7 @@ string AFF4Map::Read(size_t length) {
     return "";
 
   string result;
-  length = std::min((off_t)length, Size() - readptr);
+  length = std::min((aff4_off_t)length, Size() - readptr);
 
   while(length > 0) {
     auto map_it = map.upper_bound(readptr);
@@ -88,7 +88,7 @@ string AFF4Map::Read(size_t length) {
     };
 
     Range range = map_it->second;
-    off_t length_to_start_of_range = range.map_offset - readptr;
+    aff4_off_t length_to_start_of_range = range.map_offset - readptr;
     if(length_to_start_of_range > 0) {
       // Null pad it.
       result.resize(result.size() + length_to_start_of_range);
@@ -99,10 +99,10 @@ string AFF4Map::Read(size_t length) {
 
     // The readptr is inside a range.
     URN target = targets[range.target_id];
-    off_t length_to_read_in_target = std::min(
-        length, range.map_end() - readptr);
+    aff4_off_t length_to_read_in_target = std::min(
+        (aff4_off_t)length, range.map_end() - readptr);
 
-    off_t offset_in_target = range.target_offset + (
+    aff4_off_t offset_in_target = range.target_offset + (
         readptr - range.map_offset);
 
     AFF4ScopedPtr<AFF4Stream> target_stream = resolver->AFF4FactoryOpen<
@@ -128,7 +128,7 @@ string AFF4Map::Read(size_t length) {
   return result;
 }
 
-off_t AFF4Map::Size() {
+aff4_off_t AFF4Map::Size() {
   // The size of the stream is the end of the last range.
   auto it = map.end();
   if(it == map.begin()) {
@@ -230,7 +230,7 @@ mapping).
  *
  * @return
  */
-AFF4Status AFF4Map::AddRange(off_t map_offset, off_t target_offset,
+AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
                              size_t length, URN target) {
   string key = target.SerializeToString();
   auto it = target_idx_map.find(key);
@@ -287,7 +287,7 @@ AFF4Status AFF4Map::AddRange(off_t map_offset, off_t target_offset,
     // Old range starts after the begining of this range. This means this
     // subrange is not covered by the old range.
     if(old_range.map_offset > map_offset) {
-      subrange.length = std::min(length,
+      subrange.length = std::min((aff4_off_t)length,
                                  old_range.map_offset - map_offset);
 
       // Subrange is not covered by old range, just add it to the map.
@@ -303,7 +303,7 @@ AFF4Status AFF4Map::AddRange(off_t map_offset, off_t target_offset,
     // If we get here, the next subrange overlaps with the old range. First
     // split the subrange to consume as much as the old range as possible but
     // not exceed it. Then we split the old range into three subranges.
-    subrange.length = std::min(length,
+    subrange.length = std::min((aff4_off_t)length,
                                old_range.map_end() - subrange.map_offset);
 
     map_offset += subrange.length;

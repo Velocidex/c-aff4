@@ -14,7 +14,9 @@ specific language governing permissions and limitations under the License.
 */
 
 #include <glog/logging.h>
-
+#include <pcre++.h>
+#include <sstream>
+#include <iomanip>
 #include "zip.h"
 #include "rdf.h"
 #include "lexicon.h"
@@ -84,16 +86,19 @@ AFF4Status ZipFile::parse_cd() {
       backing_store_urn);
 
   if (!backing_store) {
-    LOG(ERROR) << "Unable to open backing URN " << backing_store_urn.value.c_str();
+    LOG(ERROR) << "Unable to open backing URN " <<
+        backing_store_urn.SerializeToString().c_str();
     return IO_ERROR;
   };
 
   // Find the End of Central Directory Record - We read about 4k of
   // data and scan for the header from the end, just in case there is
   // an archive comment appended to the end.
-  backing_store->Seek(-BUFF_SIZE, SEEK_END);
+  if(backing_store->Seek(-BUFF_SIZE, SEEK_END) != STATUS_OK) {
+    return IO_ERROR;
+  };
 
-  off_t ecd_offset = backing_store->Tell();
+  aff4_off_t ecd_offset = backing_store->Tell();
   string buffer = backing_store->Read(BUFF_SIZE);
 
   // Not enough data to contain an EndCentralDirectory
@@ -127,7 +132,7 @@ AFF4Status ZipFile::parse_cd() {
     // open it. Therefore we start with a random URN and then create a new
     // ZipFile volume. After parsing the central directory we discover our URN
     // and therefore we can delete the old, randomly selected URN.
-    if (urn.value != urn_string) {
+    if (urn.SerializeToString() != urn_string) {
       resolver->DeleteSubject(urn);
       urn.Set(urn_string);
 
@@ -138,14 +143,14 @@ AFF4Status ZipFile::parse_cd() {
 
   };
 
-  off_t directory_offset = end_cd->offset_of_cd;
+  aff4_off_t directory_offset = end_cd->offset_of_cd;
   directory_number_of_entries = end_cd->total_entries_in_cd;
 
   // This is a 64 bit archive, find the Zip64EndCD.
   if (directory_offset < 0) {
     Zip64CDLocator locator;
     uint32_t magic = locator.magic;
-    off_t locator_offset = ecd_offset - sizeof(Zip64CDLocator);
+    aff4_off_t locator_offset = ecd_offset - sizeof(Zip64CDLocator);
     backing_store->Seek(locator_offset, 0);
     backing_store->ReadIntoBuffer(&locator, sizeof(locator));
 
@@ -167,7 +172,7 @@ AFF4Status ZipFile::parse_cd() {
   };
 
   // Now iterate over the directory and read all the ZipInfo structs.
-  off_t entry_offset = directory_offset;
+  aff4_off_t entry_offset = directory_offset;
   for(int i=0; i<directory_number_of_entries; i++) {
     CDFileHeader entry;
     uint32_t magic = entry.magic;
@@ -196,7 +201,7 @@ AFF4Status ZipFile::parse_cd() {
     if (zip_info->local_header_offset < 0) {
       // Parse all the extra field records.
       Zip64FileHeaderExtensibleField extra;
-      off_t end_of_extra = backing_store->Tell() + entry.extra_field_len;
+      aff4_off_t end_of_extra = backing_store->Tell() + entry.extra_field_len;
 
       while(backing_store->Tell() < end_of_extra) {
         backing_store->ReadIntoBuffer(&extra, entry.extra_field_len);
@@ -257,11 +262,13 @@ AFF4Status ZipFile::Flush() {
       resolver->DumpToTurtle(*turtle_segment, urn);
       turtle_segment->Flush();
 
+#ifdef HAVE_LIBYAML_CPP
       AFF4ScopedPtr<ZipFileSegment> yaml_segment = CreateZipSegment(
           "information.yaml");
       yaml_segment->compression_method = ZIP_DEFLATE;
       resolver->DumpToYaml(*yaml_segment);
       yaml_segment->Flush();
+#endif
     };
 
     AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
@@ -285,9 +292,13 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   struct EndCentralDirectory end;
 
   // Append a new central directory to the end of the zip file.
-  backing_store.Seek(0, SEEK_END);
+  if(backing_store.Seek(0, SEEK_END) != STATUS_OK) {
+    LOG(ERROR) << "Unable to write EOCD on non-seekable stream: " <<
+        urn.SerializeToString();
+    return;
+  };
 
-  off_t directory_offset = backing_store.Tell();
+  aff4_off_t directory_offset = backing_store.Tell();
 
   int total_entries = members.size();
 
@@ -300,6 +311,7 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   locator.offset_of_end_cd = cd_stream.Tell() + directory_offset;
 
   end_cd.size_of_header = sizeof(end_cd)-12;
+
   end_cd.number_of_entries_in_volume = total_entries;
   end_cd.number_of_entries_in_total = total_entries;
   end_cd.size_of_cd = locator.offset_of_end_cd - directory_offset;
@@ -374,7 +386,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
   resolver->Set(segment_urn, AFF4_STORED, new URN(urn));
 
   // Keep track of all the segments we issue.
-  children.insert(segment_urn.value);
+  children.insert(segment_urn.SerializeToString());
 
   ZipFileSegment *result = new ZipFileSegment(filename, *this);
   result->Truncate();
@@ -426,6 +438,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
     return PARSING_ERROR;
   };
 
+  // The filename should be null terminated so we force c_str().
   string file_header_filename = backing_store->Read(
       file_header.file_name_length).c_str();
   if (file_header_filename != zip_info->filename) {
@@ -551,11 +564,13 @@ AFF4Status ZipFileSegment::Flush() {
 
     if(!backing_store) return GENERIC_ERROR;
 
-    LOG(INFO) << "Writing member " << urn.value.c_str();
+    LOG(INFO) << "Writing member " << urn.SerializeToString().c_str();
     unique_ptr<ZipInfo> zip_info(new ZipInfo());
 
     // Append member at the end of the file.
-    backing_store->Seek(0, SEEK_END);
+    if(backing_store->Seek(0, SEEK_END) != STATUS_OK) {
+      return IO_ERROR;
+    };
 
     zip_info->local_header_offset = backing_store->Tell();
     zip_info->filename = owner->_member_name_for_urn(urn);
@@ -582,8 +597,8 @@ AFF4Status ZipFileSegment::Flush() {
     owner->members[member_name] = std::move(zip_info);
 
     // Mark the owner as dirty.
-    LOG(INFO) << owner->urn.value.c_str() << " is dirtied by segment " <<
-        urn.value.c_str();
+    LOG(INFO) << owner->urn.SerializeToString().c_str() << " is dirtied by segment " <<
+        urn.SerializeToString().c_str();
 
     owner->MarkDirty();
 
@@ -608,17 +623,71 @@ ZipInfo::ZipInfo() {
 
 string ZipFile::_member_name_for_urn(const URN member) const {
   string filename = urn.RelativePath(member);
+  std::stringstream result;
 
   // Make sure zip members do not have leading /.
   if (filename[0] == '/') {
-    return filename.substr(1, filename.size());
+    filename = filename.substr(1, filename.size());
   };
 
-  return filename;
+  // Now escape any chars which are non printable.
+  for(int i=0; i<filename.size(); i++) {
+    char j = filename[i];
+    if(!std::isprint(j) ||
+       j=='!' || j=='$' ||
+       j=='\\' || j==':' || j=='*' || j=='%' ||
+       j=='?' || j=='"' || j=='<' || j=='>' || j=='|') {
+      result << "%" << std::hex << std::setw(2) << std::setfill('0') << (int)j;
+      continue;
+    };
+
+    // Escape // sequences.
+    if(filename[i]=='/' && i<filename.size()-1 &&
+       filename[i+1]=='/') {
+
+      result << "%" << std::hex << std::setw(2) << std::setfill('0') <<
+          (int)(filename[i]);
+
+      result << "%" << std::hex << std::setw(2) << std::setfill('0') <<
+          (int)(filename[i+1]);
+      i++;
+      continue;
+    };
+
+    result << j;
+  };
+
+  return result.str();
 };
 
 URN ZipFile::_urn_from_member_name(const string member) const {
-  return urn.Append(member);
+  std::stringstream result;
+
+  // Now escape any chars which are non printable.
+  for(int i=0; i<member.size(); i++) {
+    if(member[i]=='%') {
+      i++;
+
+      int number = std::stoi(member.substr(i, 2), NULL, 16);
+      if(number)
+        result << (char)number;
+
+      // We consume 2 chars.
+      i++;
+    } else {
+      result << member[i];
+    };
+  };
+
+  // If this is a fully qualified AFF4 URN we return it as is, else we return
+  // the relative URN to our base.
+  URN result_urn(result.str());
+  string scheme = result_urn.Scheme();
+  if(scheme=="aff4") {
+    return result_urn;
+  };
+
+  return urn.Append(result.str());
 };
 
 

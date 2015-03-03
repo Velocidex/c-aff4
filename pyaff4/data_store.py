@@ -20,6 +20,7 @@ from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
 
+LOGGER = logging.getLogger("pyaff4")
 
 
 def CHECK(condition, error):
@@ -65,7 +66,7 @@ class AFF4ObjectCache(object):
     def _Trim(self):
         while len(self.lru_map) > self.max_items:
             older_item = self.lru_list.prev
-            logging.debug("Trimming %s from cache" % older_item.key)
+            LOGGER.debug("Trimming %s from cache" % older_item.key)
 
             self.lru_map.pop(older_item.key)
             older_item.unlink()
@@ -227,7 +228,7 @@ class MemoryDataStore(object):
         return obj
 
     def Return(self, obj):
-        logging.debug("Returning %s" % obj.urn)
+        LOGGER.debug("Returning %s" % obj.urn)
         self.ObjectCache.Return(obj)
 
     def Close(self, obj):
@@ -281,7 +282,7 @@ class MemoryDataStore(object):
         cached_obj = self.ObjectCache.Get(urn)
         if cached_obj:
             cached_obj.Prepare()
-            logging.debug("AFF4FactoryOpen (Cached): %s" % urn)
+            LOGGER.debug("AFF4FactoryOpen (Cached): %s" % urn)
             return cached_obj
 
         type_urn = self.Get(urn, lexicon.AFF4_TYPE)
@@ -300,7 +301,7 @@ class MemoryDataStore(object):
         # Cache the object for next time.
         self.ObjectCache.Put(obj, True)
 
-        logging.debug("AFF4FactoryOpen (new instance): %s" % urn)
+        LOGGER.debug("AFF4FactoryOpen (new instance): %s" % urn)
         obj.Prepare()
         return obj
 

@@ -4,18 +4,35 @@
 ACLOCAL_AMFLAGS = -I m4
 
 # This is so we can #include <package/foo>
-AM_CPPFLAGS = -I$(top_srcdir)/src -I$(top_srcdir)/third_party/include -DHAVE_SSTREAM
+AM_CPPFLAGS = -I$(top_srcdir)/src -I$(top_srcdir)/third_party/include -DHAVE_SSTREAM \
+	-D_FILE_OFFSET_BITS=64
 
 # These are good warnings to turn on by default
 if GCC
-AM_CXXFLAGS = -Wall -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare
+AFF4CXXFLAGS = -Wall -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare \
+	-std=c++11
 endif
+
+# On windows we need to specify this to avoid a bug in gcc
+# (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
+if WIN32_NATIVE_HOST
+WINCXXFLAGS = -mno-ms-bitfields
+else
+UNIXLDFLAGS = -luuid
+endif
+
+# Default flags for targets without specific overrides.
+AM_CXXFLAGS = $(AFF4CXXFLAGS) $(WINCXXFLAGS)
+
 
 # Support static builds.
 if STATIC_BUILD
-STATIC_LIB_LDFLAGS = -static -static-libstdc++ -static-libgcc
-STATIC_LDFLAGS = -all-static
+STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
+STATIC_LINKERLDFLAGS = -all-static
 endif
+
+LIBS = -lz -lraptor2 -lpcre++ -lglog -lsnappy -lpthread \
+	-luriparser $(UNIXLDFLAGS)
 
 # The -no-undefined flag allows libtool to generate shared libraries for
 # Cygwin and MinGW.  LIBSTDCXX_LA_LINKER_FLAG is used to fix a Solaris bug.
@@ -35,18 +52,21 @@ libaff4_include_HEADERS = \
 	aff4_map.h tclap_parsers.h \
         aff4_imager_utils.h
 
-libaff4_la_CXXFLAGS = -std=c++11 -g -Wall -O0
 libaff4_la_SOURCES = \
 	aff4_image.cc aff4_init.cc data_store.cc libaff4.cc \
-	rdf.cc stream_test.cc zip.cc aff4_imager_utils.cc \
-	aff4_map.cc
+	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc
 
-libaff4_la_LDFLAGS = $(STATIC_LIB_LDFLAGS)
-libaff4_la_LIBADD =  -lz -lyaml-cpp -luuid -lraptor2 -lpcre++ -lglog
+libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
+
+if WIN32_NATIVE_HOST
+libaff4_la_LIBADD = -lrpcrt4 -lshlwapi $(LIBS)
+else
+libaff4_la_LIBADD =  $(LIBS)
+endif
+
 
 bin_PROGRAMS = aff4imager
-aff4imager_LDADD = libaff4.la
+aff4imager_LDADD = libaff4.la $(LIBS)
 
-aff4imager_LDFLAGS = $(STATIC_LDFLAGS)
-aff4imager_CXXFLAGS = -std=c++11 -g -Wall -O0
+aff4imager_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 aff4imager_SOURCES = aff4imager.cc

@@ -23,6 +23,8 @@ from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
 
+LOGGER = logging.getLogger("pyaff4")
+
 
 class FileBackedObject(aff4.AFF4Stream):
     def LoadFromURN(self):
@@ -74,6 +76,35 @@ class FileBackedObject(aff4.AFF4Stream):
 registry.AFF4_TYPE_MAP["file"] = FileBackedObject
 
 
+class FileWrapper(object):
+    def __init__(self, resolver, file_urn, slice_offset, slice_size):
+        self.file_urn = file_urn
+        self.resolver = resolver
+        self.slice_size = slice_size
+        self.slice_offset = slice_offset
+        self.readptr = 0
+
+    def seek(self, offset, whence=0):
+        if whence == 0:
+            self.readptr = offset
+        elif whence == 1:
+            self.readptr += offset
+        elif whence == 2:
+            self.readptr = self.slice_size + offset
+
+    def tell(self):
+        return self.readptr
+
+    def read(self, length):
+        with self.resolver.AFF4FactoryOpen(self.file_urn) as fd:
+            fd.seek(self.slice_offset + self.readptr)
+            to_read = min(self.slice_size - self.readptr, length)
+            result = fd.read(to_read)
+            self.readptr += len(result)
+
+            return result
+
+
 class ZipFileSegment(FileBackedObject):
     def LoadFromURN(self):
         owner_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
@@ -84,11 +115,23 @@ class ZipFileSegment(FileBackedObject):
         """Read the segment data from the ZipFile owner."""
         member_name = owner.member_name_for_urn(self.urn)
         try:
-            data = owner.zip_handle.read(member_name)
-        except KeyError:
-            data = ""
+            zinfo = owner.zip_handle.getinfo(member_name)
 
-        self.fd = StringIO.StringIO(data)
+            # For uncompressed segments we can map their file directly.
+            if zinfo.compress_type == 0:
+                backing_store_urn = self.resolver.Get(
+                    owner.urn, lexicon.AFF4_STORED)
+
+                # Find the start of the file data
+                data_start = zinfo.header_offset + len(zinfo.FileHeader())
+                self.fd = FileWrapper(
+                    self.resolver, backing_store_urn, data_start,
+                    zinfo.compress_size)
+            else:
+                self.fd = StringIO.StringIO(owner.zip_handle.read(member_name))
+
+        except KeyError:
+            self.fd = StringIO.StringIO("")
 
     def Flush(self):
         if self.IsDirty():
@@ -156,8 +199,8 @@ class ZipFile(aff4.AFF4Volume):
         result = ZipFileSegment(resolver=self.resolver, urn=segment_urn)
         result.LoadFromZipFile(self)
 
-        logging.info("Creating ZipFileSegment %s",
-                     result.urn.SerializeToString())
+        LOGGER.info("Creating ZipFileSegment %s",
+                    result.urn.SerializeToString())
 
         # Add the new object to the object cache.
         return self.resolver.CachePut(result)
@@ -178,12 +221,17 @@ class ZipFile(aff4.AFF4Volume):
             if write_mode == "read":
                 mode = "r"
 
-            self.zip_handle = zipfile.ZipFile(backing_store, mode=mode,
-                                              allowZip64=True)
+            try:
+                self.zip_handle = zipfile.ZipFile(backing_store, mode=mode,
+                                                  allowZip64=True)
+            except zipfile.BadZipfile:
+                raise IOError("Unable to open zip file.")
 
             # The current URN is stored in the zip comment.
             if self.zip_handle.comment:
                 self.urn.Set(self.zip_handle.comment)
+                self.resolver.Set(self.urn, lexicon.AFF4_STORED,
+                                  backing_store_urn)
 
             # Populate the resolver with the information from the zip handle.
             for name in self.zip_handle.namelist():

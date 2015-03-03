@@ -89,6 +89,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
 	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
 	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/m4/uriparser.m4 $(top_srcdir)/m4/w32.m4 \
 	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
@@ -119,7 +120,7 @@ aff4_test_OBJECTS = $(am_aff4_test_OBJECTS)
 aff4_test_DEPENDENCIES = libgtest.la ../src/libaff4.la
 aff4_test_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(aff4_test_CXXFLAGS) \
-	$(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
+	$(CXXFLAGS) $(aff4_test_LDFLAGS) $(LDFLAGS) -o $@
 SCRIPTS = $(noinst_SCRIPTS)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -523,6 +524,10 @@ AM_CPPFLAGS = -I$(top_srcdir)/src \
 AM_LDFLAGS = -no-undefined $(LIBSTDCXX_LA_LINKER_FLAG) \
              -version-info @SO_VERSION@
 
+
+# Support static builds.
+@STATIC_BUILD_TRUE@STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
+@STATIC_BUILD_TRUE@STATIC_LINKERLDFLAGS = -all-static
 TESTS_ENVIRONMENT = 
 check_SCRIPTS = 
 
@@ -540,6 +545,7 @@ aff4_test_SOURCES = \
 
 aff4_test_LDADD = libgtest.la ../src/libaff4.la
 aff4_test_CXXFLAGS = -std=c++11 -g -Wall -O0
+aff4_test_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 all: all-am
 
 .SUFFIXES:

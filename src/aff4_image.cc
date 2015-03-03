@@ -28,7 +28,7 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
     return AFF4ScopedPtr<AFF4Image>();        /** Volume not known? */
 
   // Inform the volume that we have a new image stream contained within it.
-  volume->children.insert(image_urn.value);
+  volume->children.insert(image_urn.SerializeToString());
 
   resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
   resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
@@ -84,7 +84,7 @@ AFF4Status AFF4Image::LoadFromURN() {
 AFF4Status AFF4Image::_FlushBevy() {
   // If the bevy is empty nothing else to do.
   if (bevy.Size() == 0) {
-    LOG(INFO) << urn.value.c_str() << "Bevy is empty.";
+    LOG(INFO) << urn.SerializeToString() << "Bevy is empty.";
     return STATUS_OK;
   };
 
@@ -176,7 +176,7 @@ AFF4Status AFF4Image::CompressZlib_(const char *data, size_t length,
 
   if(compress2((Bytef *)output->data(), &c_length, (Bytef *)data, length,
                1) != Z_OK) {
-    LOG(ERROR) << "Unable to compress chunk " << urn.value.c_str();
+    LOG(ERROR) << "Unable to compress chunk " << urn.SerializeToString();
     return MEMORY_ERROR;
   };
 
@@ -265,14 +265,15 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
   unsigned int compressed_chunk_size;
 
   if (index_size == 0) {
-    LOG(ERROR) << "Index empty in " << urn.value.c_str() << ":" << chunk_id;
+    LOG(ERROR) << "Index empty in " <<
+        urn.SerializeToString() << ":" << chunk_id;
     return IO_ERROR;
   };
 
   // The segment is not completely full.
   if (chunk_id_in_bevy >= index_size) {
-    LOG(ERROR) << "Bevy index too short in " << urn.value.c_str() << ":"
-               << chunk_id;
+    LOG(ERROR) << "Bevy index too short in " <<
+        urn.SerializeToString() << ":" << chunk_id;
     return IO_ERROR;
 
     // For the last chunk in the bevy, consume to the end of the bevy segment.
@@ -316,8 +317,8 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
   };
 
   if(res != STATUS_OK) {
-    LOG(ERROR) << urn.value.c_str() << ": Unable to uncompress chunk "
-               << chunk_id;
+    LOG(ERROR) << urn.SerializeToString() <<
+        ": Unable to uncompress chunk " << chunk_id;
     return res;
   };
 
@@ -341,7 +342,8 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
         bevy_urn);
 
     if(!bevy_index || !bevy) {
-      LOG(ERROR) << "Unable to open bevy " << bevy_urn.value.c_str();
+      LOG(ERROR) << "Unable to open bevy " <<
+          bevy_urn.SerializeToString();
       return -1;
     }
 
@@ -377,7 +379,7 @@ string AFF4Image::Read(size_t length) {
   if(length > AFF4_MAX_READ_LEN)
     return "";
 
-  length = std::min((off_t)length, Size() - readptr);
+  length = std::min((aff4_off_t)length, Size() - readptr);
 
   int initial_chunk_offset = readptr % chunk_size;
   // We read this many full chunks at once.

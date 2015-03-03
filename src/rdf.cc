@@ -13,13 +13,20 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#include <pcre++.h>
+#include "aff4_base.h"
 #include "lexicon.h"
 #include "rdf.h"
+#include <limits.h>
+#include <pcre++.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <uriparser/Uri.h>
 
-static string _NormalizeComponent(const string &component);
+#ifdef _WIN32
+#include <shlwapi.h>
+#endif
 
+static string _NormalizePath(const string &component);
 
 string RDFBytes::SerializeToString() const {
   string result;
@@ -103,39 +110,71 @@ raptor_term *XSDString::GetRaptorTerm(raptor_world *world) const {
 };
 
 
-uri_components::uri_components(const string &uri) {
-  static pcrepp::Pcre uri_regex(
-      "^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\\\\?([^#]*))?(#(.*))?");
-
-  if (uri_regex.search(uri)) {
-    try {
-      scheme = uri_regex[1];
-      domain = uri_regex[3];
-      path = uri_regex[4];
-      hash_data = uri_regex[8];
-
-      // Not all subexpression need match. In that case we catch the exception
-      // and leave the items blank.
-    } catch (pcrepp::Pcre::exception &E) {};
-  };
-
-  if (scheme == "") {
-    scheme = "file";
-    // Relative path to current working directory.
-    if(path.size() > 0 && path[0] != '/') {
-      char cwd[1024];
-      if(getcwd(cwd, sizeof(cwd)))
-        path = string(cwd) + "/" + path;
-    };
-  };
-
-  path = _NormalizeComponent(path);
-};
-
-
 uri_components URN::Parse() const {
-  return uri_components(value);
+  UriParserStateA state;
+  UriUriA uri;
+  uri_components result;
+
+  state.uri = &uri;
+
+  if(uriParseUriA(&state, value.c_str()) != URI_SUCCESS) {
+    LOG(INFO) << "Failed to parse " << value << " as a URN";
+  } else {
+    result.scheme.assign(
+        uri.scheme.first, uri.scheme.afterLast - uri.scheme.first);
+
+    result.domain.assign(
+        uri.hostText.first, uri.hostText.afterLast - uri.hostText.first);
+
+    result.fragment.assign(
+        uri.fragment.first, uri.fragment.afterLast - uri.fragment.first);
+
+    for(auto it=uri.pathHead; it!=0; it=it->next)
+      result.path += "/" + string(
+          it->text.first, it->text.afterLast - it->text.first);
+  }
+
+  uriFreeUriMembersA(&uri);
+  return result;
 };
+
+
+URN::URN(const char *data): URN() {
+  UriParserStateA state;
+  UriUriA uri;
+
+  state.uri = &uri;
+
+  if(uriParseUriA(&state, data) != URI_SUCCESS) {
+    LOG(INFO) << "Failed to parse " << data << " as a URN";
+  };
+
+  // No scheme specified - assume this is a filename.
+  if(uri.pathHead && !uri.scheme.first) {
+    value = NewURNFromFilename(data).SerializeToString();
+    goto exit;
+  };
+
+  if (uriNormalizeSyntaxA(&uri) != URI_SUCCESS) {
+    LOG(INFO) << "Failed to normalize";
+  }
+
+  int charsRequired;
+  if (uriToStringCharsRequiredA(&uri, &charsRequired) == URI_SUCCESS) {
+    charsRequired++;
+
+    char tmp[charsRequired * sizeof(char)];
+    if (uriToStringA(tmp, &uri, charsRequired, NULL) != URI_SUCCESS) {
+      LOG(INFO) << "Failed";
+    };
+
+    value = tmp;
+  };
+
+exit:
+  uriFreeUriMembersA(&uri);
+};
+
 
 raptor_term *URN::GetRaptorTerm(raptor_world *world) const {
   string value_string(SerializeToString());
@@ -146,8 +185,26 @@ raptor_term *URN::GetRaptorTerm(raptor_world *world) const {
       value_string.size());
 };
 
+URN URN::Append(const string &component) const {
+  return URN(value + _NormalizePath(component));
+};
 
-static string _NormalizeComponent(const string &component) {
+
+string URN::RelativePath(const URN other) const {
+  string my_urn = SerializeToString();
+  string other_urn = other.SerializeToString();
+
+  if (0 == my_urn.compare(0, my_urn.size(), other_urn,
+                          0, my_urn.size())) {
+    return other_urn.substr(my_urn.size(), string::npos);
+  };
+
+  return other_urn;
+};
+
+
+
+static string _NormalizePath(const string &component) {
   vector<string> result;
   size_t i = 0, j = 0;
 
@@ -184,59 +241,158 @@ static string _NormalizeComponent(const string &component) {
 };
 
 
-URN URN::Append(const string &component) const {
-  return URN(value + _NormalizeComponent(component));
+#ifdef _WIN32
+
+/**
+ * Windows implementation of abspath. Use the system APIs to normalize the path
+ * name.
+ *
+ * @param path
+ *
+ * @return an absolute path.
+ */
+static string abspath(string path) {
+  // The windows version of this function is somewhat simpler.
+  DWORD buffer_len = GetFullPathName(path.c_str(), 0, NULL, NULL);
+  if (buffer_len > 0) {
+    char buffer[buffer_len];
+    GetFullPathName(path.c_str(), buffer_len, buffer, NULL);
+    return buffer;
+  };
+
+  return path;
+}
+
+/* Windows filename -> URL handling is pretty complex. The urlparser library
+ * does a reasonable job but misses some important edge cases. Microsoft
+ * recommends that we use the provided API to cater to all weird edge cases.
+ */
+string URN::ToFilename() {
+  // Alas Microsoft's implementation is also incomplete. Here we check for some
+  // edge cases and manually hack around them.
+  pcrepp::Pcre volume_regex("^file://./([a-zA-Z]):$");  // file://./c: -> \\.\c:
+  if(volume_regex.search(value))
+    return volume_regex.replace(value, "\\\\.\\$1:");
+
+  const int bytesNeeded = std::max(value.size() + 1, (size_t)MAX_PATH);
+  char path[bytesNeeded];
+  DWORD path_length = sizeof(path);
+  HRESULT res;
+
+  res = PathCreateFromUrl(value.c_str(), path, &path_length, 0);
+  if(res == S_FALSE || res == S_OK) {
+    LOG(INFO) << "Converted " << value << " into " << path;
+    return path;
+
+    // Failing the MS API we fallback to the urlparser.
+  } else {
+    if (uriUriStringToWindowsFilenameA(value.c_str(), path) !=
+      URI_SUCCESS) {
+      return "";
+    };
+
+    return path;
+  }
+};
+
+#else
+
+/**
+ * Posix implementation of abspath: prepend cwd and normalize path.
+ *
+ * @param path
+ *
+ * @return
+ */
+static string abspath(string path) {
+  // Path is absolute.
+  if (path[0] == '/' ||
+      path[0] == '\\' ||
+      path[1] == ':') {
+    return path;
+  };
+
+  // Prepend the CWD to the path.
+  int path_len = PATH_MAX;
+  while(1) {
+    char cwd[path_len];
+
+    // Try again with a bigger size.
+    if(NULL==getcwd(cwd, path_len) && errno == ERANGE) {
+      path_len += PATH_MAX;
+      continue;
+    };
+
+    // Remove . and .. sequences.
+    return _NormalizePath(string(cwd) + "/" + path);
+  };
+};
+
+// Unix version to ToFilename().
+string URN::ToFilename() {
+  const int bytesNeeded = value.size() + 1;
+  char path[bytesNeeded];
+
+  if (uriUriStringToUnixFilenameA(value.c_str(), path) !=
+      URI_SUCCESS) {
+    return "";
+  };
+
+  return path;
+};
+
+#endif
+
+
+URN URN::NewURNFromFilename(string filename, bool windows_filename) {
+  URN result;
+
+  filename = abspath(filename);
+
+  char tmp[filename.size() * 3 + 8 + 1];
+
+  /* Windows filename -> URL handling is pretty complex. The urlparser library
+   * does a reasonable job but misses some important edge cases. Microsoft
+   * recommends that we use the provided API to cater to all weird edge cases
+   * since windows filenames are a rats nest of special cases and exceptions. So
+   * on windows we try to use the API.
+   *
+   * http://blogs.msdn.com/b/ie/archive/2006/12/06/file-uris-in-windows.aspx
+  */
+  if(windows_filename) {
+#ifdef _WIN32
+    char url[INTERNET_MAX_URL_LENGTH];
+    DWORD url_length = sizeof(url);
+    HRESULT res;
+    res = UrlCreateFromPath(filename.c_str(), url, &url_length, 0);
+
+    if(res == S_FALSE || res == S_OK) {
+      result.value.assign(url, url_length);
+
+      // Failing the MS API we fallback to the urlparser.
+    } else
+#endif
+    {
+      if(uriWindowsFilenameToUriStringA(filename.c_str(), tmp) == URI_SUCCESS) {
+        result.value = tmp;
+      };
+    };
+
+    // Unix filename
+  } else if(uriUnixFilenameToUriStringA(filename.c_str(), tmp) ==
+            URI_SUCCESS) {
+    result.value = tmp;
+  };
+
+  return result;
 };
 
 
-string URN::RelativePath(const URN other) const {
-  string my_urn = SerializeToString();
-  string other_urn = other.SerializeToString();
+URN URN::NewURNFromFilename(string filename) {
+  // Get the absolute path of the filename.
+  string abs_filename = abspath(filename);
 
-  if (0 == my_urn.compare(0, my_urn.size(), other_urn,
-                          0, my_urn.size())) {
-    return other_urn.substr(my_urn.size(), string::npos);
-  };
-
-  return other_urn;
-};
-
-
-string URN::SerializeToString() const {
-  uri_components components = Parse();
-
-  if (components.hash_data.size()) {
-    return aff4_sprintf(
-        "%s://%s%s#%s",
-        components.scheme.c_str(),
-        components.domain.c_str(),
-        _NormalizeComponent(components.path).c_str(),
-        components.hash_data.c_str());
-  };
-
-  if (components.path.size() && components.domain.size()) {
-    return aff4_sprintf(
-        "%s://%s%s",
-        components.scheme.c_str(),
-        components.domain.c_str(),
-        _NormalizeComponent(components.path).c_str());
-  };
-
-  if (components.domain.size()) {
-    return aff4_sprintf(
-        "%s://%s",
-        components.scheme.c_str(),
-        components.domain.c_str());
-  };
-
-  if (components.path.size()) {
-    return aff4_sprintf(
-        "%s://%s",
-        components.scheme.c_str(),
-        _NormalizeComponent(components.path).c_str());
-  };
-
-  return "";
+  return NewURNFromFilename(abs_filename, abs_filename[0] != '/');
 };
 
 string XSDInteger::SerializeToString() const {

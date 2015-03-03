@@ -194,17 +194,16 @@ AFF4Status BasicImager::handle_input() {
 
   res = CONTINUE;
   for(string input: inputs) {
-    URN input_urn(input);
+    URN input_urn(URN::NewURNFromFilename(input));
 
     std::cout << "Adding " << input.c_str() << "\n";
 
     // Try to open the input.
     AFF4ScopedPtr<AFF4Stream> input_stream = resolver.AFF4FactoryOpen<
-      AFF4Stream>(input);
+      AFF4Stream>(input_urn);
 
     // Not valid - skip it.
     if(!input_stream) {
-      LOG(ERROR) << "Failed to open input file: " << input.c_str();
       res = IO_ERROR;
       continue;
     };
@@ -244,9 +243,9 @@ AFF4Status BasicImager::handle_export() {
   // We do not want to interpret this parameter as a file reference since it
   // must come from the image.
   if (volume_URN.value.size() > 0 &&
-      export_urn.Parse().scheme == "file") {
+      export_urn.Scheme() == "file") {
     LOG(INFO) << "Interpreting export URN as relative to volume " <<
-        volume_URN.value.c_str();
+        volume_URN.value;
 
     export_urn = volume_URN.Append(export_);
   };
@@ -276,20 +275,24 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN &volume_urn) {
     return INVALID_INPUT;
 
   string output_path = GetArg<TCLAP::ValueArg<string>>("output")->getValue();
+  URN output_urn(URN::NewURNFromFilename(output_path));
 
   // We are allowed to write on the output file.
   if(Get("truncate")->isSet()) {
-    LOG(INFO) << "Truncating output file: " << output_path.c_str();
-    resolver.Set(output_path, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+    LOG(INFO) << "Truncating output file: " << output_urn.SerializeToString();
+
+    resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
   } else {
-    resolver.Set(output_path, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+    resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
   };
 
   AFF4ScopedPtr<AFF4Stream> output_stream = resolver.AFF4FactoryOpen<AFF4Stream>(
-      output_path);
+      output_urn);
 
   if(!output_stream) {
-    LOG(ERROR) << "Failed to create output file: " << output_path.c_str();
+    LOG(ERROR) << "Failed to create output file: " <<
+        output_urn.SerializeToString();
+
     return IO_ERROR;
   };
 

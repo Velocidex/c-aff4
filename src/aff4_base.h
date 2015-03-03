@@ -16,6 +16,8 @@ specific language governing permissions and limitations under the License.
 #ifndef AFF4_BASE_H
 #define AFF4_BASE_H
 
+#include <iostream>
+
 /**
  * @file
  * @author scudette <scudette@google.com>
@@ -25,6 +27,18 @@ specific language governing permissions and limitations under the License.
  *
  *
  */
+
+#if defined(_WIN32)
+#include "windows.h"
+
+#ifndef INTERNET_MAX_URL_LENGTH
+#define INTERNET_MAX_URL_LENGTH 2056
+#endif
+
+#endif
+
+// Windows defines this macro which interfers with glog's version.
+#undef ERROR
 
 #include "lexicon.h"
 #include "aff4_errors.h"
@@ -173,5 +187,7 @@ class AFF4Registrar {
   };
 };
 
+// In the AFF4 library all offsets are 64 bits - even on windows!
+typedef int64_t aff4_off_t;
 
 #endif // AFF4_BASE_H

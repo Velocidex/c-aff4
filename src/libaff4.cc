@@ -13,9 +13,10 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
+#include "aff4_utils.h"
 #include "aff4_errors.h"
+#include "aff4_io.h"
 #include "libaff4.h"
-#include <uuid/uuid.h>
 #include <fstream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,10 +26,15 @@ specific language governing permissions and limitations under the License.
 #include <string.h>
 #include <cstring>
 #include <iostream>
+#include <iomanip>
 
-#ifndef OS_WINDOWS
+#ifndef O_BINARY
 #define O_BINARY 0
 #endif
+
+
+#if defined(HAVE_LIBUUID)
+#include <uuid/uuid.h>
 
 /**
  * By default empty objects receive a unique URN.
@@ -44,6 +50,26 @@ AFF4Object::AFF4Object(DataStore *resolver): resolver(resolver) {
   urn.Set("aff4://" + string(buffer.data()));
 };
 
+// On windows we use native GUID generation.
+#elif defined(_WIN32)
+#include <objbase.h>
+
+/**
+ * By default empty objects receive a unique URN.
+ *
+ * @param resolver
+ */
+AFF4Object::AFF4Object(DataStore *resolver): resolver(resolver) {
+  GUID newId;
+  UuidCreate(&newId);
+
+  unsigned char *buffer;
+  UuidToString(&newId, &buffer);
+
+  urn.Set("aff4://" + string((char *)buffer));
+};
+
+#endif
 
 AFF4Status AFF4Object::Flush() {
   // Flushing makes the object no longer dirty.
@@ -57,18 +83,34 @@ void AFF4Object::Return() {
   resolver->Return(this);
 };
 
-void AFF4Stream::Seek(off_t offset, int whence) {
+AFF4Status AFF4Stream::Seek(off_t offset, int whence) {
+  off_t new_offset = readptr;
+
   if (whence == 0) {
-    readptr = offset;
+    new_offset = offset;
+
   } else if(whence == 1) {
-    readptr += offset;
+    new_offset += offset;
+
   } else if(whence == 2) {
-    readptr = offset + Size();
+    // We can not seek relative to size for streams which are non sizeable.
+    if(!properties.sizeable) {
+      return IO_ERROR;
+    };
+
+    new_offset = offset + Size();
   }
 
-  if(readptr < 0) {
-    readptr = 0;
+  if(new_offset < 0) {
+    new_offset = 0;
   };
+
+  // For non-seekable streams its ok to seek to the current position.
+  if(!properties.seekable && new_offset!=offset)
+    return IO_ERROR;
+
+  readptr = new_offset;
+  return STATUS_OK;
 };
 
 string AFF4Stream::Read(size_t length) {
@@ -194,7 +236,6 @@ int AFF4Stream::sprintf(string fmt, ...) {
   }
 };
 
-
 int StringIO::Write(const char *data, int length) {
   MarkDirty();
 
@@ -221,14 +262,166 @@ AFF4Status StringIO::Truncate() {
   return STATUS_OK;
 };
 
+/***************************************************************
+FileBackedObject implementation.
+****************************************************************/
 
+// Windows files are read through the CreateFile() API so that devices can be
+// read.
+#if defined(_WIN32)
 AFF4Status FileBackedObject::LoadFromURN() {
-  int flags = O_RDONLY | O_BINARY;
-  uri_components components = urn.Parse();
+  DWORD desired_access = GENERIC_READ;
+  DWORD creation_disposition = OPEN_EXISTING;
+
   XSDString mode("read");
 
   // Only file:// URNs are supported.
-  if (components.scheme != "file") {
+  if (urn.Scheme() != "file") {
+    return INVALID_INPUT;
+  };
+
+  // Attribute is optional so if it is not there we just go with false.
+  resolver->Get(urn, AFF4_STREAM_WRITE_MODE, mode);
+
+  if(mode == "truncate") {
+    creation_disposition = CREATE_ALWAYS;
+    desired_access |= GENERIC_WRITE;
+
+    // Next call will append.
+    resolver->Set(urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+    properties.writable = true;
+
+  } else if (mode == "append") {
+    creation_disposition = OPEN_ALWAYS;
+    desired_access |= GENERIC_WRITE;
+    properties.writable = true;
+  };
+
+  string filename = urn.ToFilename();
+  LOG(INFO) << "Opening file " << filename;
+
+  fd = CreateFile(filename.c_str(),
+                  desired_access,
+                  FILE_SHARE_READ | FILE_SHARE_WRITE,
+                  NULL,
+                  creation_disposition,
+                  FILE_ATTRIBUTE_NORMAL,
+                  NULL);
+
+  if(fd == INVALID_HANDLE_VALUE){
+    LOG(ERROR) << "Can not open file " << filename << " :" <<
+        GetLastErrorMessage();
+
+    return IO_ERROR;
+  };
+
+  LARGE_INTEGER tmp;
+
+  // Now deduce the size of the stream.
+  if(GetFileSizeEx(fd, &tmp)) {
+    size = tmp.QuadPart;
+  } else {
+    // The file may be a raw device so we need to issue an ioctl to see how
+    // large it is.
+    GET_LENGTH_INFORMATION lpOutBuffer;
+    DWORD lpBytesReturned;
+    if(DeviceIoControl(
+           fd,                // handle to device
+           IOCTL_DISK_GET_LENGTH_INFO,    // dwIoControlCode
+           NULL,                          // lpInBuffer
+           0,                             // nInBufferSize
+           &lpOutBuffer,                     // output buffer
+           sizeof(GET_LENGTH_INFORMATION),// size of output buffer
+           (LPDWORD) &lpBytesReturned,    // number of bytes returned
+           NULL                           // OVERLAPPED structure
+                       )) {
+      size = lpOutBuffer.Length.QuadPart;
+    } else {
+      // We dont know the size - seek relative to the end will fail now.
+      size = -1;
+      properties.sizeable = false;
+    };
+  };
+
+  return STATUS_OK;
+};
+
+string FileBackedObject::Read(size_t length) {
+  DWORD buffer_size = length;
+  string result(buffer_size, 0);
+
+  if(properties.seekable) {
+    LARGE_INTEGER tmp;
+    tmp.QuadPart = readptr;
+    if(!SetFilePointerEx(fd, tmp, &tmp, FILE_BEGIN)) {
+      LOG(INFO) << "Failed to seek:" << GetLastErrorMessage();
+    };
+  };
+
+  if(!ReadFile(fd, &result[0], buffer_size, &buffer_size, NULL)) {
+    LOG(INFO) << "Reading failed " << readptr << ": " <<
+        GetLastErrorMessage();
+
+    return "";
+  };
+
+  readptr += buffer_size;
+  result.resize(buffer_size);
+
+  return result;
+};
+
+int FileBackedObject::Write(const char *data, int length) {
+  // Dont even try to write on files we are not allowed to write on.
+  if(!properties.writable)
+    return IO_ERROR;
+
+  if(properties.seekable) {
+    LARGE_INTEGER tmp;
+    tmp.QuadPart = readptr;
+    SetFilePointerEx(fd, tmp, &tmp, FILE_BEGIN);
+  };
+
+  DWORD tmp = length;
+  if (!WriteFile(fd, data, tmp, &tmp, NULL)) {
+    return IO_ERROR;
+  };
+
+  readptr += tmp;
+  if(size >= 0 && readptr > size)
+    size = readptr;
+
+  return tmp;
+};
+
+AFF4Status FileBackedObject::Truncate() {
+  if(!properties.seekable)
+    return IO_ERROR;
+
+  LARGE_INTEGER tmp;
+  tmp.QuadPart = 0;
+
+  SetFilePointerEx(fd, tmp, &tmp, FILE_BEGIN);
+  if(SetEndOfFile(fd) == 0)
+    return IO_ERROR;
+
+  return STATUS_OK;
+};
+
+FileBackedObject::~FileBackedObject() {
+  CloseHandle(fd);
+};
+
+// On other systems the posix open() API is used.
+#else
+
+AFF4Status FileBackedObject::LoadFromURN() {
+  int flags = O_RDONLY | O_BINARY;
+
+  XSDString mode("read");
+
+  // Only file:// URNs are supported.
+  if (urn.Scheme() != "file") {
     return INVALID_INPUT;
   };
 
@@ -240,23 +433,39 @@ AFF4Status FileBackedObject::LoadFromURN() {
 
     // Next call will append.
     resolver->Set(urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+    properties.writable = true;
 
   } else if (mode == "append") {
     flags |= O_CREAT | O_RDWR;
+    properties.writable = true;
   };
 
-  fd = open(components.path.c_str(), flags,
+  string filename = urn.ToFilename();
+  LOG(INFO) << "Opening file " << filename;
+
+  fd = open(filename.c_str(), flags,
             S_IRWXU | S_IRWXG | S_IRWXO);
 
   if(fd < 0){
-    LOG(ERROR) << "Can not open file " << components.path.c_str() << " :" <<
-        std::strerror(errno);
+    LOG(ERROR) << "Can not open file " << filename << " :" <<
+        GetLastErrorMessage();
     return IO_ERROR;
+  };
+
+  // If this fails we dont know the size - this can happen e.g. with devices. In
+  // this case seeks relative to the end will fail.
+  size = lseek(fd, 0, SEEK_END);
+  if (size < 0) {
+    properties.sizeable = false;
+  };
+
+  // Detect if the file is seekable (e.g. a pipe).
+  if(lseek(fd, 0, SEEK_CUR)<0) {
+    properties.seekable = false;
   };
 
   return STATUS_OK;
 };
-
 
 string FileBackedObject::Read(size_t length) {
   string result(length, 0);
@@ -275,28 +484,39 @@ string FileBackedObject::Read(size_t length) {
 };
 
 int FileBackedObject::Write(const char *data, int length) {
+  if(!properties.writable) {
+    return IO_ERROR;
+  };
+
   // Since all file operations are synchronous this object can not be dirty.
   lseek(fd, readptr, SEEK_SET);
   int res = write(fd, data, length);
   if (res > 0) {
     readptr += res;
   };
+
+  if(size >= 0 && readptr > size)
+    size = readptr;
+
   return res;
 };
-
-off_t FileBackedObject::Size() {
-  off_t result = lseek(fd, 0, SEEK_END);
-
-  return result;
-};
-
 
 AFF4Status FileBackedObject::Truncate() {
   if(ftruncate(fd, 0) != 0)
     return IO_ERROR;
 
+  Seek(0, SEEK_SET);
+  size = 0;
+
   return STATUS_OK;
 };
+
+FileBackedObject::~FileBackedObject() {
+  if(fd>=0)
+    close(fd);
+};
+
+#endif
 
 
 ClassFactory<AFF4Object> *GetAFF4ClassFactory() {
@@ -306,6 +526,34 @@ ClassFactory<AFF4Object> *GetAFF4ClassFactory() {
 
 // The FileBackedObject will be invoked for file:// style urns.
 static AFF4Registrar<FileBackedObject> r1("file");
+
+#ifdef _WIN32
+
+string GetLastErrorMessage() {
+  LPTSTR lpMsgBuf;
+  DWORD dw = GetLastError();
+
+  FormatMessage(
+      FORMAT_MESSAGE_ALLOCATE_BUFFER |
+      FORMAT_MESSAGE_FROM_SYSTEM |
+      FORMAT_MESSAGE_IGNORE_INSERTS,
+      NULL,
+      dw,
+      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+      (LPTSTR) &lpMsgBuf,
+      0, NULL );
+
+  return lpMsgBuf;
+};
+
+#else
+string GetLastErrorMessage() {
+  return std::strerror(errno);
+};
+
+#endif
+
+
 
 
 extern "C" {
@@ -340,7 +588,8 @@ URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method) {
 
     case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
       return AFF4_IMAGE_COMPRESSION_STORED;
-  };
 
-  return "";
+    default:
+      return "";
+  };
 };

@@ -23,6 +23,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4_errors.h"
 #include <raptor2/raptor2.h>
 #include "aff4_registry.h"
+#include <uriparser/Uri.h>
 
 using std::string;
 using std::shared_ptr;
@@ -162,9 +163,9 @@ class XSDString: public RDFBytes {
  */
 class XSDInteger: public RDFValue {
  public:
-  unsigned long long int value;
+  uint64_t value;
 
-  XSDInteger(off_t data):
+  XSDInteger(uint64_t data):
       RDFValue(NULL), value(data) {};
 
   XSDInteger(DataStore *resolver):
@@ -203,40 +204,78 @@ class XSDBoolean: public RDFValue {
   raptor_term *GetRaptorTerm(raptor_world *world) const;
 };
 
-
-
 /**
  * Once a URN is parsed we place its components into one easy to use struct.
  *
  */
 struct uri_components {
- public:
-  uri_components(const string &uri);
-
   string scheme;
   string domain;
-  string hash_data;
+  string fragment;
   string path;
-
 };
-
 
 /**
  * An RDFValue to store and parse a URN.
  *
  */
 class URN: public XSDString {
- public:
+ protected:
+  string original_filename;
 
-  URN(const char * data): XSDString(data) {};
-  URN(const string data): XSDString(data) {};
-  URN(DataStore *resolver): XSDString(resolver) {};
-  URN(){};
+ public:
+  /**
+   * Create a new URN from a filename.
+   *
+   * @param filename: The filename to convert.
+   * @param windows_filename: If true interpret the filename as a windows
+   * filename, else it will be considered a unix filename. Currently windows and
+   * unix filenames are escaped differently.
+   *
+   * @return a URN object.
+   */
+  static URN NewURNFromFilename(string filename, bool windows_filename);
+
+  /**
+   * Create a URN from filename.
+   * This variant of the function automatically selects the type.
+   *
+   * @param filename
+   *
+   * @return
+   */
+  static URN NewURNFromFilename(string filename);
+
+  /**
+   * Returns the current URN as a filename.
+   *
+   *
+   * @return If this is a file:// URN, returns the filename, else "".
+   */
+  string ToFilename();
+
+  URN(const char * data);
+  URN(const string data): URN(data.c_str()) {};
+  URN(DataStore *resolver): URN() {};
+  URN() {};
 
   URN Append(const string &component) const;
 
   raptor_term *GetRaptorTerm(raptor_world *world) const;
   uri_components Parse() const;
+
+  // Convenience methods for Parse()
+  string Scheme() const {
+    return Parse().scheme;
+  };
+
+  string Path() const {
+    return Parse().path;
+  };
+
+  string Domain() const {
+    return Parse().domain;
+  };
 
   /**
    * returns the path of the URN relative to ourselves.
@@ -249,8 +288,6 @@ class URN: public XSDString {
    * @return A string representing the path.
    */
   string RelativePath(const URN urn) const;
-
-  string SerializeToString() const;
 
   AFF4Status Set(const URN data) {
     value = data.SerializeToString();

@@ -20,11 +20,15 @@ class AFF4MapTest: public ::testing::Test {
   virtual void SetUp() {
     MemoryDataStore resolver;
 
+    URN filename_urn = URN::NewURNFromFilename(filename);
+
     // We are allowed to write on the output filename.
-    resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+    resolver.Set(filename_urn, AFF4_STREAM_WRITE_MODE,
+                 new XSDString("truncate"));
 
     // The backing file is given to the volume.
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
+        &resolver, filename_urn);
 
     // Now an image is created inside the volume.
     AFF4ScopedPtr<AFF4Map> image = AFF4Map::NewAFF4Map(
@@ -51,9 +55,11 @@ class AFF4MapTest: public ::testing::Test {
 TEST_F(AFF4MapTest, TestAddRange) {
   MemoryDataStore resolver;
   vector<Range> ranges;
+  URN filename_urn = URN::NewURNFromFilename(filename);
 
   // Load the zip file into the resolver.
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
+      &resolver, filename_urn);
 
   ASSERT_TRUE(zip.get());
 
@@ -146,9 +152,11 @@ TEST_F(AFF4MapTest, TestAddRange) {
 
 TEST_F(AFF4MapTest, CreateMapStream) {
   MemoryDataStore resolver;
+  URN filename_urn = URN::NewURNFromFilename(filename);
 
   // Load the zip file into the resolver.
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
+      &resolver, filename_urn);
 
   ASSERT_TRUE(zip.get());
 

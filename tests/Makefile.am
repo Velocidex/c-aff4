@@ -16,6 +16,12 @@ endif
 AM_LDFLAGS = -no-undefined $(LIBSTDCXX_LA_LINKER_FLAG) \
              -version-info @SO_VERSION@
 
+# Support static builds.
+if STATIC_BUILD
+STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
+STATIC_LINKERLDFLAGS = -all-static
+endif
+
 ## unittests to run when people type 'make check'.
 TESTS = aff4-test
 TESTS_ENVIRONMENT =
@@ -40,3 +46,4 @@ aff4_test_SOURCES =  \
 
 aff4_test_LDADD = libgtest.la ../src/libaff4.la
 aff4_test_CXXFLAGS = -std=c++11 -g -Wall -O0
+aff4_test_LDFLAGS = $(STATIC_LINKERLDFLAGS)

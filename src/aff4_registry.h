@@ -3,10 +3,12 @@
 */
 #ifndef AFF4_REGISTRY_H
 #define AFF4_REGISTRY_H
+#include <glog/logging.h>
 
 #include <unordered_map>
 #include <memory>
 #include <string>
+#include <iostream>
 
 using std::string;
 using std::unique_ptr;
@@ -30,8 +32,11 @@ class ClassFactory {
 
     // find name in the registry and call factory method.
     auto it = factoryFunctionRegistry.find(name);
-    if(it != factoryFunctionRegistry.end())
+    if(it != factoryFunctionRegistry.end()) {
       instance = it->second(data);
+    } else {
+      LOG(ERROR) << "No implementation found for type " << name;
+    };
 
     return unique_ptr<T>(instance);
   };

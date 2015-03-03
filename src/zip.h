@@ -92,7 +92,7 @@ struct Zip64FileHeaderExtensibleField {
 
 struct Zip64EndCD {
   uint32_t magic = 0x06064b50;
-  uint64_t size_of_header;
+  uint64_t size_of_header = 0;
   uint16_t version_made_by = 0x2d;
   uint16_t version_needed = 0x2d;
   uint32_t number_of_disk = 0;
@@ -237,6 +237,7 @@ class ZipFile: public AFF4Volume {
    */
   AFF4Status LoadTurtleMetadata();
 
+ public:
   /**
    * Convert from a child URN to the zip member name.
    *
@@ -262,7 +263,6 @@ class ZipFile: public AFF4Volume {
   string _member_name_for_urn(const URN object) const;
   URN _urn_from_member_name(const string member) const;
 
- public:
   ZipFile(DataStore *resolver);
 
   /**

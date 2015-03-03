@@ -18,21 +18,12 @@ specific language governing permissions and limitations under the License.
 #include "lexicon.h"
 #include "data_store.h"
 #include "libaff4.h"
-#include <yaml-cpp/yaml.h>
 #include <raptor2/raptor2.h>
 #include <glog/logging.h>
+#include <iostream>
 
-DataStore::DataStore() {
-  // By default suppress ZipFileSegment objects since all their metadata comes
-  // directly from the ZIP container. This keeps the turtle files a bit cleaner.
-  suppressed_rdftypes.insert(AFF4_ZIP_SEGMENT_TYPE);
-  suppressed_rdftypes.insert(AFF4_ZIP_TYPE);
-};
-
-
-DataStore::~DataStore() {
-};
-
+#ifdef HAVE_LIBYAML_CPP
+# include <yaml-cpp/yaml.h>
 
 AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
   YAML::Emitter out;
@@ -73,6 +64,25 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
 
   return STATUS_OK;
 };
+
+AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream &stream) {
+  return NOT_IMPLEMENTED;
+};
+
+#endif
+
+
+DataStore::DataStore() {
+  // By default suppress ZipFileSegment objects since all their metadata comes
+  // directly from the ZIP container. This keeps the turtle files a bit cleaner.
+  suppressed_rdftypes.insert(AFF4_ZIP_SEGMENT_TYPE);
+  suppressed_rdftypes.insert(AFF4_ZIP_TYPE);
+};
+
+
+DataStore::~DataStore() {
+};
+
 
 
 class RaptorSerializer {
@@ -342,11 +352,6 @@ AFF4Status MemoryDataStore::LoadFromTurtle(AFF4Stream &stream) {
 
   return STATUS_OK;
 }
-
-AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream &stream) {
-  return NOT_IMPLEMENTED;
-};
-
 
 void MemoryDataStore::Set(const URN &urn, const URN &attribute,
                           RDFValue *value) {

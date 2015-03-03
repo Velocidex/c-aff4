@@ -15,7 +15,7 @@ TEST(URNTest, SerializeURN) {
   EXPECT_EQ(components.scheme, "http");
   EXPECT_EQ(components.domain, "www.google.com");
   EXPECT_EQ(components.path, "/path/to/element");
-  EXPECT_EQ(components.hash_data, "hash_data");
+  EXPECT_EQ(components.fragment, "hash_data");
   URNVerifySerialization(url);
 
   // First some valid input.
@@ -24,29 +24,37 @@ TEST(URNTest, SerializeURN) {
   URNVerifySerialization("ftp://www.google.com");
   URNVerifySerialization("");
 
+#ifdef _WIN32
   // Absolute paths.
-  EXPECT_EQ(URN("/etc/passwd").SerializeToString(),
-            "file:///etc/passwd");
+  EXPECT_EQ(URN::NewURNFromFilename(
+      "C:\\Windows\\notepad.exe").SerializeToString(),
+            "file:///C:/Windows/notepad.exe");
+#else
+  // Absolute paths.
+  EXPECT_EQ(URN::NewURNFromFilename(
+      "/etc/passwd").SerializeToString(), "file:///etc/passwd");
+#endif
 
   // Relative paths are relative to the current working directory.
   {
     char cwd[1024];
+    string cwd_string = "/";
+    memset(cwd, 0, sizeof(cwd));
+
     getcwd(cwd, sizeof(cwd));
+    for(unsigned int i=0; i<sizeof(cwd)-1; i++)
+      if(cwd[i]=='\\')
+        cwd[i]='/';
+
+    if(cwd[0]!='/')
+      cwd_string += cwd;
+    else
+      cwd_string = cwd;
 
     EXPECT_EQ(URN("etc/passwd").SerializeToString(),
-              string("file://") + cwd + "/etc/passwd");
+              string("file://") + cwd_string + "/etc/passwd");
   };
   components = URN("http:www.google.com").Parse();
-
-  // Some unusual and incorrect forms.
-  EXPECT_EQ(URN("//etc/passwd").SerializeToString(), "file://etc/passwd");
-
-  // www.google.com is considered a path below and domain is empty.
-  EXPECT_EQ(URN("http:www.google.com").SerializeToString(),
-            "http:///www.google.com");
-
-  EXPECT_EQ(URN("http:/www.google.com").SerializeToString(),
-            "http:///www.google.com");
 };
 
 

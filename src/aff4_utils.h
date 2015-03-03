@@ -28,4 +28,6 @@ inline uint64_t time_from_epoch() {
   return tv.tv_sec * 1000000 + tv.tv_usec;
 };
 
+std::string GetLastErrorMessage();
+
 #endif

@@ -339,14 +339,17 @@ class DataStore {
 
   virtual AFF4Status DeleteSubject(const URN &urn) = 0;
 
+#ifdef HAVE_LIBYAML_CPP
   // Dump ourselves to a yaml file.
   virtual AFF4Status DumpToYaml(AFF4Stream &output,
                                 bool verbose=false) = 0;
 
+  virtual AFF4Status LoadFromYaml(AFF4Stream &output) = 0;
+#endif
+
   virtual AFF4Status DumpToTurtle(AFF4Stream &output, URN base,
                                   bool verbose=false) = 0;
 
-  virtual AFF4Status LoadFromYaml(AFF4Stream &output) = 0;
   virtual AFF4Status LoadFromTurtle(AFF4Stream &output) = 0;
 
   /**
@@ -438,6 +441,7 @@ class DataStore {
 
     } else {
       const uri_components components = urn.Parse();
+      LOG(INFO) << "Loading file object " << urn.SerializeToString();
 
       // Try to instantiate the handler based on the URN scheme alone.
       obj = GetAFF4ClassFactory()->CreateInstance(components.scheme, this);
@@ -509,13 +513,15 @@ class MemoryDataStore: public DataStore {
 
   virtual AFF4Status DeleteSubject(const URN &urn);
 
+#ifdef HAVE_LIBYAML_CPP
   virtual AFF4Status DumpToYaml(AFF4Stream &output,
                                 bool verbose=false);
+  virtual AFF4Status LoadFromYaml(AFF4Stream &output);
+#endif
 
   virtual AFF4Status DumpToTurtle(AFF4Stream &output, URN base,
                                   bool verbose=false);
 
-  virtual AFF4Status LoadFromYaml(AFF4Stream &output);
   virtual AFF4Status LoadFromTurtle(AFF4Stream &output);
 
   virtual AFF4Status Clear();

@@ -45,6 +45,7 @@ config.status
 autom4te.cache
 config.h
 stamp-h1
+libtool
 
 build/
 *.egg-info/

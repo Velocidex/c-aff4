@@ -2,9 +2,11 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([AFF4], [0.1], [aff4@googlegroups.com])
+AC_INIT([AFF4], [0.1], [aff4-users@googlegroups.com], [],
+                [http://www.aff4.org/])
 AM_INIT_AUTOMAKE([-Wall foreign])
 AC_CONFIG_MACRO_DIR([m4])
+AC_LANG_SOURCE
 
 SO_VERSION=0:0:0
 
@@ -24,11 +26,7 @@ AC_CHECK_LIB([raptor2], [raptor_new_term_from_counted_uri_string], [], [
   exit -1
 ])
 
-AC_CHECK_LIB([uuid], [uuid_generate], [], [
-  echo uuid library not found. On debian systems this is provided by
-  echo apt-get install uuid-dev
-  exit -1
-])
+AC_CHECK_LIB(uuid, uuid_generate)
 
 AC_CHECK_LIB([z], [compress], [], [
   echo zlib not found. On debian systems this is provided by
@@ -36,11 +34,16 @@ AC_CHECK_LIB([z], [compress], [], [
   exit -1
 ])
 
-AC_CHECK_LIB([yaml-cpp], [main], [], [
-  echo libyaml-cpp not found. On debian systems this is provided by
-  echo apt-get install libyaml-cpp-dev
-  exit -1
-])
+AC_ARG_ENABLE([yaml],
+  AS_HELP_STRING([--enable-yaml], [Enable YAML support.]))
+
+AS_IF([test "x$enable_yaml" = "xyes"],
+  AC_CHECK_LIB([yaml-cpp], [main], [], [
+    echo libyaml-cpp not found. On debian systems this is provided by
+    echo apt-get install libyaml-cpp-dev
+    exit -1
+  ])
+)
 
 AC_CHECK_LIB([pcre++], [main]. [], [
   echo Libpcre++ not found. On debian systems this is provided by
@@ -88,15 +91,16 @@ AM_PROG_AR
 LT_INIT
 AM_CONDITIONAL(GCC, test "$GCC" = yes)   # let the Makefile know if we're gcc
 
-AC_ARG_ENABLE([enable-static-binaries],
-[  --enable-static-binaries    Builds binaries statically.],
-[case "${enableval}" in
-  yes) enable_static_binaries=true ;;
-  no)  enable_static_binaries=false ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --enable-static-binaries]) ;;
-esac],[debug=false])
+AC_ARG_ENABLE([static-binaries],
+  AS_HELP_STRING([--enable-static-binaries], [Build completely static binaries.]))
 
 AM_CONDITIONAL([STATIC_BUILD], [test x$enable_static_binaries = xyes])
+
+# Check for windows.
+MINGW_AC_WIN32_NATIVE_HOST
+URIPARSER_CHECK
+
+AM_CONDITIONAL([WIN32_NATIVE_HOST], [test x$mingw_cv_win32_host = xyes])
 
 # Checks for library functions.
 AC_CHECK_FUNCS([ftruncate localtime_r memset setenv])
