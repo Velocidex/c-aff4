@@ -15,6 +15,9 @@
 """An implementation of the ZipFile based AFF4 volume."""
 
 import logging
+import urlparse
+import re
+import string
 import zipfile
 import StringIO
 
@@ -131,6 +134,7 @@ class ZipFileSegment(FileBackedObject):
                 self.fd = StringIO.StringIO(owner.zip_handle.read(member_name))
 
         except KeyError:
+            import pdb; pdb.post_mortem()
             self.fd = StringIO.StringIO("")
 
     def Flush(self):
@@ -150,15 +154,33 @@ class ZipFile(aff4.AFF4Volume):
     def __init__(self, *args, **kwargs):
         super(ZipFile, self).__init__(*args, **kwargs)
         self.children = set()
+        self.printables = set(string.printable)
+        for i in "!$\\:*%?\"<>|]":
+            self.printables.discard(i)
 
     def member_name_for_urn(self, member_urn):
         filename = self.urn.RelativePath(member_urn)
         if filename.startswith("/"):
             filename = filename[1:]
 
-        return filename
+        # Escape chars which are non printable.
+        escaped_filename = []
+        for c in filename:
+            if c in self.printables:
+                escaped_filename.append(c)
+            else:
+                escaped_filename.append("%%%02x" % ord(c))
+
+        return "".join(escaped_filename)
 
     def urn_from_member_name(self, member):
+        # Remove %xx escapes.
+        member = re.sub(
+            "%(..)", lambda x: chr(int("0x" + x.group(1), 0)),
+            member)
+        if urlparse.urlparse(member).scheme == "aff4":
+            return member
+
         return self.urn.Append(member)
 
     @staticmethod

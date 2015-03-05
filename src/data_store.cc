@@ -77,6 +77,11 @@ DataStore::DataStore() {
   // directly from the ZIP container. This keeps the turtle files a bit cleaner.
   suppressed_rdftypes.insert(AFF4_ZIP_SEGMENT_TYPE);
   suppressed_rdftypes.insert(AFF4_ZIP_TYPE);
+
+  // Add these default namespace.
+  namespaces.push_back(std::pair<string, string>("aff4", AFF4_NAMESPACE));
+  namespaces.push_back(std::pair<string, string>("xsd", XSD_NAMESPACE));
+  namespaces.push_back(std::pair<string, string>("rdf", RDF_NAMESPACE));
 };
 
 
@@ -95,7 +100,8 @@ class RaptorSerializer {
   RaptorSerializer() {};
 
  public:
-  static unique_ptr<RaptorSerializer> NewRaptorSerializer(URN base) {
+  static unique_ptr<RaptorSerializer> NewRaptorSerializer(
+      URN base, const vector<std::pair<string, string>> &namespaces) {
     unique_ptr<RaptorSerializer> result(new RaptorSerializer());
     raptor_uri *uri;
 
@@ -110,24 +116,13 @@ class RaptorSerializer {
     raptor_free_uri(uri);
 
     // Add the most common namespaces.
-    uri = raptor_new_uri(
-        result->world, (const unsigned char *)AFF4_NAMESPACE);
-    raptor_serializer_set_namespace(result->serializer, uri,
-                                    (const unsigned char *)"aff4");
-    raptor_free_uri(uri);
-
-    uri = raptor_new_uri(
-        result->world, (const unsigned char *)XSD_NAMESPACE);
-    raptor_serializer_set_namespace(result->serializer, uri,
-                                    (const unsigned char *)"xsd");
-    raptor_free_uri(uri);
-
-    uri = raptor_new_uri(
-        result->world,
-        (const unsigned char *)RDF_NAMESPACE);
-    raptor_serializer_set_namespace(result->serializer, uri,
-                                    (const unsigned char *)"rdf");
-    raptor_free_uri(uri);
+    for (auto it : namespaces) {
+      uri = raptor_new_uri(
+          result->world, (const unsigned char *)it.second.c_str());
+      raptor_serializer_set_namespace(result->serializer, uri,
+                                      (const unsigned char *)it.first.c_str());
+      raptor_free_uri(uri);
+    };
 
     return result;
   };
@@ -294,7 +289,7 @@ class RaptorParser {
 AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream, URN base,
                                          bool verbose) {
   unique_ptr<RaptorSerializer> serializer(
-      RaptorSerializer::NewRaptorSerializer(base));
+      RaptorSerializer::NewRaptorSerializer(base, namespaces));
   if(!serializer) {
     return MEMORY_ERROR;
   };

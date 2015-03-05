@@ -317,6 +317,9 @@ class DataStore {
   DataStore();
   virtual ~DataStore();
 
+  /// You can add new namespaces here for turtle serialization.
+  vector<std::pair<string, string>> namespaces;
+
   template<typename T>
   AFF4ScopedPtr<T> CachePut(AFF4Object *object) {
     ObjectCache.Put(object, true);

@@ -36,6 +36,8 @@ specific language governing permissions and limitations under the License.
 #define AFF4_NAMESPACE "http://aff4.org/Schema#"
 #define XSD_NAMESPACE "http://www.w3.org/2001/XMLSchema#"
 #define RDF_NAMESPACE "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+#define AFF4_MEMORY_NAMESPACE "http://aff4.org/Schema#memory/"
+#define AFF4_DISK_NAMESPACE "http://aff4.org/Schema#disk/"
 
 // Attributes in this namespace will never be written to persistant
 // storage. They are simply used as a way for storing metadata about an AFF4
@@ -84,10 +86,6 @@ specific language governing permissions and limitations under the License.
 
 // Categories describe the general type of an image.
 #define AFF4_CATEGORY (AFF4_NAMESPACE "category")
-
-// These represent standard attributes to describe memory forensics images.
-#define AFF4_MEMORY_NAMESPACE AFF4_NAMESPACE "memory/"
-#define AFF4_DISK_NAMESPACE AFF4_NAMESPACE "disk/"
 
 #define AFF4_MEMORY_PHYSICAL (AFF4_MEMORY_NAMESPACE "physical")
 #define AFF4_MEMORY_VIRTUAL (AFF4_MEMORY_NAMESPACE "virtual")

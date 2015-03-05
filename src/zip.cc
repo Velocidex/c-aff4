@@ -235,7 +235,7 @@ AFF4Status ZipFile::parse_cd() {
 
   // Now iterate over the directory and read all the ZipInfo structs.
   aff4_off_t entry_offset = directory_offset;
-  for (int i=0; i<directory_number_of_entries; i++) {
+  for (int i = 0; i < directory_number_of_entries; i++) {
     CDFileHeader entry;
     uint32_t magic = entry.magic;
     backing_store->Seek(entry_offset + global_offset, SEEK_SET);
@@ -355,7 +355,7 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   struct EndCentralDirectory end;
 
   // Append a new central directory to the end of the zip file.
-  if(backing_store.Seek(0, SEEK_END) != STATUS_OK) {
+  if (backing_store.Seek(0, SEEK_END) != STATUS_OK) {
     LOG(ERROR) << "Unable to write EOCD on non-seekable stream: " <<
         urn.SerializeToString();
     return;
@@ -366,9 +366,9 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
 
   int total_entries = members.size();
 
-  for(auto it=members.begin(); it != members.end(); it++) {
+  for (auto it = members.begin(); it != members.end(); it++) {
     ZipInfo *zip_info = it->second.get();
-    LOG(INFO) << "Writing CD entry for " << it->first.c_str() ;
+    LOG(INFO) << "Writing CD entry for " << it->first.c_str();
     WriteCDFileHeader(*zip_info, cd_stream);
   };
 
@@ -390,13 +390,13 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   LOG(INFO) << "Writing Zip64EndCD at " << std::hex <<
       cd_stream.Tell() + ecd_real_offset;
 
-  cd_stream.Write((char *)&end_cd, sizeof(end_cd));
-  cd_stream.Write((char *)&locator, sizeof(locator));
+  cd_stream.Write(reinterpret_cast<char *>(&end_cd), sizeof(end_cd));
+  cd_stream.Write(reinterpret_cast<char *>(&locator), sizeof(locator));
 
   LOG(INFO) << "Writing ECD at " << std::hex <<
       cd_stream.Tell() + ecd_real_offset;
 
-  cd_stream.Write((char *)&end, sizeof(end));
+  cd_stream.Write(reinterpret_cast<char *>(&end), sizeof(end));
   cd_stream.Write(urn_string);
 
   // Now copy the cd_stream into the backing_store in one write operation.
@@ -425,7 +425,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::OpenZipSegment(string filename) {
   // Is it already in the cache?
   URN segment_urn = _urn_from_member_name(filename);
   auto res = resolver->CacheGet<ZipFileSegment>(segment_urn);
-  if(res.get()) {
+  if (res.get()) {
     LOG(INFO) << "Openning ZipFileSegment (cached) " <<
         res->urn.SerializeToString();
     return res;
@@ -445,7 +445,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
 
   // Is it in the cache?
   auto res = resolver->CacheGet<ZipFileSegment>(segment_urn);
-  if(res.get()) {
+  if (res.get()) {
     LOG(INFO) << "Creating ZipFileSegment (cached) " <<
         res->urn.SerializeToString();
 
@@ -468,7 +468,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
 };
 
 
-ZipFileSegment::ZipFileSegment(DataStore *resolver): StringIO(resolver) {};
+ZipFileSegment::ZipFileSegment(DataStore *resolver): StringIO(resolver) {}
 ZipFileSegment::ZipFileSegment(string filename, ZipFile &owner) {
   resolver = owner.resolver;
   owner_urn = owner.urn;
@@ -492,8 +492,8 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
   ZipFileHeader file_header;
   uint32_t magic = file_header.magic;
 
-  AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(
-      owner.backing_store_urn);
+  AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen
+      <AFF4Stream>(owner.backing_store_urn);
 
   if (!backing_store) {
     return IO_ERROR;
@@ -528,7 +528,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
     case ZIP_DEFLATE: {
       string c_buffer = backing_store->Read(zip_info->compress_size);
 
-      if(DecompressBuffer(&buffer[0], buffer_size, c_buffer) != buffer_size) {
+      if (DecompressBuffer(&buffer[0], buffer_size, c_buffer) != buffer_size) {
         LOG(INFO) << "Unable to decompress file.";
         return PARSING_ERROR;
       };
@@ -571,10 +571,10 @@ static string CompressBuffer(const string &buffer) {
 
   memset(&strm, 0, sizeof(strm));
 
-  strm.next_in = (Bytef*)buffer.data();
+  strm.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(&buffer[0]));
   strm.avail_in = buffer.size();
 
-  if(deflateInit2(&strm, 9, Z_DEFLATED, -15,
+  if (deflateInit2(&strm, 9, Z_DEFLATED, -15,
                   9, Z_DEFAULT_STRATEGY) != Z_OK) {
     LOG(INFO) << "Unable to initialise zlib (" <<  strm.msg << ")";
     return NULL;
@@ -582,9 +582,9 @@ static string CompressBuffer(const string &buffer) {
 
   // Get an upper bound on the size of the compressed buffer.
   int buffer_size = deflateBound(&strm, buffer.size() + 10);
-  char c_buffer[buffer_size];
+  std::unique_ptr<char> c_buffer(new char[buffer_size]);
 
-  strm.next_out = (Bytef *)c_buffer;
+  strm.next_out = reinterpret_cast<Bytef *>(c_buffer.get());
   strm.avail_out = buffer_size;
 
   if (deflate(&strm, Z_FINISH) != Z_STREAM_END) {
@@ -594,7 +594,7 @@ static string CompressBuffer(const string &buffer) {
 
   deflateEnd(&strm);
 
-  return string(c_buffer, strm.total_out);
+  return string(c_buffer.get(), strm.total_out);
 };
 
 static unsigned int DecompressBuffer(
@@ -603,12 +603,14 @@ static unsigned int DecompressBuffer(
 
   memset(&strm, 0, sizeof(strm));
 
-  strm.next_in = (Bytef *)c_buffer.data();
+  strm.next_in = reinterpret_cast<Bytef *>(const_cast<char *>(
+      c_buffer.data()));
+
   strm.avail_in = c_buffer.size();
-  strm.next_out = (Bytef *)buffer;
+  strm.next_out = reinterpret_cast<Bytef *>(buffer);
   strm.avail_out = length;
 
-  if(inflateInit2(&strm, -15) != Z_OK) {
+  if (inflateInit2(&strm, -15) != Z_OK) {
     LOG(ERROR) << "Unable to initialise zlib (" <<  strm.msg << ")";
     return 0;
   };
@@ -629,18 +631,18 @@ AFF4Status ZipFileSegment::Flush() {
     AFF4ScopedPtr<ZipFile> owner = resolver->AFF4FactoryOpen<ZipFile>(
         owner_urn);
 
-    if(!owner) return GENERIC_ERROR;
+    if (!owner) return GENERIC_ERROR;
 
-    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(
-        owner->backing_store_urn);
+    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen
+        <AFF4Stream>(owner->backing_store_urn);
 
-    if(!backing_store) return GENERIC_ERROR;
+    if (!backing_store) return GENERIC_ERROR;
 
     LOG(INFO) << "Writing member " << urn.SerializeToString().c_str();
     unique_ptr<ZipInfo> zip_info(new ZipInfo());
 
     // Append member at the end of the file.
-    if(backing_store->Seek(0, SEEK_END) != STATUS_OK) {
+    if (backing_store->Seek(0, SEEK_END) != STATUS_OK) {
       return IO_ERROR;
     };
 
@@ -650,7 +652,9 @@ AFF4Status ZipFileSegment::Flush() {
 
     zip_info->filename = owner->_member_name_for_urn(urn);
     zip_info->file_size = buffer.size();
-    zip_info->crc32 = crc32(0, (Bytef*)buffer.data(), buffer.size());
+    zip_info->crc32 = crc32(
+        0, reinterpret_cast<Bytef*>(const_cast<char *>(buffer.data())),
+        buffer.size());
 
     if (compression_method == ZIP_DEFLATE) {
       string cdata = CompressBuffer(buffer);
@@ -676,7 +680,6 @@ AFF4Status ZipFileSegment::Flush() {
         " is dirtied by segment " << urn.SerializeToString().c_str();
 
     owner->MarkDirty();
-
   };
 
   return AFF4Stream::Flush();
@@ -706,25 +709,24 @@ string ZipFile::_member_name_for_urn(const URN member) const {
   };
 
   // Now escape any chars which are non printable.
-  for(int i=0; i<filename.size(); i++) {
+  for (int i = 0; i < filename.size(); i++) {
     char j = filename[i];
-    if(!std::isprint(j) ||
-       j=='!' || j=='$' ||
-       j=='\\' || j==':' || j=='*' || j=='%' ||
-       j=='?' || j=='"' || j=='<' || j=='>' || j=='|') {
-      result << "%" << std::hex << std::setw(2) << std::setfill('0') << (int)j;
+    if (!std::isprint(j) || j == '!' || j == '$' ||
+        j == '\\' || j == ':' || j == '*' || j == '%' ||
+        j == '?' || j == '"' || j == '<' || j == '>' || j == '|') {
+      result << "%" << std::hex << std::setw(2) << std::setfill('0') <<
+          static_cast<int>(j);
       continue;
     };
 
     // Escape // sequences.
-    if(filename[i]=='/' && i<filename.size()-1 &&
-       filename[i+1]=='/') {
+    if (filename[i] == '/' && i < filename.size()-1 &&
+       filename[i+1] == '/') {
+      result << "%" << std::hex << std::setw(2) << std::setfill('0') <<
+          static_cast<int>(filename[i]);
 
       result << "%" << std::hex << std::setw(2) << std::setfill('0') <<
-          (int)(filename[i]);
-
-      result << "%" << std::hex << std::setw(2) << std::setfill('0') <<
-          (int)(filename[i+1]);
+          static_cast<int>(filename[i+1]);
       i++;
       continue;
     };
@@ -739,13 +741,13 @@ URN ZipFile::_urn_from_member_name(const string member) const {
   std::stringstream result;
 
   // Now escape any chars which are non printable.
-  for(int i=0; i<member.size(); i++) {
-    if(member[i]=='%') {
+  for (int i = 0; i < member.size(); i++) {
+    if (member[i] == '%') {
       i++;
 
       int number = std::stoi(member.substr(i, 2), NULL, 16);
-      if(number)
-        result << (char)number;
+      if (number)
+        result << static_cast<char>(number);
 
       // We consume 2 chars.
       i++;
@@ -758,7 +760,7 @@ URN ZipFile::_urn_from_member_name(const string member) const {
   // the relative URN to our base.
   URN result_urn(result.str());
   string scheme = result_urn.Scheme();
-  if(scheme=="aff4") {
+  if (scheme == "aff4") {
     return result_urn;
   };
 
@@ -779,14 +781,14 @@ AFF4Status ZipFile::WriteCDFileHeader(
   header.dosdate = zip_info.lastmoddate;
   header.extra_field_len = sizeof(zip64header);
 
-  output.Write((char *)&header, sizeof(header));
+  output.Write(reinterpret_cast<char *>(&header), sizeof(header));
   output.Write(filename);
 
   zip64header.file_size = zip_info.file_size;
   zip64header.compress_size = zip_info.compress_size;
   zip64header.relative_offset_local_header = zip_info.local_header_offset;
 
-  output.Write((char *)&zip64header, sizeof(zip64header));
+  output.Write(reinterpret_cast<char *>(&zip64header), sizeof(zip64header));
 
   return STATUS_OK;
 };
@@ -806,13 +808,13 @@ AFF4Status ZipFile::WriteZipFileHeader(
   header.lastmoddate = zip_info.lastmoddate;
   header.extra_field_len = sizeof(zip64header);
 
-  output.Write((char *)&header, sizeof(header));
+  output.Write(reinterpret_cast<char *>(&header), sizeof(header));
   output.Write(filename);
 
   zip64header.file_size = zip_info.file_size;
   zip64header.compress_size = zip_info.compress_size;
   zip64header.relative_offset_local_header = zip_info.local_header_offset;
-  output.Write((char *)&zip64header, sizeof(zip64header));
+  output.Write(reinterpret_cast<char *>(&zip64header), sizeof(zip64header));
 
   return STATUS_OK;
 };

@@ -229,11 +229,14 @@ class AFF4Map(aff4.AFF4Stream):
                         map_stream.Write(interval.data.Serialize())
 
                 with volume.CreateMember(self.urn.Append("idx")) as idx_stream:
-                    idx_stream.Write("\n".join(self.targets))
+                    idx_stream.Write("\n".join(
+                        [x.SerializeToString() for x in self.targets]))
 
         return super(AFF4Map, self).Flush()
 
     def Write(self, data):
+        self.MarkDirty()
+
         if self.targets:
             target = self.last_target
         else:
