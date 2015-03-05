@@ -17,8 +17,6 @@ specific language governing permissions and limitations under the License.
 #ifndef     AFF4_LIBAFF4_H_
 #define     AFF4_LIBAFF4_H_
 
-#include "config.h"
-
 #include "rdf.h"
 #include "aff4_io.h"
 #include "aff4_image.h"

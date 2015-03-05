@@ -219,6 +219,11 @@ class ZipFile: public AFF4Volume {
   int directory_number_of_entries = -1;
   URN backing_store_urn;
 
+  /// The global offset of all zip file references from the real file
+  /// references. This might be non-zero if the zip file was appended to another
+  /// file.
+  int global_offset = 0;
+
   /**
    * Parse the central directory in the Zip File.
    *

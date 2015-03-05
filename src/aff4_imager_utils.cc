@@ -102,6 +102,10 @@ AFF4Status ExtractStream(DataStore &resolver, URN input_urn,
 
 
 AFF4Status BasicImager::ParseArgs(int argc, char** argv)  {
+  AFF4Status res = Initialize();
+  if(res != STATUS_OK)
+    return res;
+
   RegisterArgs();
 
   TCLAP::CmdLine cmd(GetName(), ' ', GetVersion());
@@ -209,7 +213,7 @@ AFF4Status BasicImager::handle_input() {
     };
 
     // Create a new AFF4Image in this volume.
-    URN image_urn = volume_urn.Append(input_urn.Parse().path);
+    URN image_urn = volume_urn.Append(input);
 
     AFF4ScopedPtr<AFF4Image> image_stream = AFF4Image::NewAFF4Image(
         &resolver, image_urn, volume_urn);

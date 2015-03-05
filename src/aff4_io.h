@@ -121,13 +121,6 @@ class StringIO: public AFF4Stream {
 
 
 class FileBackedObject: public AFF4Stream {
- protected:
-#if defined(_WIN32)
-  HANDLE fd;
-#else
-  int fd;
-#endif
-
  public:
   FileBackedObject(DataStore *resolver): AFF4Stream(resolver) {};
   virtual ~FileBackedObject();
@@ -144,6 +137,14 @@ class FileBackedObject: public AFF4Stream {
   virtual AFF4Status LoadFromURN();
 
   virtual AFF4Status Truncate();
+
+  // We provide access to the underlying file handle so callers can do other
+  // things with the stream (i.e. ioctl on raw devices).
+#if defined(_WIN32)
+  HANDLE fd;
+#else
+  int fd;
+#endif
 };
 
 /**

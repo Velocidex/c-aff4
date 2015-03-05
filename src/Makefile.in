@@ -83,8 +83,8 @@ host_triplet = @host@
 bin_PROGRAMS = aff4imager$(EXEEXT)
 subdir = src
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
-	$(srcdir)/config.h.in $(top_srcdir)/depcomp \
-	$(libaff4_include_HEADERS)
+	$(srcdir)/config.h.in $(srcdir)/aff4_config.h.in \
+	$(top_srcdir)/depcomp $(libaff4_include_HEADERS)
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/libtool.m4 \
 	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
@@ -95,7 +95,7 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = config.h
-CONFIG_CLEAN_FILES =
+CONFIG_CLEAN_FILES = aff4_config.h
 CONFIG_CLEAN_VPATH_FILES =
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
@@ -134,7 +134,8 @@ am__DEPENDENCIES_2 = $(am__DEPENDENCIES_1)
 @WIN32_NATIVE_HOST_TRUE@libaff4_la_DEPENDENCIES =  \
 @WIN32_NATIVE_HOST_TRUE@	$(am__DEPENDENCIES_2)
 am_libaff4_la_OBJECTS = aff4_image.lo aff4_init.lo data_store.lo \
-	libaff4.lo rdf.lo zip.lo aff4_imager_utils.lo aff4_map.lo
+	libaff4.lo rdf.lo zip.lo aff4_imager_utils.lo aff4_map.lo \
+	lexicon.lo
 libaff4_la_OBJECTS = $(am_libaff4_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -242,6 +243,7 @@ EGREP = @EGREP@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GREP = @GREP@
+HAVE_LIBYAML_CPP = @HAVE_LIBYAML_CPP@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -372,7 +374,7 @@ AM_LDFLAGS = -no-undefined $(LIBSTDCXX_LA_LINKER_FLAG) \
 lib_LTLIBRARIES = libaff4.la
 libaff4_includedir = $(includedir)/aff4/
 libaff4_include_HEADERS = \
-	aff4_base.h    aff4_image.h  aff4_io.h\
+	aff4_base.h    aff4_config.h aff4_image.h  aff4_io.h\
         aff4_simple.h  config.h      lexicon.h  rdf.h\
 	aff4_errors.h  aff4_init.h   aff4_registry.h \
 	aff4_utils.h   data_store.h  libaff4.h  zip.h \
@@ -381,7 +383,7 @@ libaff4_include_HEADERS = \
 
 libaff4_la_SOURCES = \
 	aff4_image.cc aff4_init.cc data_store.cc libaff4.cc \
-	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc
+	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc lexicon.cc
 
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
 @WIN32_NATIVE_HOST_FALSE@libaff4_la_LIBADD = $(LIBS)
@@ -439,6 +441,8 @@ $(srcdir)/config.h.in:  $(am__configure_deps)
 
 distclean-hdr:
 	-rm -f config.h stamp-h1
+aff4_config.h: $(top_builddir)/config.status $(srcdir)/aff4_config.h.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 
 install-libLTLIBRARIES: $(lib_LTLIBRARIES)
 	@$(NORMAL_INSTALL)
@@ -543,6 +547,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_map.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4imager.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/data_store.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/lexicon.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libaff4.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rdf.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zip.Plo@am__quote@

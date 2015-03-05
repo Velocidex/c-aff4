@@ -30,9 +30,6 @@
 /* Define to 1 if you have the `uuid' library (-luuid). */
 #undef HAVE_LIBUUID
 
-/* Define to 1 if you have the `yaml-cpp' library (-lyaml-cpp). */
-#undef HAVE_LIBYAML_CPP
-
 /* Define to 1 if you have the `z' library (-lz). */
 #undef HAVE_LIBZ
 

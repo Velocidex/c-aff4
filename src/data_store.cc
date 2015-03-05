@@ -22,7 +22,7 @@ specific language governing permissions and limitations under the License.
 #include <glog/logging.h>
 #include <iostream>
 
-#ifdef HAVE_LIBYAML_CPP
+#ifdef AFF4_HAS_LIBYAML_CPP
 # include <yaml-cpp/yaml.h>
 
 AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {

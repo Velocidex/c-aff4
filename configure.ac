@@ -38,7 +38,9 @@ AC_ARG_ENABLE([yaml],
   AS_HELP_STRING([--enable-yaml], [Enable YAML support.]))
 
 AS_IF([test "x$enable_yaml" = "xyes"],
-  AC_CHECK_LIB([yaml-cpp], [main], [], [
+  AC_CHECK_LIB([yaml-cpp], [main], [
+    AC_SUBST(HAVE_LIBYAML_CPP, ["#define AFF4_HAS_LIBYAML_CPP"])
+  ], [
     echo libyaml-cpp not found. On debian systems this is provided by
     echo apt-get install libyaml-cpp-dev
     exit -1
@@ -112,6 +114,7 @@ AC_SUBST(SO_VERSION)
 AC_CONFIG_FILES([
         Makefile
         src/Makefile
+        src/aff4_config.h
         tests/Makefile
         ])
 AC_OUTPUT

@@ -15,7 +15,6 @@ specific language governing permissions and limitations under the License.
 
 #ifndef AFF4_UTILS_H
 #define AFF4_UTILS_H
-#include "config.h"
 #include <sys/time.h>
 #include <vector>
 #include <string>

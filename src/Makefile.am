@@ -45,7 +45,7 @@ lib_LTLIBRARIES = libaff4.la
 
 libaff4_includedir = $(includedir)/aff4/
 libaff4_include_HEADERS = \
-	aff4_base.h    aff4_image.h  aff4_io.h\
+	aff4_base.h    aff4_config.h aff4_image.h  aff4_io.h\
         aff4_simple.h  config.h      lexicon.h  rdf.h\
 	aff4_errors.h  aff4_init.h   aff4_registry.h \
 	aff4_utils.h   data_store.h  libaff4.h  zip.h \
@@ -54,7 +54,7 @@ libaff4_include_HEADERS = \
 
 libaff4_la_SOURCES = \
 	aff4_image.cc aff4_init.cc data_store.cc libaff4.cc \
-	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc
+	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc lexicon.cc
 
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
 

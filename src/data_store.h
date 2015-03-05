@@ -15,6 +15,7 @@ specific language governing permissions and limitations under the License.
 
 #ifndef  _AFF4_DATA_STORE_H_
 #define  _AFF4_DATA_STORE_H_
+#include "aff4_config.h"
 
 #include "aff4_base.h"
 #include <glog/logging.h>
@@ -339,7 +340,7 @@ class DataStore {
 
   virtual AFF4Status DeleteSubject(const URN &urn) = 0;
 
-#ifdef HAVE_LIBYAML_CPP
+#ifdef AFF4_HAS_LIBYAML_CPP
   // Dump ourselves to a yaml file.
   virtual AFF4Status DumpToYaml(AFF4Stream &output,
                                 bool verbose=false) = 0;
@@ -435,16 +436,14 @@ class DataStore {
     URN type_urn;
     unique_ptr<AFF4Object> obj;
 
+    const uri_components components = urn.Parse();
+
+    // Try to instantiate the handler based on the URN scheme alone.
+    obj = GetAFF4ClassFactory()->CreateInstance(components.scheme, this);
+
     // Check if there is a resolver triple for it.
-    if (Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
+    if (!obj && Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
       obj = GetAFF4ClassFactory()->CreateInstance(type_urn.value, this);
-
-    } else {
-      const uri_components components = urn.Parse();
-      LOG(INFO) << "Loading file object " << urn.SerializeToString();
-
-      // Try to instantiate the handler based on the URN scheme alone.
-      obj = GetAFF4ClassFactory()->CreateInstance(components.scheme, this);
     };
 
     // Failed to find the object.
@@ -513,7 +512,7 @@ class MemoryDataStore: public DataStore {
 
   virtual AFF4Status DeleteSubject(const URN &urn);
 
-#ifdef HAVE_LIBYAML_CPP
+#ifdef AFF4_HAS_LIBYAML_CPP
   virtual AFF4Status DumpToYaml(AFF4Stream &output,
                                 bool verbose=false);
   virtual AFF4Status LoadFromYaml(AFF4Stream &output);

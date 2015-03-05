@@ -156,3 +156,63 @@ TEST_F(ZipTest, OpenMemberByURN) {
   string expected = data1 + data2;
   EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
 };
+
+/**
+ * Test that we can handle concatenated volumes (i.e. an AFF4 volume appended to
+ * something else. Check we can read them and also we can modify them without
+ * corrupting the volume..
+ */
+TEST_F(ZipTest, ConcatenatedVolumes) {
+  {
+    MemoryDataStore resolver;
+
+    string concate_filename = filename + "_con.zip";
+
+    resolver.Set(concate_filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+
+    // Copy the files across.
+    {
+      AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
+          filename);
+
+      ASSERT_TRUE(file.get()) << "Unable to create file";
+
+      AFF4ScopedPtr<AFF4Stream> concate_file = resolver.AFF4FactoryOpen<AFF4Stream>(
+          concate_filename);
+
+      ASSERT_TRUE(concate_file.get()) << "Unable to create file";
+
+      concate_file->Write("pad pad pad pad pad pad pad");
+      file->CopyToStream(*concate_file, file->Size());
+    }
+
+    // Now open the zip file from the concatenated file.
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, concate_filename);
+    ASSERT_TRUE(zip.get()) << "Unable to create zip file";
+
+    AFF4ScopedPtr<ZipFileSegment> segment(zip->OpenZipSegment(segment_name));
+    ASSERT_TRUE(segment.get());
+
+    string expected = data1 + data2;
+    EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
+
+    // Now ensure we can modify the file.
+    segment->Truncate();
+    segment->Write("foobar");
+  }
+
+  // Now check with a fresh resolver.
+  MemoryDataStore resolver;
+
+  string concate_filename = filename + "_con.zip";
+
+  // Now open the zip file from the concatenated file.
+  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, concate_filename);
+  ASSERT_TRUE(zip.get()) << "Unable to create zip file";
+
+  AFF4ScopedPtr<ZipFileSegment> segment(zip->OpenZipSegment(segment_name));
+  ASSERT_TRUE(segment.get());
+
+  // New data should be there.
+  EXPECT_STREQ("foobar", (segment->Read(1000).c_str()));
+};

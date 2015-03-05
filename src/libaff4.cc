@@ -13,6 +13,8 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
+#include "config.h"
+
 #include "aff4_utils.h"
 #include "aff4_errors.h"
 #include "aff4_io.h"

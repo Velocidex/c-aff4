@@ -34,8 +34,6 @@ class ClassFactory {
     auto it = factoryFunctionRegistry.find(name);
     if(it != factoryFunctionRegistry.end()) {
       instance = it->second(data);
-    } else {
-      LOG(ERROR) << "No implementation found for type " << name;
     };
 
     return unique_ptr<T>(instance);

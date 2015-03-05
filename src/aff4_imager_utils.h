@@ -105,6 +105,16 @@ protected:
   };
 
 public:
+  /**
+   * This should be overloaded for imagers that need to do something before they
+   * start. The method is called during the imager's initialization routine.
+
+   * @return If this returns anything other that STATUS_OK we abort.
+   */
+  virtual AFF4Status Initialize() {
+    return STATUS_OK;
+  };
+
   virtual AFF4Status RegisterArgs() {
     AddArg(new TCLAP::SwitchArg("V", "view", "View AFF4 metadata", false));
     AddArg(new TCLAP::SwitchArg("v", "verbose", "Display more verbose logging",

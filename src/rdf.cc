@@ -475,10 +475,10 @@ raptor_term *XSDBoolean::GetRaptorTerm(raptor_world *world) const {
 ClassFactory<RDFValue> RDFValueRegistry;
 
 
-static RDFValueRegistrar<RDFBytes> r1(XSD_NAMESPACE "hexBinary");
-static RDFValueRegistrar<XSDString> r2(XSD_NAMESPACE "string");
+static RDFValueRegistrar<RDFBytes> r1(RDFBytesType);
+static RDFValueRegistrar<XSDString> r2(XSDStringType);
 
-static RDFValueRegistrar<XSDInteger> r3(XSD_NAMESPACE "integer");
-static RDFValueRegistrar<XSDInteger> r4(XSD_NAMESPACE "int");
-static RDFValueRegistrar<XSDInteger> r5(XSD_NAMESPACE "long");
-static RDFValueRegistrar<XSDBoolean> r6(XSD_NAMESPACE "boolean");
+static RDFValueRegistrar<XSDInteger> r3(XSDIntegerType);
+static RDFValueRegistrar<XSDInteger> r4(XSDIntegerTypeInt);
+static RDFValueRegistrar<XSDInteger> r5(XSDIntegerTypeLong);
+static RDFValueRegistrar<XSDBoolean> r6(XSDBooleanType);
