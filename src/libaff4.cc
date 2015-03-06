@@ -147,36 +147,54 @@ off_t AFF4Stream::Size() {
   return size;
 }
 
-AFF4Status AFF4Stream::CopyToStream(AFF4Stream &output, size_t length,
-                                    size_t buffer_size) {
-  uint64_t last_time = 0;
-  off_t last_offset = 0;
-  off_t start = Tell();
-  size_t length_remaining = length;
+bool empty_progress(aff4_off_t readptr, ProgressContext &context) {
+  return true;
+};
+
+bool default_progress(aff4_off_t readptr, ProgressContext &context) {
+  uint64_t now = time_from_epoch();
+
+  if (now > context.last_time + 1000000/4) {
+    // Rate in MB/s.
+    off_t rate = (readptr - context.last_offset) /
+        (now - context.last_time) * 1000000 / 1024/1024 ;
+
+    std::cout << " Reading 0x" << std::hex << readptr << "  " <<
+        std::dec << (readptr - context.start)/1024/1024 << "MiB / " <<
+        context.length/1024/1024 << "MiB " << rate << "MiB/s\r";
+    std::cout.flush();
+
+    context.last_time = now;
+    context.last_offset = readptr;
+  };
+
+  return true;
+};
+
+
+AFF4Status AFF4Stream::CopyToStream(
+    AFF4Stream &output, aff4_off_t length,
+    std::function<bool(aff4_off_t, ProgressContext&)> progress,
+    size_t buffer_size) {
+  ProgressContext context;
+
+  context.start = Tell();
+  context.length = length;
+
+  aff4_off_t length_remaining = length;
 
   while(length_remaining > 0) {
-    size_t to_read = std::min(buffer_size, length_remaining);
+    size_t to_read = std::min((aff4_off_t)buffer_size, length_remaining);
     string data = Read(to_read);
     if(data.size() == 0) {
       break;
     };
-
-    output.Write(data);
     length_remaining -= data.size();
 
-    uint64_t now = time_from_epoch();
+    output.Write(data);
 
-    if (now > last_time + 1000000/4) {
-      // Rate in MB/s.
-      off_t rate = (readptr - last_offset) / (now - last_time) * 1000000 /
-          1024/1024 ;
-
-      std::cout << " Reading 0x" << std::hex << readptr << "  " <<
-          std::dec << (readptr - start)/1024/1024 << "MiB / " <<
-          length/1024/1024 << "MiB " << rate << "MiB/s\r";
-      std::cout.flush();
-      last_time = now;
-      last_offset = readptr;
+    if(!progress(readptr, context)) {
+      return ABORTED;
     };
   };
 

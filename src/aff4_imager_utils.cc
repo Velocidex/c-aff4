@@ -60,7 +60,9 @@ AFF4Status ImageStream(DataStore &resolver, vector<URN> &input_urns,
       return IO_ERROR;
     };
 
-    input->CopyToStream(*image, input->Size());
+    AFF4Status res = input->CopyToStream(*image, input->Size());
+    if (res != STATUS_OK)
+      return res;
   };
 
   return result;
@@ -96,8 +98,8 @@ AFF4Status ExtractStream(DataStore &resolver, URN input_urn,
     return IO_ERROR;
   };
 
-  return input->CopyToStream(*output, input->Size());
-  return STATUS_OK;
+  AFF4Status res = input->CopyToStream(*output, input->Size());
+  return res;
 };
 
 
@@ -196,7 +198,6 @@ AFF4Status BasicImager::handle_input() {
   vector<string> inputs = GetArg<TCLAP::MultiArgToNextFlag<string>>(
       "input")->getValue();
 
-  res = CONTINUE;
   for(string input: inputs) {
     URN input_urn(URN::NewURNFromFilename(input));
 
@@ -227,10 +228,15 @@ AFF4Status BasicImager::handle_input() {
     image_stream->compression = compression;
 
     // Copy the input stream to the output stream.
-    input_stream->CopyToStream(*image_stream, input_stream->Size());
+    res = input_stream->CopyToStream(
+        *image_stream, input_stream->Size(),
+        std::bind(&BasicImager::progress_renderer, this,
+                  std::placeholders::_1, std::placeholders::_2));
+    if (res != STATUS_OK)
+      return res;
   };
 
-  return res;
+  return CONTINUE;
 }
 
 AFF4Status BasicImager::handle_export() {
@@ -334,4 +340,21 @@ AFF4Status BasicImager::handle_compression() {
   std::cout << "Setting compression " << compression_setting.c_str() << "\n";
 
   return CONTINUE;
+};
+
+bool BasicImager::progress_renderer(
+    aff4_off_t readptr, ProgressContext &context) {
+  bool result = default_progress(readptr, context);
+
+  if (should_abort) {
+    std::cout << "\n\nAborted!\n";
+    return false;
+  };
+
+  return result;
+};
+
+void BasicImager::Abort() {
+  // Tell everything to wind down.
+  should_abort = true;
 };

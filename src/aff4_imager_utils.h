@@ -60,6 +60,8 @@ protected:
   // Type of compression we should use.
   AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
 
+  bool should_abort = false;
+
   virtual string GetName() {
     return "AFF4 Imager";
   };
@@ -166,6 +168,11 @@ public:
 
 
   AFF4Status ParseArgs(int argc, char** argv);
+
+  virtual bool progress_renderer(
+      aff4_off_t readptr, ProgressContext &context);
+
+  void Abort();
 };
 
 

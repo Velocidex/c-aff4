@@ -401,7 +401,7 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
 
   // Now copy the cd_stream into the backing_store in one write operation.
   cd_stream.Seek(0, SEEK_SET);
-  cd_stream.CopyToStream(backing_store, cd_stream.Size());
+  cd_stream.CopyToStream(backing_store, cd_stream.Size(), empty_progress);
 };
 
 AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(URN child) {
