@@ -29,14 +29,14 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
   YAML::Emitter out;
 
   out << YAML::BeginMap;
-  for(const auto &it: store) {
+  for (const auto &it : store) {
     URN subject(it.first);
     URN type;
 
     // Skip this URN if it is in the suppressed_rdftypes set.
     if (Get(subject, AFF4_TYPE, type) == STATUS_OK) {
-      if(!verbose &&
-         suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
+      if (!verbose &&
+          suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
         continue;
       };
     };
@@ -44,11 +44,11 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
     out << YAML::Key << it.first;
 
     out << YAML::Value << YAML::BeginMap;
-    for(const auto &attr_it: it.second) {
+    for (const auto &attr_it : it.second) {
       URN predicate(attr_it.first);
 
       // Volatile predicates are suppressed.
-      if(!verbose && 0 == predicate.value.compare(
+      if (!verbose && 0 == predicate.value.compare(
              0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
         continue;
       };
@@ -97,7 +97,7 @@ class RaptorSerializer {
   size_t length;
   raptor_serializer* serializer;
 
-  RaptorSerializer() {};
+  RaptorSerializer() {}
 
  public:
   static unique_ptr<RaptorSerializer> NewRaptorSerializer(
@@ -151,7 +151,7 @@ class RaptorSerializer {
 
   string Finalize() {
     raptor_serializer_serialize_end(serializer);
-    return string((char *)output, length);
+    return string(reinterpret_cast<char *>(output), length);
   };
 
   ~RaptorSerializer() {
@@ -164,7 +164,7 @@ class RaptorSerializer {
 static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
     DataStore *resolver, raptor_term *term) {
   if (term->type == RAPTOR_TERM_TYPE_URI) {
-    char *uri = (char *)raptor_uri_to_string(term->value.uri);
+    char *uri = reinterpret_cast<char *>(raptor_uri_to_string(term->value.uri));
     unique_ptr<RDFValue> result(new URN(uri));
     raptor_free_memory(uri);
     return result;
@@ -172,12 +172,14 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
 
   if (term->type == RAPTOR_TERM_TYPE_LITERAL) {
     // Does it have a special data type?
-    if(term->value.literal.datatype) {
-      char *uri = (char *)raptor_uri_to_string(term->value.literal.datatype);
+    if (term->value.literal.datatype) {
+      char *uri = reinterpret_cast<char *>(
+          raptor_uri_to_string(term->value.literal.datatype));
 
-      unique_ptr<RDFValue> result = RDFValueRegistry.CreateInstance(uri, resolver);
+      unique_ptr<RDFValue> result = RDFValueRegistry.CreateInstance(
+          uri, resolver);
       // If we do not know how to handle this type we skip it.
-      if(!result) {
+      if (!result) {
         LOG(INFO) << "Unable to handle RDF type " << uri;
         raptor_free_memory(uri);
         return NULL;
@@ -185,10 +187,10 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
 
       raptor_free_memory(uri);
 
-      string value_string((char *)term->value.literal.string,
+      string value_string(reinterpret_cast<char *>(term->value.literal.string),
                           term->value.literal.string_len);
 
-      if(result->UnSerializeFromString(value_string) != STATUS_OK) {
+      if (result->UnSerializeFromString(value_string) != STATUS_OK) {
         LOG(ERROR) << "Unable to parse " << value_string.c_str();
         return NULL;
       };
@@ -197,7 +199,7 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
 
       // No special type - this is just a string.
     } else {
-      string value_string((char *)term->value.literal.string,
+      string value_string(reinterpret_cast<char *>(term->value.literal.string),
                           term->value.literal.string_len);
 
       return unique_ptr<RDFValue>(new XSDString(value_string));
@@ -209,19 +211,20 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
 
 static void statement_handler(void *user_data,
                               raptor_statement *statement) {
-  DataStore *resolver = (DataStore *)user_data;
+  DataStore *resolver = reinterpret_cast<DataStore *>(user_data);
 
   if (statement->subject->type == RAPTOR_TERM_TYPE_URI &&
       statement->predicate->type == RAPTOR_TERM_TYPE_URI) {
-    char *subject = (char *)raptor_uri_to_string(statement->subject->value.uri);
+    char *subject = reinterpret_cast<char *>(
+        raptor_uri_to_string(statement->subject->value.uri));
 
-    char *predicate = (char *)raptor_uri_to_string(
-        statement->predicate->value.uri);
+    char *predicate = reinterpret_cast<char *>(
+        raptor_uri_to_string(statement->predicate->value.uri));
 
     unique_ptr<RDFValue> object(RDFValueFromRaptorTerm(
         resolver, statement->object));
 
-    if(object.get()) {
+    if (object.get()) {
       resolver->Set(URN(subject), URN(predicate), std::move(object));
     };
 
@@ -237,7 +240,7 @@ class RaptorParser {
   raptor_parser *parser;
   DataStore *resolver;
 
-  RaptorParser(DataStore *resolver): resolver(resolver) {};
+  RaptorParser(DataStore *resolver): resolver(resolver) {}
 
  public:
   static unique_ptr<RaptorParser> NewRaptorParser(DataStore *resolver) {
@@ -256,7 +259,7 @@ class RaptorParser {
     raptor_uri *uri = raptor_new_uri(
         result->world, (const unsigned char *)".");
 
-    if(raptor_parser_parse_start(result->parser, uri)) {
+    if (raptor_parser_parse_start(result->parser, uri)) {
       LOG(ERROR) << "Unable to initialize the parser.";
       return NULL;
     };
@@ -267,7 +270,7 @@ class RaptorParser {
   };
 
   AFF4Status Parse(string buffer) {
-    if(raptor_parser_parse_chunk(
+    if (raptor_parser_parse_chunk(
            parser, (const unsigned char *)buffer.data(),
            buffer.size(), 1)) {
       return PARSING_ERROR;
@@ -290,27 +293,27 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream, URN base,
                                          bool verbose) {
   unique_ptr<RaptorSerializer> serializer(
       RaptorSerializer::NewRaptorSerializer(base, namespaces));
-  if(!serializer) {
+  if (!serializer) {
     return MEMORY_ERROR;
   };
 
-  for(const auto &it: store) {
+  for (const auto &it : store) {
     URN subject(it.first);
     URN type;
 
     // Skip this URN if it is in the suppressed_rdftypes set.
     if (Get(subject, AFF4_TYPE, type) == STATUS_OK) {
-      if(!verbose &&
-         suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
+      if (!verbose &&
+          suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
         continue;
       };
     };
 
-    for(const auto &attr_it: it.second) {
+    for (const auto &attr_it : it.second) {
       URN predicate(attr_it.first);
 
       // Volatile predicates are suppressed.
-      if(!verbose && 0 == predicate.value.compare(
+      if (!verbose && 0 == predicate.value.compare(
              0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
         continue;
       };
@@ -421,59 +424,73 @@ void DataStore::Dump(bool verbose) {
 
 
 AFF4Status AFF4ObjectCache::Flush() {
-  // It is an error to flush the object cache while there are still items in use.
-  if(in_use.size() > 0) {
+  AFF4Status res = STATUS_OK;
+
+  // It is an error to flush the object cache while there are still items in
+  // use.
+  if (in_use.size() > 0) {
     Dump();
-    CHECK(in_use.size() == 0) << "ObjectCache flushed while some objects in use!";
+    CHECK_EQ(in_use.size(), 0) <<
+        "ObjectCache flushed while some objects in use!";
   };
 
   // First flush all objects without deleting them since some flushed objects
   // may still want to use other cached objects. It is also possible that new
   // objects are added during object deletion. Therefore we keep doing it until
   // all objects are clean.
-  while(1) {
+  while (1) {
     bool dirty_objects_found = false;
 
-    for(AFF4ObjectCacheEntry *it=lru_list.next; it!=&lru_list; it=it->next) {
-      if (it->object->IsDirty()) {
-        dirty_objects_found = true;
-        it->object->Flush();
+    for (AFF4ObjectCacheEntry *it = lru_list.next; it != &lru_list;
+         it = it->next) {
+      if (!it->flush_failed && it->object->IsDirty()) {
+        res = it->object->Flush();
+
+        // If we fail to flush this object we must not count it as dirty.
+        if (res != STATUS_OK) {
+          it->flush_failed = true;
+        } else {
+          dirty_objects_found = true;
+        };
       };
     };
 
-    if(!dirty_objects_found)
+    if (!dirty_objects_found)
       break;
   };
 
   // Now delete all entries.
-  for(auto it: lru_map) {
+  for (auto it : lru_map) {
     delete it.second;
   };
 
   // Clear the map.
   lru_map.clear();
 
-  return STATUS_OK;
+  return res;
 };
 
 
 void AFF4ObjectCache::Dump() {
   // Now dump the objects in use.
   std::cout << "Objects in use:\n";
-  for(auto it: in_use) {
+  for (auto it : in_use) {
     std::cout << it.first << " - " << it.second->use_count << "\n";
   };
 
   std::cout << "Objects in cache:\n";
-  for(AFF4ObjectCacheEntry *it=lru_list.next; it!=&lru_list; it=it->next) {
+  for (AFF4ObjectCacheEntry *it = lru_list.next; it != &lru_list;
+       it = it->next) {
     std::cout << it->key << " - " << it->use_count << "\n";
   };
 };
 
 
-void AFF4ObjectCache::Trim_() {
+AFF4Status AFF4ObjectCache::Trim_() {
+  AFF4Status res = STATUS_OK;
+
   // First check that the cache is not full.
-  while(lru_map.size() > max_items) {
+  while (lru_map.size() > max_items) {
     // The back of the list is the oldest one.
     AFF4ObjectCacheEntry *older_item = lru_list.prev;
 
@@ -483,12 +500,15 @@ void AFF4ObjectCache::Trim_() {
     lru_map.erase(older_item->key);
 
     // Remove from the list
+    res = older_item->object->Flush();
     delete older_item;
   };
+
+  return res;
 };
 
 
-void AFF4ObjectCache::Put(AFF4Object *object, bool in_use_state) {
+AFF4Status AFF4ObjectCache::Put(AFF4Object *object, bool in_use_state) {
   URN urn = object->urn;
   string key = urn.SerializeToString();
 
@@ -502,17 +522,17 @@ void AFF4ObjectCache::Put(AFF4Object *object, bool in_use_state) {
   // Do we need to immediately put it in the in-use list? This should only be
   // used for newly created objects which must be registered with the cache and
   // immediately returned to be used outside the cache.
-  if(in_use_state) {
+  if (in_use_state) {
     entry->use_count = 1;
     in_use[key] = entry;
-    return;
+    return STATUS_OK;
   };
 
   // Newest items go on the front.
   lru_list.append(entry);
   lru_map[key] = entry;
 
-  Trim_();
+  return Trim_();
 }
 
 
@@ -523,7 +543,7 @@ AFF4Object *AFF4ObjectCache::Get(const URN urn) {
   // the state of the object may suddenly change for its previous user. We allow
   // it because it may be convenient but it is not generally recommended.
   auto in_use_itr = in_use.find(key);
-  if(in_use_itr != in_use.end()) {
+  if (in_use_itr != in_use.end()) {
     LOG(INFO) << "URN " << key << " is already in use.";
 
     in_use_itr->second->use_count++;
@@ -551,7 +571,7 @@ AFF4Object *AFF4ObjectCache::Get(const URN urn) {
   return entry->object;
 };
 
-AFF4Status AFF4ObjectCache::Return(AFF4Object *object) {
+void AFF4ObjectCache::Return(AFF4Object *object) {
   string key = object->urn.SerializeToString();
   auto it = in_use.find(key);
 
@@ -562,13 +582,14 @@ AFF4Status AFF4ObjectCache::Return(AFF4Object *object) {
 
   AFF4ObjectCacheEntry *entry = it->second;
 
-  CHECK(entry->use_count > 0) << "Returned object is not used.";
+  CHECK_GT(entry->use_count, 0) <<
+      "Returned object is not used.";
 
   // Decrease the object's reference count.
   entry->use_count--;
 
   // Put it back in the LRU if it is no longer used.
-  if(entry->use_count == 0) {
+  if (entry->use_count == 0) {
     // Add it to the front of the lru list.
     lru_list.append(entry);
     lru_map[key] = entry;
@@ -579,32 +600,36 @@ AFF4Status AFF4ObjectCache::Return(AFF4Object *object) {
     // The cache has grown - check we dont exceed the limit.
     Trim_();
   };
-
-  return STATUS_OK;
 };
 
 AFF4Status AFF4ObjectCache::Remove(AFF4Object *object) {
   string key = object->urn.SerializeToString();
+  AFF4Status res;
+
   auto it = lru_map.find(key);
-  if(it != lru_map.end()) {
+  if (it != lru_map.end()) {
     AFF4ObjectCacheEntry *entry = it->second;
+    res = entry->object->Flush();
+
     delete entry;
 
     lru_map.erase(it);
 
-    return STATUS_OK;
+    return res;
   };
 
   // Is the item in use?
   auto in_use_it = in_use.find(key);
   if (in_use_it != in_use.end()) {
     AFF4ObjectCacheEntry *entry = in_use_it->second;
+    res = entry->object->Flush();
+
     delete entry;
 
     // Maybe its in use - remove it from there.
     in_use.erase(in_use_it);
 
-    return STATUS_OK;
+    return res;
   };
 
   // This is a fatal error.

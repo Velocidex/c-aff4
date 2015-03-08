@@ -234,17 +234,20 @@ class URN: public XSDString {
    *
    * @return a URN object.
    */
-  static URN NewURNFromFilename(string filename, bool windows_filename);
+  static URN NewURNFromOSFilename(string filename, bool windows_filename,
+                                  bool absolute_path=true);
 
   /**
    * Create a URN from filename.
    * This variant of the function automatically selects the type.
    *
    * @param filename
+   * @param absolute_path: If specified we convert the filename to an absolute
+   * path first.
    *
    * @return
    */
-  static URN NewURNFromFilename(string filename);
+  static URN NewURNFromFilename(string filename, bool absolute_path=true);
 
   /**
    * Returns the current URN as a filename.

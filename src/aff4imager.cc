@@ -29,9 +29,11 @@ int main(int argc, char* argv[]) {
   google::SetStderrLogging(google::GLOG_ERROR);
 
   BasicImager imager;
-  AFF4Status res = imager.ParseArgs(argc, argv);
-  if (res == STATUS_OK)
+  AFF4Status res = imager.Run(argc, argv);
+  if (res == STATUS_OK || res == CONTINUE)
     return 0;
+
+  LOG(ERROR) << "Imaging failed with error: " << res;
 
   return res;
 }

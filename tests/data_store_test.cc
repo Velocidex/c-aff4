@@ -80,7 +80,7 @@ class AFF4ObjectCacheMock: public AFF4ObjectCache {
 
   vector<string> GetKeys() {
     vector<string> result;
-    for(AFF4ObjectCacheEntry *it=lru_list.next; it!=&lru_list; it=it->next) {
+    for (AFF4ObjectCacheEntry *it=lru_list.next; it!=&lru_list; it=it->next) {
       result.push_back(it->key);
     };
 

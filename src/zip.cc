@@ -318,6 +318,9 @@ AFF4Status ZipFile::Flush() {
       AFF4ScopedPtr <ZipFileSegment> turtle_segment = CreateZipSegment(
           "information.turtle");
 
+      if (!turtle_segment)
+        return IO_ERROR;
+
       turtle_segment->compression_method = ZIP_DEFLATE;
 
       // Overwrite the old turtle file with the newer data.
@@ -328,6 +331,11 @@ AFF4Status ZipFile::Flush() {
 #ifdef AFF4_HAS_LIBYAML_CPP
       AFF4ScopedPtr<ZipFileSegment> yaml_segment = CreateZipSegment(
           "information.yaml");
+
+      if (!yaml_segment)
+        return IO_ERROR;
+
+
       yaml_segment->compression_method = ZIP_DEFLATE;
       resolver->DumpToYaml(*yaml_segment);
       yaml_segment->Flush();
@@ -337,7 +345,12 @@ AFF4Status ZipFile::Flush() {
     AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
       AFF4Stream>(backing_store_urn);
 
-    write_zip64_CD(*backing_store);
+    if (!backing_store)
+      return IO_ERROR;
+
+    AFF4Status res = write_zip64_CD(*backing_store);
+    if (res != STATUS_OK)
+      return res;
   };
 
   return AFF4Volume::Flush();
@@ -345,7 +358,7 @@ AFF4Status ZipFile::Flush() {
 
 /** This writes a zip64 end of central directory and a central
     directory locator */
-void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
+AFF4Status ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   // We write to a memory stream first, and then copy it into the backing_store
   // at once. This really helps when we have lots of members in the zip archive.
   StringIO cd_stream;
@@ -358,7 +371,7 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   if (backing_store.Seek(0, SEEK_END) != STATUS_OK) {
     LOG(ERROR) << "Unable to write EOCD on non-seekable stream: " <<
         urn.SerializeToString();
-    return;
+    return IO_ERROR;
   };
 
   // The real start of the ECD.
@@ -401,7 +414,8 @@ void ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
 
   // Now copy the cd_stream into the backing_store in one write operation.
   cd_stream.Seek(0, SEEK_SET);
-  cd_stream.CopyToStream(backing_store, cd_stream.Size(), empty_progress);
+  return cd_stream.CopyToStream(
+      backing_store, cd_stream.Size(), empty_progress);
 };
 
 AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(URN child) {
@@ -522,20 +536,21 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
 
   // We write the entire file in a memory buffer.
   unsigned int buffer_size = zip_info->file_size;
-  buffer.resize(buffer_size);
+  unique_ptr<char[]> decomp_buffer(new char[buffer_size]);
 
   switch (file_header.compression_method) {
     case ZIP_DEFLATE: {
       string c_buffer = backing_store->Read(zip_info->compress_size);
 
-      if (DecompressBuffer(&buffer[0], buffer_size, c_buffer) != buffer_size) {
+      if (DecompressBuffer(decomp_buffer.get(), buffer_size, c_buffer) !=
+          buffer_size) {
         LOG(INFO) << "Unable to decompress file.";
         return PARSING_ERROR;
       };
     } break;
 
     case ZIP_STORED: {
-      backing_store->ReadIntoBuffer(&buffer[0], buffer_size);
+      backing_store->ReadIntoBuffer(decomp_buffer.get(), buffer_size);
     } break;
 
     default:
@@ -543,6 +558,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
       return NOT_IMPLEMENTED;
   };
 
+  buffer.assign(decomp_buffer.get(), buffer_size);
   return STATUS_OK;
 };
 
@@ -571,7 +587,7 @@ static string CompressBuffer(const string &buffer) {
 
   memset(&strm, 0, sizeof(strm));
 
-  strm.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(&buffer[0]));
+  strm.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data()));
   strm.avail_in = buffer.size();
 
   if (deflateInit2(&strm, 9, Z_DEFLATED, -15,
@@ -582,7 +598,7 @@ static string CompressBuffer(const string &buffer) {
 
   // Get an upper bound on the size of the compressed buffer.
   int buffer_size = deflateBound(&strm, buffer.size() + 10);
-  std::unique_ptr<char> c_buffer(new char[buffer_size]);
+  std::unique_ptr<char[]> c_buffer(new char[buffer_size]);
 
   strm.next_out = reinterpret_cast<Bytef *>(c_buffer.get());
   strm.avail_out = buffer_size;
@@ -662,13 +678,16 @@ AFF4Status ZipFileSegment::Flush() {
       zip_info->compression_method = ZIP_DEFLATE;
 
       owner->WriteZipFileHeader(*zip_info, *backing_store);
-      backing_store->Write(cdata);
+      if (backing_store->Write(cdata) < 0)
+        return IO_ERROR;
 
     } else {
       zip_info->compress_size = buffer.size();
 
       owner->WriteZipFileHeader(*zip_info, *backing_store);
-      backing_store->Write(buffer);
+      if (backing_store->Write(buffer) < 0) {
+        return IO_ERROR;
+      };
     };
 
     // Replace ourselves in the members map.

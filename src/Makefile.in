@@ -130,9 +130,11 @@ LTLIBRARIES = $(lib_LTLIBRARIES)
 am__DEPENDENCIES_1 =
 am__DEPENDENCIES_2 = $(am__DEPENDENCIES_1)
 @WIN32_NATIVE_HOST_FALSE@libaff4_la_DEPENDENCIES =  \
-@WIN32_NATIVE_HOST_FALSE@	$(am__DEPENDENCIES_2)
+@WIN32_NATIVE_HOST_FALSE@	$(am__DEPENDENCIES_2) \
+@WIN32_NATIVE_HOST_FALSE@	$(am__DEPENDENCIES_1)
 @WIN32_NATIVE_HOST_TRUE@libaff4_la_DEPENDENCIES =  \
-@WIN32_NATIVE_HOST_TRUE@	$(am__DEPENDENCIES_2)
+@WIN32_NATIVE_HOST_TRUE@	$(am__DEPENDENCIES_2) \
+@WIN32_NATIVE_HOST_TRUE@	$(am__DEPENDENCIES_1)
 am_libaff4_la_OBJECTS = aff4_image.lo aff4_init.lo data_store.lo \
 	libaff4.lo rdf.lo zip.lo aff4_imager_utils.lo aff4_map.lo \
 	lexicon.lo
@@ -147,7 +149,8 @@ libaff4_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 PROGRAMS = $(bin_PROGRAMS)
 am_aff4imager_OBJECTS = aff4imager.$(OBJEXT)
 aff4imager_OBJECTS = $(am_aff4imager_OBJECTS)
-aff4imager_DEPENDENCIES = libaff4.la $(am__DEPENDENCIES_2)
+aff4imager_DEPENDENCIES = libaff4.la $(am__DEPENDENCIES_2) \
+	$(am__DEPENDENCIES_1)
 aff4imager_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
 	$(CXXFLAGS) $(aff4imager_LDFLAGS) $(LDFLAGS) -o $@
@@ -362,6 +365,7 @@ AM_CXXFLAGS = $(AFF4CXXFLAGS) $(WINCXXFLAGS)
 # Support static builds.
 @STATIC_BUILD_TRUE@STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
 @STATIC_BUILD_TRUE@STATIC_LINKERLDFLAGS = -all-static
+@HAVE_LIBYAML_CPP_TRUE@LIBS_LIBYAML_CPP = -lyaml-cpp
 
 # The -no-undefined flag allows libtool to generate shared libraries for
 # Cygwin and MinGW.  LIBSTDCXX_LA_LINKER_FLAG is used to fix a Solaris bug.
@@ -386,9 +390,9 @@ libaff4_la_SOURCES = \
 	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc lexicon.cc
 
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
-@WIN32_NATIVE_HOST_FALSE@libaff4_la_LIBADD = $(LIBS)
-@WIN32_NATIVE_HOST_TRUE@libaff4_la_LIBADD = -lrpcrt4 -lshlwapi $(LIBS)
-aff4imager_LDADD = libaff4.la $(LIBS)
+@WIN32_NATIVE_HOST_FALSE@libaff4_la_LIBADD = $(LIBS) $(LIBS_LIBYAML_CPP)
+@WIN32_NATIVE_HOST_TRUE@libaff4_la_LIBADD = -lrpcrt4 -lshlwapi $(LIBS) $(LIBS_LIBYAML_CPP)
+aff4imager_LDADD = libaff4.la $(LIBS) $(LIBS_LIBYAML_CPP)
 aff4imager_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 aff4imager_SOURCES = aff4imager.cc
 all: config.h

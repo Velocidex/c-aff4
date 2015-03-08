@@ -46,6 +46,7 @@ AS_IF([test "x$enable_yaml" = "xyes"],
     exit -1
   ])
 )
+AM_CONDITIONAL([HAVE_LIBYAML_CPP], [test x$ac_cv_lib_yaml_cpp_main = xyes])
 
 AC_CHECK_LIB([pcre++], [main]. [], [
   echo Libpcre++ not found. On debian systems this is provided by

@@ -51,21 +51,21 @@ AFF4Status AFF4Image::LoadFromURN() {
   // Configure the stream parameters.
   XSDInteger value;
 
-  if(resolver->Get(urn, AFF4_IMAGE_CHUNK_SIZE, value) == STATUS_OK) {
+  if (resolver->Get(urn, AFF4_IMAGE_CHUNK_SIZE, value) == STATUS_OK) {
     chunk_size = value.value;
   };
 
-  if(resolver->Get(urn, AFF4_IMAGE_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
+  if (resolver->Get(urn, AFF4_IMAGE_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
     chunks_per_segment = value.value;
   };
 
-  if(resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
+  if (resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
     size = value.value;
   };
 
   // Load the compression scheme. If it is not set we just default to ZLIB.
   URN compression_urn;
-  if(STATUS_OK ==
+  if (STATUS_OK ==
      resolver->Get(urn, AFF4_IMAGE_COMPRESSION, compression_urn)) {
     compression = CompressionMethodFromURN(compression_urn);
     if (compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
@@ -100,20 +100,31 @@ AFF4Status AFF4Image::_FlushBevy() {
   };
 
   // Create the new segments in this zip file.
-  AFF4ScopedPtr<AFF4Stream> bevy_index_stream = volume->CreateMember(bevy_index_urn);
+  AFF4ScopedPtr<AFF4Stream> bevy_index_stream = volume->CreateMember(
+      bevy_index_urn);
+
   AFF4ScopedPtr<AFF4Stream> bevy_stream = volume->CreateMember(bevy_urn);
 
-  if(!bevy_index_stream || ! bevy_stream) {
+  if (!bevy_index_stream || !bevy_stream) {
     LOG(ERROR) << "Unable to create bevy URN";
     return IO_ERROR;
   };
 
-  bevy_index_stream->Write(bevy_index.buffer);
-  bevy_stream->Write(bevy.buffer);
+  if (bevy_index_stream->Write(bevy_index.buffer) < 0)
+    return IO_ERROR;
+
+  if (bevy_stream->Write(bevy.buffer) < 0)
+    return IO_ERROR;
 
   // These calls flush the bevies and removes them from the resolver cache.
-  resolver->Close(bevy_index_stream);
-  resolver->Close(bevy_stream);
+  AFF4Status res = resolver->Close(bevy_index_stream);
+  if (res != STATUS_OK)
+    return res;
+
+  res = resolver->Close(bevy_stream);
+  if (res != STATUS_OK) {
+    return res;
+  };
 
   bevy_index.Truncate();
   bevy.Truncate();
@@ -139,7 +150,7 @@ AFF4Status AFF4Image::FlushChunk(const char *data, size_t length) {
 
   AFF4Status result;
 
-  switch(compression) {
+  switch (compression) {
     case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
       result = CompressZlib_(data, length, &output);
     } break;
@@ -157,12 +168,16 @@ AFF4Status AFF4Image::FlushChunk(const char *data, size_t length) {
       return IO_ERROR;
   };
 
-  bevy_index.Write((char *)&bevy_offset, sizeof(bevy_offset));
-  bevy.Write(output);
+  if (bevy_index.Write(
+          reinterpret_cast<char *>(&bevy_offset), sizeof(bevy_offset)) < 0)
+    return IO_ERROR;
+
+  if (bevy.Write(output) < 0)
+    return IO_ERROR;
 
   chunk_count_in_bevy++;
 
-  if(chunk_count_in_bevy >= chunks_per_segment) {
+  if (chunk_count_in_bevy >= chunks_per_segment) {
     return _FlushBevy();
   };
 
@@ -174,8 +189,10 @@ AFF4Status AFF4Image::CompressZlib_(const char *data, size_t length,
   uLongf c_length = compressBound(length) + 1;
   output->resize(c_length);
 
-  if(compress2((Bytef *)output->data(), &c_length, (Bytef *)data, length,
-               1) != Z_OK) {
+  if (compress2(reinterpret_cast<Bytef *>(const_cast<char *>(output->data())),
+                &c_length,
+                reinterpret_cast<Bytef *>(const_cast<char *>(data)),
+                length, 1) != Z_OK) {
     LOG(ERROR) << "Unable to compress chunk " << urn.SerializeToString();
     return MEMORY_ERROR;
   };
@@ -189,9 +206,9 @@ AFF4Status AFF4Image::DeCompressZlib_(const char *data, size_t length,
                                       string *buffer) {
   uLongf buffer_size = buffer->size();
 
-  if(uncompress((Bytef *)buffer->data(), &buffer_size,
+  if (uncompress(reinterpret_cast<Bytef *>(const_cast<char *>(buffer->data())),
+                 &buffer_size,
                 (const Bytef *)data, length) == Z_OK) {
-
     buffer->resize(buffer_size);
     return STATUS_OK;
   };
@@ -210,7 +227,7 @@ AFF4Status AFF4Image::CompressSnappy_(const char *data, size_t length,
 
 AFF4Status AFF4Image::DeCompressSnappy_(const char *data, size_t length,
                                         string *output) {
-  if(!snappy::Uncompress(data, length, output)) {
+  if (!snappy::Uncompress(data, length, output)) {
     return GENERIC_ERROR;
   };
 
@@ -228,8 +245,9 @@ int AFF4Image::Write(const char *data, int length) {
 
   // Consume full chunks from the buffer.
   while (buffer.length() - offset >= chunk_size) {
-    if(FlushChunk(chunk_ptr + offset, chunk_size) != STATUS_OK)
-      return 0;
+    if (FlushChunk(chunk_ptr + offset, chunk_size) != STATUS_OK) {
+      return IO_ERROR;
+    };
 
     offset += chunk_size;
   };
@@ -294,7 +312,7 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
 
   AFF4Status res;
 
-  switch(compression) {
+  switch (compression) {
     case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
       res = DeCompressZlib_(cbuffer.data(), cbuffer.length(),
                             &buffer);
@@ -316,7 +334,7 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
       LOG(FATAL) << "Unexpected compression type set";
   };
 
-  if(res != STATUS_OK) {
+  if (res != STATUS_OK) {
     LOG(ERROR) << urn.SerializeToString() <<
         ": Unable to uncompress chunk " << chunk_id;
     return res;
@@ -335,13 +353,13 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
     URN bevy_urn = urn.Append(aff4_sprintf("%08d", bevy_id));
     URN bevy_index_urn = bevy_urn.Append("index");
 
-    AFF4ScopedPtr<AFF4Stream> bevy_index = resolver->AFF4FactoryOpen<AFF4Stream>(
-        bevy_index_urn);
+    AFF4ScopedPtr<AFF4Stream> bevy_index = resolver->AFF4FactoryOpen
+        <AFF4Stream>(bevy_index_urn);
 
     AFF4ScopedPtr<AFF4Stream> bevy = resolver->AFF4FactoryOpen<AFF4Stream>(
         bevy_urn);
 
-    if(!bevy_index || !bevy) {
+    if (!bevy_index || !bevy) {
       LOG(ERROR) << "Unable to open bevy " <<
           bevy_urn.SerializeToString();
       return -1;
@@ -350,14 +368,15 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
     uint32_t index_size = bevy_index->Size() / sizeof(uint32_t);
     string bevy_index_data = bevy_index->Read(bevy_index->Size());
 
-    uint32_t *bevy_index_array = (uint32_t *)bevy_index_data.data();
+    uint32_t *bevy_index_array = reinterpret_cast<uint32_t *>(
+        const_cast<char *>(bevy_index_data.data()));
 
     while (chunks_to_read > 0) {
       // Read a full chunk from the bevy.
       AFF4Status res = _ReadChunkFromBevy(
           result, chunk_id, bevy, bevy_index_array, index_size);
 
-      if(res != STATUS_OK) {
+      if (res != STATUS_OK) {
         return res;
       };
 
@@ -366,7 +385,7 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
       chunks_read++;
 
       // This bevy is exhausted, get the next one.
-      if(bevy_id < chunk_id / chunks_per_segment) {
+      if (bevy_id < chunk_id / chunks_per_segment) {
         break;
       }
     };
@@ -376,7 +395,7 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
 };
 
 string AFF4Image::Read(size_t length) {
-  if(length > AFF4_MAX_READ_LEN)
+  if (length > AFF4_MAX_READ_LEN)
     return "";
 
   length = std::min((aff4_off_t)length, Size() - readptr);
@@ -390,7 +409,7 @@ string AFF4Image::Read(size_t length) {
   // Make sure we have enough room for output.
   result.reserve(chunks_to_read * chunk_size);
 
-  while(chunks_to_read > 0) {
+  while (chunks_to_read > 0) {
     int chunks_read = _ReadPartial(chunk_id, chunks_to_read, result);
     // Error occured.
     if (chunks_read < 0) {
@@ -414,11 +433,16 @@ string AFF4Image::Read(size_t length) {
 
 
 AFF4Status AFF4Image::Flush() {
-  if(IsDirty()) {
+  if (IsDirty()) {
     // Flush the last chunk.
-    FlushChunk(buffer.c_str(), buffer.length());
+    AFF4Status res = FlushChunk(buffer.c_str(), buffer.length());
+    if (res != STATUS_OK)
+      return res;
+
     buffer.resize(0);
-    _FlushBevy();
+    res = _FlushBevy();
+    if (res != STATUS_OK)
+      return res;
 
     resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
 

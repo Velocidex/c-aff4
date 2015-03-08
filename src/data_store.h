@@ -37,7 +37,7 @@ using std::unordered_set;
 class AFF4Object;
 class AFF4Stream;
 class AFF4Volume;
-
+class DataStore;
 
 // AFF4_Attributes are a collection of RDFValue objects, keyed by attributes.
 typedef unordered_map<string, unique_ptr<RDFValue> > AFF4_Attributes;
@@ -47,6 +47,7 @@ struct AFF4ObjectCacheEntry {
   string key;
   AFF4Object *object=NULL;
   int use_count=0;
+  bool flush_failed = false;
 
   AFF4ObjectCacheEntry *next, *prev;
 
@@ -79,9 +80,12 @@ struct AFF4ObjectCacheEntry {
   ~AFF4ObjectCacheEntry() {
     unlink();
 
+    // We can not call Flush on destruction because Flushing an object might try
+    // to access another object in the cache, which we can not guarantee is not
+    // already destroyed. Therefore we destroy the cache in two passes - first
+    // we call Flush on all objects, then we destroy all objects without calling
+    // their Flush methods.
     if(object) {
-      object->Flush();
-
       delete object;
     };
   };
@@ -94,6 +98,8 @@ struct AFF4ObjectCacheEntry {
  * @param max_items
  */
 class AFF4ObjectCache {
+  friend DataStore;
+
  protected:
   AFF4ObjectCacheEntry lru_list;
 
@@ -104,13 +110,19 @@ class AFF4ObjectCache {
   unordered_map<string, AFF4ObjectCacheEntry *> lru_map;
   size_t max_items = 10;
 
-  // Trim the size of the cache if needed.
-  void Trim_();
+  /**
+   *   Trim the size of the cache if needed.
+   *
+   * @return STATUS_OK if flushing objects is successful. Objects which can not
+   * be flushed are not removed from the cache.
+   */
+  AFF4Status Trim_();
 
  public:
-  AFF4ObjectCache(){};
+  AFF4ObjectCache() {};
 
-  AFF4ObjectCache(int max_items): max_items(max_items) {};
+  AFF4ObjectCache(int max_items):
+      max_items(max_items) {};
 
   virtual ~AFF4ObjectCache() {Flush();};
 
@@ -127,7 +139,7 @@ class AFF4ObjectCache {
    * @param urn
    * @param object
    */
-  void Put(AFF4Object *object, bool in_use=false);
+  AFF4Status Put(AFF4Object *object, bool in_use=false);
 
   /**
    * Get an AFF4 object from the cache. The cache will always own the object,
@@ -144,13 +156,13 @@ class AFF4ObjectCache {
   /**
    * Objects are returned to the cache by calling this method. If the object is
    * not in the cache yet, we call Put() automatically. After this function
-   * returns, references to object are no longer valid.
+   * returns, references to object are no longer valid. This function is
+   * normally called automatically from AFF4ScopedPtr and therefore we cant
+   * provide a meaningful return value.
    *
    * @param object
-   *
-   * @return
    */
-  AFF4Status Return(AFF4Object *object);
+  void Return(AFF4Object *object);
 
 
   /**
@@ -158,7 +170,8 @@ class AFF4ObjectCache {
    *
    * @param urn
    *
-   * @return
+   * @return STATUS_OK if Flushing the object worked. If there is an error the
+   * object can not be removed from the cache.
    */
   AFF4Status Remove(AFF4Object *object);
 
@@ -479,8 +492,11 @@ class DataStore {
   // longer exists in memory.
   template<typename T>
   AFF4Status Close(AFF4ScopedPtr<T> &object){
-    LOG(INFO) << "Closing object " << object->urn.value << "\n";
-    return ObjectCache.Remove(object.release());
+    URN tmp_urn = object->urn;
+    AFF4Status res = ObjectCache.Remove(object.release());
+    LOG(INFO) << "Closing object " << tmp_urn.value << " " << res << "\n";
+
+    return res;
   };
 };
 

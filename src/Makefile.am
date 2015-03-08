@@ -34,6 +34,10 @@ endif
 LIBS = -lz -lraptor2 -lpcre++ -lglog -lsnappy -lpthread \
 	-luriparser $(UNIXLDFLAGS)
 
+if HAVE_LIBYAML_CPP
+LIBS_LIBYAML_CPP = -lyaml-cpp
+endif
+
 # The -no-undefined flag allows libtool to generate shared libraries for
 # Cygwin and MinGW.  LIBSTDCXX_LA_LINKER_FLAG is used to fix a Solaris bug.
 # -version-info tells libtool what to put after the '.so' in the filename.
@@ -59,14 +63,14 @@ libaff4_la_SOURCES = \
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
 
 if WIN32_NATIVE_HOST
-libaff4_la_LIBADD = -lrpcrt4 -lshlwapi $(LIBS)
+libaff4_la_LIBADD = -lrpcrt4 -lshlwapi $(LIBS) $(LIBS_LIBYAML_CPP)
 else
-libaff4_la_LIBADD =  $(LIBS)
+libaff4_la_LIBADD =  $(LIBS) $(LIBS_LIBYAML_CPP)
 endif
 
 
 bin_PROGRAMS = aff4imager
-aff4imager_LDADD = libaff4.la $(LIBS)
+aff4imager_LDADD = libaff4.la $(LIBS) $(LIBS_LIBYAML_CPP)
 
 aff4imager_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 aff4imager_SOURCES = aff4imager.cc

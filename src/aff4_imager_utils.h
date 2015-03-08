@@ -1,4 +1,19 @@
 /*
+Copyright 2015 Google Inc. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License.  You may obtain a copy of the
+License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations under the License.
+*/
+
+/*
   Utilities for AFF4 imaging. These are mostly high level utilities used by the
   command line imager.
 */
@@ -14,7 +29,7 @@
 // Supports all integer inputs given as hex.
 #define TCLAP_SETBASE_ZERO 1
 #include <tclap/CmdLine.h>
-
+#include <set>
 
 /**
  * A Convenience method to add a vector of input URNs to a volume created on an
@@ -33,7 +48,7 @@
 AFF4Status ImageStream(DataStore &resolver, vector<URN> &input_urns,
                        URN output_urn,
                        bool truncate = true,
-                       size_t buffer_size=1024*1024);
+                       size_t buffer_size = 1024*1024);
 
 /**
  * Copy a stream from a loaded volume into and output stream.
@@ -48,10 +63,10 @@ AFF4Status ImageStream(DataStore &resolver, vector<URN> &input_urns,
 AFF4Status ExtractStream(DataStore &resolver, URN input_urn,
                          URN output_urn,
                          bool truncate = true,
-                         size_t buffer_size=1024*1024);
+                         size_t buffer_size = 1024*1024);
 
 class BasicImager {
-protected:
+ protected:
   MemoryDataStore resolver;
   URN volume_URN;
 
@@ -60,7 +75,17 @@ protected:
   // Type of compression we should use.
   AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
 
+  /**
+   * When this is set the imager will try to abort as soon as possible.
+   *
+   * Any streams it is currently writing will be closed and flushed. Any volumes
+   * will be finalized. The imager will then return from the Run() method with
+   * an AFF4Status of ABORT.
+   */
   bool should_abort = false;
+
+  // As actions are executed they are added to this.
+  std::set<string> actions_run;
 
   virtual string GetName() {
     return "AFF4 Imager";
@@ -81,8 +106,31 @@ protected:
   virtual AFF4Status handle_export();
   virtual AFF4Status handle_compression();
 
-  // Dispatch handlers based on the parsed config options.
-  virtual AFF4Status HandlerDispatch();
+  /**
+   * This method should be called by imager programs to parse the command line
+   * and set internal state. The method should not actually do anything other
+   * than interpret and copy the command line. This method could be called
+   * multiple times! If you extend this class, you must also call this method of
+   * the base class - especially if you also need to check flags parsed by the
+   * base class.
+   *
+   * @param argc
+   * @param argv
+   *
+   * @return STATUS_OK if it is ok to continue processing. Otherwise the program
+   * should not call the Run() method.
+   */
+  virtual AFF4Status ParseArgs();
+
+  /**
+   * This method is called after the args are parsed. This is where we actually
+   * process the args and do things.
+   *
+   *
+   * @return STATUS_OK if the method actually ran something, CONTINUE if there
+   * was nothing to do.
+   */
+  virtual AFF4Status ProcessArgs();
 
   // We use a list here to preserve insertion order.
   std::list<std::unique_ptr<TCLAP::Arg>> args;
@@ -92,8 +140,8 @@ protected:
   };
 
   TCLAP::Arg *Get(string name) {
-    for(auto it=args.begin(); it!=args.end(); it++) {
-      if((*it)->getName() == name) {
+    for (auto it = args.begin(); it != args.end(); it++) {
+      if ((*it)->getName() == name) {
         return it->get();
       };
     };
@@ -106,7 +154,7 @@ protected:
     return dynamic_cast<T *>(Get(name));
   };
 
-public:
+ public:
   /**
    * This should be overloaded for imagers that need to do something before they
    * start. The method is called during the imager's initialization routine.
@@ -166,8 +214,7 @@ public:
     return STATUS_OK;
   };
 
-
-  AFF4Status ParseArgs(int argc, char** argv);
+  virtual AFF4Status Run(int argc, char** argv);
 
   virtual bool progress_renderer(
       aff4_off_t readptr, ProgressContext &context);
@@ -175,5 +222,4 @@ public:
   void Abort();
 };
 
-
-#endif // _AFF4_IMAGER_UTILS_H
+#endif  // _AFF4_IMAGER_UTILS_H

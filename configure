@@ -674,6 +674,8 @@ AR
 EGREP
 GREP
 CXXCPP
+HAVE_LIBYAML_CPP_FALSE
+HAVE_LIBYAML_CPP_TRUE
 HAVE_LIBYAML_CPP
 am__fastdepCC_FALSE
 am__fastdepCC_TRUE
@@ -5030,6 +5032,14 @@ fi
 
 
 fi
+ if test x$ac_cv_lib_yaml_cpp_main = xyes; then
+  HAVE_LIBYAML_CPP_TRUE=
+  HAVE_LIBYAML_CPP_FALSE='#'
+else
+  HAVE_LIBYAML_CPP_TRUE='#'
+  HAVE_LIBYAML_CPP_FALSE=
+fi
+
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for main.  in -lpcre++" >&5
 $as_echo_n "checking for main.  in -lpcre++... " >&6; }
@@ -16741,6 +16751,10 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${am__fastdepCC_TRUE}" && test -z "${am__fastdepCC_FALSE}"; then
   as_fn_error $? "conditional \"am__fastdepCC\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${HAVE_LIBYAML_CPP_TRUE}" && test -z "${HAVE_LIBYAML_CPP_FALSE}"; then
+  as_fn_error $? "conditional \"HAVE_LIBYAML_CPP\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${GCC_TRUE}" && test -z "${GCC_FALSE}"; then

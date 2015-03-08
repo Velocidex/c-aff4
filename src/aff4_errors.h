@@ -43,7 +43,7 @@ typedef enum {
   IO_ERROR = -8,                        /**< Unable to open URN for IO. */
   FATAL_ERROR = -9,
   CONTINUE = -10,
-  ABORTED = 11
+  ABORTED = -11
 } AFF4Status;
 
 

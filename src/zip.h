@@ -211,7 +211,7 @@ class ZipFile: public AFF4Volume {
   friend class ZipFileSegment;
 
  private:
-  void write_zip64_CD(AFF4Stream &backing_store);
+  AFF4Status write_zip64_CD(AFF4Stream &backing_store);
   AFF4Status WriteCDFileHeader(ZipInfo &zip_info, AFF4Stream &output);
   AFF4Status WriteZipFileHeader(ZipInfo &zip_info, AFF4Stream &output);
 

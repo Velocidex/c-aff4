@@ -344,10 +344,12 @@ string URN::ToFilename() {
 #endif
 
 
-URN URN::NewURNFromFilename(string filename, bool windows_filename) {
+URN URN::NewURNFromOSFilename(string filename, bool windows_filename,
+                              bool absolute_path) {
   URN result;
 
-  filename = abspath(filename);
+  if (absolute_path)
+    filename = abspath(filename);
 
   char tmp[filename.size() * 3 + 8 + 1];
 
@@ -388,11 +390,14 @@ URN URN::NewURNFromFilename(string filename, bool windows_filename) {
 };
 
 
-URN URN::NewURNFromFilename(string filename) {
+URN URN::NewURNFromFilename(string filename, bool absolute_path) {
   // Get the absolute path of the filename.
-  string abs_filename = abspath(filename);
+  if (absolute_path) {
+    filename = abspath(filename);
+  }
 
-  return NewURNFromFilename(abs_filename, abs_filename[0] != '/');
+  return NewURNFromOSFilename(filename, filename[0] != '/',
+                              absolute_path);
 };
 
 string XSDInteger::SerializeToString() const {
