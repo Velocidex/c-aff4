@@ -140,6 +140,9 @@ AFF4Status BasicImager::ParseArgs() {
     return INCOMPATIBLE_TYPES;
   };
 
+  if (result == CONTINUE && Get("input")->isSet())
+    result = parse_input();
+
   if (result == CONTINUE && Get("compression")->isSet())
     result = handle_compression();
 
@@ -161,8 +164,8 @@ AFF4Status BasicImager::ProcessArgs() {
   if (result == CONTINUE && Get("export")->isSet())
     result = handle_export();
 
-  if (result == CONTINUE && Get("input")->isSet())
-    result = handle_input();
+  if (result == CONTINUE && inputs.size() > 0)
+    result = process_input();
 
   return result;
 };
@@ -200,54 +203,84 @@ AFF4Status BasicImager::handle_view() {
   return STATUS_OK;
 }
 
-AFF4Status BasicImager::handle_input() {
+AFF4Status BasicImager::parse_input() {
+  inputs = GetArg<TCLAP::MultiArgToNextFlag<string>>(
+      "input")->getValue();
+
+  return CONTINUE;
+};
+
+AFF4Status BasicImager::process_input() {
   // Get the output volume.
   URN volume_urn;
   AFF4Status res = GetOutputVolumeURN(volume_urn);
   if (res != STATUS_OK)
     return res;
 
-  vector<string> inputs = GetArg<TCLAP::MultiArgToNextFlag<string>>(
-      "input")->getValue();
+  for (string glob : inputs) {
+    for (string input : GlobFilename(glob)) {
+      URN input_urn(URN::NewURNFromFilename(input, false));
 
-  for (string input : inputs) {
-    URN input_urn(URN::NewURNFromFilename(input, false));
+      std::cout << "Adding " << input.c_str() << " as " <<
+          input_urn.SerializeToString() << "\n";
 
-    std::cout << "Adding " << input.c_str() << " as " <<
-        input_urn.SerializeToString() << "\n";
+      // Try to open the input.
+      AFF4ScopedPtr<AFF4Stream> input_stream = resolver.AFF4FactoryOpen<
+        AFF4Stream>(input_urn);
 
-    // Try to open the input.
-    AFF4ScopedPtr<AFF4Stream> input_stream = resolver.AFF4FactoryOpen<
-      AFF4Stream>(input_urn);
+      // Not valid - skip it.
+      if (!input_stream) {
+        LOG(ERROR) << "Unable to find " << input_urn.SerializeToString();
+        res = CONTINUE;
+        continue;
+      };
 
-    // Not valid - skip it.
-    if (!input_stream) {
-      LOG(ERROR) << "Unable to find " << input_urn.SerializeToString();
-      res = CONTINUE;
-      continue;
+      // Create a new AFF4Image in this volume.
+      URN image_urn = volume_urn.Append(input_urn.Parse().path);
+
+      // For very small streams, it is more efficient to just store them in a
+      // ZipFileSegment.
+      if (input_stream->Size() < 10 * 1024 * 1024) {
+        AFF4ScopedPtr<ZipFileSegment> image_stream = ZipFileSegment::
+            NewZipFileSegment(&resolver, image_urn, volume_urn);
+
+        if (!image_stream)
+          return IO_ERROR;
+
+        image_stream->compression_method = ZIP_DEFLATE;
+        // Copy the input stream to the output stream.
+        res = input_stream->CopyToStream(
+            *image_stream, input_stream->Size(), empty_progress);
+
+        if (res != STATUS_OK)
+          return res;
+
+        // We need to explicitly check the abort status here.
+        if (should_abort)
+          return ABORTED;
+
+        // Otherwise use an AFF4Image.
+      } else {
+        AFF4ScopedPtr<AFF4Image> image_stream = AFF4Image::NewAFF4Image(
+            &resolver, image_urn, volume_urn);
+
+        // Cant write to the output stream at all, this is considered fatal.
+        if (!image_stream) {
+          return IO_ERROR;
+        };
+
+        // Set the output compression according to the user's wishes.
+        image_stream->compression = compression;
+
+        // Copy the input stream to the output stream.
+        res = input_stream->CopyToStream(
+            *image_stream, input_stream->Size(),
+            std::bind(&BasicImager::progress_renderer, this,
+                      std::placeholders::_1, std::placeholders::_2));
+        if (res != STATUS_OK)
+          return res;
+      };
     };
-
-    // Create a new AFF4Image in this volume.
-    URN image_urn = volume_urn.Append(input_urn.Parse().path);
-
-    AFF4ScopedPtr<AFF4Image> image_stream = AFF4Image::NewAFF4Image(
-        &resolver, image_urn, volume_urn);
-
-    // Cant write to the output stream at all, this is considered fatal.
-    if (!image_stream) {
-      return IO_ERROR;
-    };
-
-    // Set the output compression according to the user's wishes.
-    image_stream->compression = compression;
-
-    // Copy the input stream to the output stream.
-    res = input_stream->CopyToStream(
-        *image_stream, input_stream->Size(),
-        std::bind(&BasicImager::progress_renderer, this,
-                  std::placeholders::_1, std::placeholders::_2));
-    if (res != STATUS_OK)
-      return res;
   };
 
   actions_run.insert("input");
@@ -375,3 +408,40 @@ void BasicImager::Abort() {
   // Tell everything to wind down.
   should_abort = true;
 };
+
+
+#ifdef _WIN32
+// We only allow a wild card in the last component.
+vector<string> BasicImager::GlobFilename(string glob) const {
+  vector<string> result;
+  WIN32_FIND_DATA ffd;
+  unsigned int found = glob.find_last_of("/\\");
+  string path;
+
+  if (found == string::npos) {
+    path = glob;
+  } else {
+    path = glob.substr(0, found);
+  }
+
+  HANDLE hFind = FindFirstFile(glob.c_str(), &ffd);
+  if (INVALID_HANDLE_VALUE != hFind) {
+    do {
+      if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        result.push_back(path + "/" + ffd.cFileName);
+      };
+    } while (FindNextFile(hFind, &ffd) != 0);
+  };
+  FindClose(hFind);
+
+  return result;
+};
+#else
+
+vector<string> BasicImager::GlobFilename(string glob) const {
+  vector<string> result;
+  result.push_back(glob);
+
+  return result;
+};
+#endif

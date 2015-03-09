@@ -45,8 +45,8 @@ typedef unordered_map<string, unique_ptr<RDFValue> > AFF4_Attributes;
 struct AFF4ObjectCacheEntry {
  public:
   string key;
-  AFF4Object *object=NULL;
-  int use_count=0;
+  AFF4Object *object = NULL;
+  int use_count = 0;
   bool flush_failed = false;
 
   AFF4ObjectCacheEntry *next, *prev;
@@ -68,7 +68,8 @@ struct AFF4ObjectCacheEntry {
 
   void append(AFF4ObjectCacheEntry *entry) {
     // The entry must not exist on the list already.
-    CHECK(entry->next == entry->prev) << "Appending an element alredy in the list";
+    CHECK_EQ(entry->next, entry->prev) <<
+        "Appending an element alredy in the list";
 
     entry->next = next;
     next->prev = entry;
@@ -85,7 +86,7 @@ struct AFF4ObjectCacheEntry {
     // already destroyed. Therefore we destroy the cache in two passes - first
     // we call Flush on all objects, then we destroy all objects without calling
     // their Flush methods.
-    if(object) {
+    if (object) {
       delete object;
     };
   };
@@ -119,12 +120,12 @@ class AFF4ObjectCache {
   AFF4Status Trim_();
 
  public:
-  AFF4ObjectCache() {};
+  AFF4ObjectCache() {}
 
-  AFF4ObjectCache(int max_items):
-      max_items(max_items) {};
+  explicit AFF4ObjectCache(int max_items):
+      max_items(max_items) {}
 
-  virtual ~AFF4ObjectCache() {Flush();};
+  virtual ~AFF4ObjectCache() {Flush();}
 
   /**
    * Remove all objects from the cache.
@@ -139,7 +140,7 @@ class AFF4ObjectCache {
    * @param urn
    * @param object
    */
-  AFF4Status Put(AFF4Object *object, bool in_use=false);
+  AFF4Status Put(AFF4Object *object, bool in_use = false);
 
   /**
    * Get an AFF4 object from the cache. The cache will always own the object,
@@ -176,7 +177,6 @@ class AFF4ObjectCache {
   AFF4Status Remove(AFF4Object *object);
 
   void Dump();
-
 };
 
 
@@ -197,7 +197,7 @@ class AFF4ScopedPtr {
   DataStore *resolver_;
 
  public:
-  explicit AFF4ScopedPtr(): ptr_(0) {};
+  explicit AFF4ScopedPtr(): ptr_(0) {}
   explicit AFF4ScopedPtr(AFF4ObjectType *p, DataStore *resolver):
       ptr_(p), resolver_(resolver) {
     CHECK(resolver != NULL);
@@ -205,7 +205,7 @@ class AFF4ScopedPtr {
 
   ~AFF4ScopedPtr() {
     // When we destruct we return the underlying pointer to the DataStore.
-    if(ptr_) {
+    if (ptr_) {
       ptr_->Return();
     };
   }
@@ -323,8 +323,8 @@ class DataStore {
    */
   AFF4ObjectCache ObjectCache;
 
-  unordered_set<string> suppressed_rdftypes; /**< These types will not be dumped
-                                              * to turtle files. */
+  /// These types will not be dumped * to turtle files.
+  unordered_set<string> suppressed_rdftypes;
 
  public:
   DataStore();
@@ -390,7 +390,7 @@ class DataStore {
    * Prints out the contents of the resolver to STDOUT. Used for debugging.
    *
    */
-  void Dump(bool verbose=true);
+  void Dump(bool verbose = true);
 
   /**
      This is the main entry point into the AFF4 library. Callers use this factory
@@ -441,7 +441,7 @@ class DataStore {
   AFF4ScopedPtr<T> AFF4FactoryOpen(const URN &urn) {
     // It is in the cache, just return it.
     AFF4Object *cached_obj = ObjectCache.Get(urn);
-    if(cached_obj) {
+    if (cached_obj) {
       LOG(INFO) << "AFF4FactoryOpen (cached): " <<
           cached_obj->urn.SerializeToString();
 
@@ -506,7 +506,6 @@ class DataStore {
     This data store can be initialized and persisted into a Yaml file.
 */
 class MemoryDataStore: public DataStore {
-
  private:
   // Store a collection of AFF4_Attributes at each URN.
   unordered_map<string, AFF4_Attributes> store;

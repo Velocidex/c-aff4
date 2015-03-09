@@ -53,7 +53,6 @@ class ZipTest: public ::testing::Test {
       segment2->Write(data2);
     };
   };
-
 };
 
 TEST_F(ZipTest, CreateMember) {

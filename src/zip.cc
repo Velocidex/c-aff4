@@ -414,6 +414,7 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
 
   // Now copy the cd_stream into the backing_store in one write operation.
   cd_stream.Seek(0, SEEK_SET);
+
   return cd_stream.CopyToStream(
       backing_store, cd_stream.Size(), empty_progress);
 };
@@ -483,6 +484,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
 
 
 ZipFileSegment::ZipFileSegment(DataStore *resolver): StringIO(resolver) {}
+
 ZipFileSegment::ZipFileSegment(string filename, ZipFile &owner) {
   resolver = owner.resolver;
   owner_urn = owner.urn;
@@ -490,6 +492,20 @@ ZipFileSegment::ZipFileSegment(string filename, ZipFile &owner) {
 
   LoadFromZipFile(owner);
 };
+
+AFF4ScopedPtr<ZipFileSegment> ZipFileSegment::NewZipFileSegment(
+    DataStore *resolver, const URN &segment_urn, const URN &volume_urn) {
+  AFF4ScopedPtr<ZipFile> volume = resolver->AFF4FactoryOpen<ZipFile>(
+      volume_urn);
+
+  if (!volume)
+    return AFF4ScopedPtr<ZipFileSegment>();        /** Volume not known? */
+
+  string member_filename = volume->_member_name_for_urn(segment_urn);
+
+  return volume->CreateZipSegment(member_filename);
+};
+
 
 AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
   string member_name = owner._member_name_for_urn(urn);

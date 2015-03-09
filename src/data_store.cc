@@ -26,12 +26,18 @@ specific language governing permissions and limitations under the License.
 # include <yaml-cpp/yaml.h>
 
 AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
-  YAML::Emitter out;
+  // Right now this produces crashes on windows. We dont know why exactly.
+  return NOT_IMPLEMENTED;
 
-  out << YAML::BeginMap;
+  YAML::Emitter out;
+  YAML::Node node;
+  int subject_statements = 0;
+
   for (const auto &it : store) {
     URN subject(it.first);
     URN type;
+    YAML::Node subject_node;
+    int emitted_statements = 0;
 
     // Skip this URN if it is in the suppressed_rdftypes set.
     if (Get(subject, AFF4_TYPE, type) == STATUS_OK) {
@@ -41,26 +47,34 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
       };
     };
 
-    out << YAML::Key << it.first;
-
-    out << YAML::Value << YAML::BeginMap;
     for (const auto &attr_it : it.second) {
       URN predicate(attr_it.first);
 
       // Volatile predicates are suppressed.
-      if (!verbose && 0 == predicate.value.compare(
+      if (!verbose && 0 == predicate.SerializeToString().compare(
              0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
         continue;
       };
 
-      out << YAML::Key << attr_it.first;
-      out << YAML::Value << attr_it.second->SerializeToString();
+      LOG(ERROR) << attr_it.first << " : " << attr_it.second->SerializeToString();
+      subject_node[attr_it.first] = attr_it.second->SerializeToString();
+      emitted_statements++;
     };
-    out << YAML::EndMap;
-  };
-  out << YAML::EndMap;
 
-  output.Write(out.c_str());
+    if (emitted_statements) {
+      LOG(ERROR) << "Node : " << subject.SerializeToString() << subject_node.size();
+      node[subject.SerializeToString()] = subject_node;
+      subject_statements++;
+    };
+  };
+
+  // Unfortunately if we try to dump and empty node yaml-cpp will crash.
+  if (subject_statements) {
+    out << node;
+    output.Write(out.c_str());
+
+    LOG(ERROR) << "Yaml output: " << out.c_str();
+  };
 
   return STATUS_OK;
 };
@@ -494,13 +508,23 @@ AFF4Status AFF4ObjectCache::Trim_() {
     // The back of the list is the oldest one.
     AFF4ObjectCacheEntry *older_item = lru_list.prev;
 
-    LOG(INFO) << "Trimming " << older_item->key << " from cache";
-
-    // Remove the map entry.
+    // We now want to flush the object before destroying it. But before we do we
+    // need to gain ownership of the object to ensure that it will not be
+    // trimmed again due to a cascading operation. We therefore place it into
+    // the in_use map and remove from the lru_map.
     lru_map.erase(older_item->key);
+    older_item->unlink();
 
-    // Remove from the list
+    older_item->use_count += 1;
+    in_use[older_item->key] = older_item;
+
+    // Now flush the object.
     res = older_item->object->Flush();
+
+    // Remove from the in_use map and delete it.
+    in_use.erase(older_item->key);
+    older_item->use_count--;
+
     delete older_item;
   };
 

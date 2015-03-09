@@ -133,6 +133,19 @@ class ZipFileSegment: public StringIO {
   URN owner_urn;                        /**< The zip file who owns us. */
 
  public:
+  /**
+   * A convenience function to add a new segment to an existing ZipFile volume.
+   *
+   * @param resolver
+   * @param segment_urn
+   * @param volume_urn
+   *
+   * @return An AFF4ScopedPtr reference to the new segment or NULL if the
+   * segment could not be created.
+   */
+  static AFF4ScopedPtr<ZipFileSegment> NewZipFileSegment(
+      DataStore *resolver, const URN &segment_urn, const URN &volume_urn);
+
   ZipFileSegment(DataStore *resolver);
   ZipFileSegment(string filename, ZipFile &zipfile);
 

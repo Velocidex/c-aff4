@@ -87,6 +87,9 @@ class BasicImager {
   // As actions are executed they are added to this.
   std::set<string> actions_run;
 
+  // The list of input streams we copy (from the --inputs flag).
+  std::vector<string> inputs;
+
   virtual string GetName() {
     return "AFF4 Imager";
   };
@@ -102,7 +105,8 @@ class BasicImager {
   virtual AFF4Status handle_Verbose();
   virtual AFF4Status handle_aff4_volumes();
   virtual AFF4Status handle_view();
-  virtual AFF4Status handle_input();
+  virtual AFF4Status parse_input();
+  virtual AFF4Status process_input();
   virtual AFF4Status handle_export();
   virtual AFF4Status handle_compression();
 
@@ -153,6 +157,17 @@ class BasicImager {
   T *GetArg(string name) {
     return dynamic_cast<T *>(Get(name));
   };
+
+  /**
+   * Expands the glob into a list of filenames that would match. This
+   * functionality is especially required on windows where users have no shell
+   * expansion.
+   *
+   * @param glob
+   *
+   * @return expanded filenames.
+   */
+  vector<string> GlobFilename(string glob) const;
 
  public:
   /**

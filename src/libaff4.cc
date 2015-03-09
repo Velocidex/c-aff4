@@ -207,18 +207,18 @@ string aff4_sprintf(string fmt, ...) {
   int size = fmt.size() * 2 + 50;
 
   while (1) {
-    char buffer[size + 1];
+    unique_ptr<char[]> buffer(new char[size + 1]);
 
     // Null terminate the buffer (important on MSVC which does not always
     // terminate).
-    buffer[size] = 0;
+    buffer.get()[size] = 0;
 
     va_start(ap, fmt);
-    int n = vsnprintf(buffer, size, fmt.c_str(), ap);
+    int n = vsnprintf(buffer.get(), size, fmt.c_str(), ap);
     va_end(ap);
 
     if (n > -1 && n < size) {  // Everything worked
-      return string(buffer, n);
+      return string(buffer.get(), n);
     };
 
     if (n > -1)  // Needed size returned
@@ -500,7 +500,7 @@ string FileBackedObject::Read(size_t length) {
 
   readptr += res;
 
-  return string(result, res);
+  return string(result.get(), res);
 };
 
 int FileBackedObject::Write(const char *data, int length) {
