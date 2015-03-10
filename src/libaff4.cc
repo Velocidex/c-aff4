@@ -390,9 +390,6 @@ string FileBackedObject::Read(size_t length) {
 };
 
 int FileBackedObject::Write(const char *data, int length) {
-  if (readptr > 30*1024*1024)
-    return IO_ERROR;
-
   // Dont even try to write on files we are not allowed to write on.
   if (!properties.writable)
     return IO_ERROR;
@@ -504,9 +501,6 @@ string FileBackedObject::Read(size_t length) {
 };
 
 int FileBackedObject::Write(const char *data, int length) {
-  if (readptr > 20*1024*1024)
-    return IO_ERROR;
-
   if (!properties.writable) {
     return IO_ERROR;
   };
