@@ -361,27 +361,28 @@ URN URN::NewURNFromOSFilename(string filename, bool windows_filename,
    *
    * http://blogs.msdn.com/b/ie/archive/2006/12/06/file-uris-in-windows.aspx
   */
-  if(windows_filename) {
+  if (windows_filename) {
 #ifdef _WIN32
     char url[INTERNET_MAX_URL_LENGTH];
     DWORD url_length = sizeof(url);
     HRESULT res;
     res = UrlCreateFromPath(filename.c_str(), url, &url_length, 0);
 
-    if(res == S_FALSE || res == S_OK) {
+    if (res == S_FALSE || res == S_OK) {
       result.value.assign(url, url_length);
 
       // Failing the MS API we fallback to the urlparser.
     } else
 #endif
     {
-      if(uriWindowsFilenameToUriStringA(filename.c_str(), tmp) == URI_SUCCESS) {
+      if (uriWindowsFilenameToUriStringA(
+              filename.c_str(), tmp) == URI_SUCCESS) {
         result.value = tmp;
       };
     };
 
     // Unix filename
-  } else if(uriUnixFilenameToUriStringA(filename.c_str(), tmp) ==
+  } else if (uriUnixFilenameToUriStringA(filename.c_str(), tmp) ==
             URI_SUCCESS) {
     result.value = tmp;
   };
@@ -391,13 +392,25 @@ URN URN::NewURNFromOSFilename(string filename, bool windows_filename,
 
 
 URN URN::NewURNFromFilename(string filename, bool absolute_path) {
+#ifdef _WIN32
+  bool windows_filename = true;
+#else
+  bool windows_filename = false;
+
+  // FIXME: Due to a bug in uriparser handling of relative paths, we currently
+  // force all UNIX path names to be absolute.
+  absolute_path = true;
+#endif
+
   // Get the absolute path of the filename.
   if (absolute_path) {
     filename = abspath(filename);
+    if (filename[0] != '/') {
+      windows_filename = true;
+    };
   }
 
-  return NewURNFromOSFilename(filename, filename[0] != '/',
-                              absolute_path);
+  return NewURNFromOSFilename(filename, windows_filename, absolute_path);
 };
 
 string XSDInteger::SerializeToString() const {

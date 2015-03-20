@@ -31,8 +31,8 @@ STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
 STATIC_LINKERLDFLAGS = -all-static
 endif
 
-LIBS = -lz -lraptor2 -lpcre++ -lglog -lsnappy -lpthread \
-	-luriparser $(UNIXLDFLAGS)
+LIBS = -lz -lraptor2 -lpcre++ -lglog -lsnappy \
+	-luriparser $(UNIXLDFLAGS) -lpthread
 
 if HAVE_LIBYAML_CPP
 LIBS_LIBYAML_CPP = -lyaml-cpp

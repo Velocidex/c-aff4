@@ -102,7 +102,7 @@ class BasicImager {
 
   std::unique_ptr<TCLAP::CmdLine> cmd;
 
-  virtual AFF4Status handle_Verbose();
+  virtual AFF4Status handle_Debug();
   virtual AFF4Status handle_aff4_volumes();
   virtual AFF4Status handle_view();
   virtual AFF4Status parse_input();
@@ -182,8 +182,11 @@ class BasicImager {
 
   virtual AFF4Status RegisterArgs() {
     AddArg(new TCLAP::SwitchArg("V", "view", "View AFF4 metadata", false));
-    AddArg(new TCLAP::SwitchArg("v", "verbose", "Display more verbose logging",
+    AddArg(new TCLAP::SwitchArg("d", "debug", "Display debugging logging",
                             false));
+
+    AddArg(new TCLAP::SwitchArg(
+        "v", "verbose", "Display more verbose information", false));
 
     AddArg(new TCLAP::SwitchArg(
         "t", "truncate", "Truncate the output file. Normally volumes and "

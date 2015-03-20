@@ -255,8 +255,8 @@ INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
 LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBOBJS = @LIBOBJS@
-LIBS = -lz -lraptor2 -lpcre++ -lglog -lsnappy -lpthread \
-	-luriparser $(UNIXLDFLAGS)
+LIBS = -lz -lraptor2 -lpcre++ -lglog -lsnappy \
+	-luriparser $(UNIXLDFLAGS) -lpthread
 
 LIBTOOL = @LIBTOOL@
 LIBTOOL_DEPS = @LIBTOOL_DEPS@

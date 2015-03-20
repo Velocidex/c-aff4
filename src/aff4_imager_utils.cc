@@ -146,8 +146,8 @@ AFF4Status BasicImager::ParseArgs() {
   if (result == CONTINUE && Get("compression")->isSet())
     result = handle_compression();
 
-  if (result == CONTINUE && Get("verbose")->isSet())
-    result = handle_Verbose();
+  if (result == CONTINUE && Get("debug")->isSet())
+    result = handle_Debug();
 
   if (result == CONTINUE && Get("aff4_volumes")->isSet())
     result = handle_aff4_volumes();
@@ -171,7 +171,7 @@ AFF4Status BasicImager::ProcessArgs() {
 };
 
 
-AFF4Status BasicImager::handle_Verbose() {
+AFF4Status BasicImager::handle_Debug() {
   google::SetStderrLogging(google::GLOG_INFO);
 
   return CONTINUE;
@@ -316,10 +316,12 @@ AFF4Status BasicImager::handle_export() {
       output_urn.value << "\n";
   AFF4Status res = ExtractStream(
       resolver, export_urn, output_urn, Get("truncate")->isSet());
-  if (res == STATUS_OK)
-    return CONTINUE;
 
-  actions_run.insert("export");
+  if (res == STATUS_OK) {
+    actions_run.insert("export");
+    return CONTINUE;
+  };
+
   return res;
 };
 
@@ -437,10 +439,25 @@ vector<string> BasicImager::GlobFilename(string glob) const {
   return result;
 };
 #else
+#include <glob.h>
 
-vector<string> BasicImager::GlobFilename(string glob) const {
+vector<string> BasicImager::GlobFilename(string glob_expression) const {
   vector<string> result;
-  result.push_back(glob);
+  glob_t glob_data;
+
+  int res = glob(glob_expression.c_str(),
+                 GLOB_MARK|GLOB_BRACE|GLOB_TILDE,
+                 NULL,  // errfunc
+                 &glob_data);
+
+  if (res == GLOB_NOSPACE)
+    return result;
+
+  for (int i = 0; i < glob_data.gl_pathc; i++) {
+    result.push_back(glob_data.gl_pathv[i]);
+  };
+
+  globfree(&glob_data);
 
   return result;
 };
