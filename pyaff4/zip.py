@@ -15,6 +15,7 @@
 """An implementation of the ZipFile based AFF4 volume."""
 
 import logging
+import urllib
 import urlparse
 import re
 import string
@@ -44,7 +45,8 @@ class FileBackedObject(aff4.AFF4Stream):
         else:
             flags = "rb"
 
-        self.fd = open(components.path, flags)
+        filename = self.urn.ToFilename()
+        self.fd = open(filename, flags)
 
     def Read(self, length):
         self.fd.seek(self.readptr)
@@ -134,7 +136,6 @@ class ZipFileSegment(FileBackedObject):
                 self.fd = StringIO.StringIO(owner.zip_handle.read(member_name))
 
         except KeyError:
-            import pdb; pdb.post_mortem()
             self.fd = StringIO.StringIO("")
 
     def Flush(self):

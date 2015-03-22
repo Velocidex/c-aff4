@@ -16,6 +16,10 @@
 import os
 import urlparse
 import rdflib
+import urllib
+
+import posixpath
+
 from pyaff4 import registry
 
 # pylint: disable=protected-access
@@ -104,6 +108,15 @@ class XSDInteger(RDFValue):
 
 class URN(RDFValue):
 
+    @classmethod
+    def FromFileName(cls, filename):
+        return cls("file:" + urllib.pathname2url(filename))
+
+
+    def ToFilename(self):
+        if self.value.startswith("file:"):
+            return urllib.url2pathname(self.value[5:])
+
     def GetRaptorTerm(self):
         return rdflib.URIRef(self.SerializeToString())
 
@@ -122,7 +135,7 @@ class URN(RDFValue):
 
     def Parse(self):
         components = urlparse.urlparse(self.value)
-        normalized_path = os.path.normpath(components.path)
+        normalized_path = posixpath.normpath(components.path)
         if normalized_path == ".":
             normalized_path = ""
 
@@ -134,7 +147,7 @@ class URN(RDFValue):
 
     def Append(self, component):
         components = self.Parse()
-        new_path = os.path.normpath(os.path.join(
+        new_path = posixpath.normpath(posixpath.join(
             components.path, component))
 
         components = components._replace(path=new_path)
