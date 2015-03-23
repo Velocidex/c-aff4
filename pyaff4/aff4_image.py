@@ -13,7 +13,11 @@
 # the License.
 
 """This module implements the standard AFF4 Image."""
-import snappy
+try:
+    import snappy
+except ImportError:
+    snappy = None
+
 import struct
 import zlib
 
@@ -83,7 +87,7 @@ class AFF4Image(aff4.AFF4Stream):
         bevy_offset = len(self.bevy)
         if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
             compressed_chunk = zlib.compress(chunk)
-        elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
+        elif snappy and self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
             compressed_chunk = snappy.compress(chunk)
         elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
             compressed_chunk = chunk
@@ -228,7 +232,7 @@ class AFF4Image(aff4.AFF4Stream):
         if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
             return zlib.decompress(cbuffer)
 
-        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
+        if snappy and self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
             return snappy.decompress(cbuffer)
 
         if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:

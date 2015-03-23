@@ -38,7 +38,7 @@ class NoseTestCommand(TestCommand):
 setup(
     name='PyAFF4',
     long_description=long_description,
-    version='0.12',
+    version='0.13',
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
     author_email='scudette@gmail.com',
@@ -49,6 +49,5 @@ setup(
     install_requires=[
         "rdflib >= 4.1",
         "intervaltree >= 2.0.4",
-        "python-snappy >= 0.5",
     ],
 )
