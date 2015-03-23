@@ -16,6 +16,12 @@
 from distutils.core import setup
 from setuptools.command.test import test as TestCommand
 
+try:
+    with open('../README.md') as file:
+        long_description = file.read()
+except IOError:
+    long_description = ""
+
 
 class NoseTestCommand(TestCommand):
     def finalize_options(self):
@@ -31,11 +37,12 @@ class NoseTestCommand(TestCommand):
 
 setup(
     name='PyAFF4',
-    version='0.1',
+    long_description=long_description,
+    version='0.12',
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
     author_email='scudette@gmail.com',
-    url='https://github.com/google/aff4',
+    url='https://www.aff4.org/',
     packages=['pyaff4'],
     package_dir={"pyaff4": "."},
     cmdclass={'test': NoseTestCommand},
