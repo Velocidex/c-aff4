@@ -62,20 +62,31 @@ class AFF4Image(aff4.AFF4Stream):
             self.urn, lexicon.AFF4_IMAGE_COMPRESSION) or
                                lexicon.AFF4_IMAGE_COMPRESSION_ZLIB)
 
+        # A buffer for overlapped writes which do not fit into a chunk.
         self.buffer = ""
-        self.bevy = ""
-        self.bevy_index = ""
+
+        # Compressed chunks in the bevy.
+        self.bevy = []
+
+        # Length of all chunks in the bevy.
+        self.bevy_length = 0
+
+        # List of bevy offsets.
+        self.bevy_index = []
         self.chunk_count_in_bevy = 0
         self.bevy_number = 0
 
     def Write(self, data):
         self.MarkDirty()
         self.buffer += data
+        idx = 0
 
-        while len(self.buffer) > self.chunk_size:
-            chunk = self.buffer[:self.chunk_size]
-            self.buffer = self.buffer[self.chunk_size:]
+        while len(self.buffer) - idx > self.chunk_size:
+            chunk = self.buffer[idx:idx+self.chunk_size]
+            idx += self.chunk_size
             self.FlushChunk(chunk)
+
+        self.buffer = self.buffer[idx:]
 
         self.readptr += len(data)
         if self.readptr > self.size:
@@ -84,7 +95,8 @@ class AFF4Image(aff4.AFF4Stream):
         return len(data)
 
     def FlushChunk(self, chunk):
-        bevy_offset = len(self.bevy)
+        bevy_offset = self.bevy_length
+
         if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
             compressed_chunk = zlib.compress(chunk)
         elif snappy and self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
@@ -92,8 +104,9 @@ class AFF4Image(aff4.AFF4Stream):
         elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
             compressed_chunk = chunk
 
-        self.bevy_index += struct.pack("<I", bevy_offset)
-        self.bevy += compressed_chunk
+        self.bevy_index.append(bevy_offset)
+        self.bevy.append(compressed_chunk)
+        self.bevy_length += len(compressed_chunk)
         self.chunk_count_in_bevy += 1
 
         if self.chunk_count_in_bevy >= self.chunks_per_segment:
@@ -113,19 +126,24 @@ class AFF4Image(aff4.AFF4Stream):
 
         with self.resolver.AFF4FactoryOpen(volume_urn) as volume:
             with volume.CreateMember(bevy_index_urn) as bevy_index:
-                bevy_index.Write(self.bevy_index)
+                bevy_index.Write(
+                    struct.pack("<" + "L" * len(self.bevy_index),
+                                *self.bevy_index))
 
             with volume.CreateMember(bevy_urn) as bevy:
-                bevy.Write(self.bevy)
+                bevy.Write("".join(self.bevy))
 
             # We dont need to hold these in memory any more.
             self.resolver.Close(bevy_index)
             self.resolver.Close(bevy)
 
+        # In Python it is more efficient to keep a list of chunks and then join
+        # them at the end in one operation.
         self.chunk_count_in_bevy = 0
         self.bevy_number += 1
-        self.bevy = ""
-        self.bevy_index = ""
+        self.bevy = []
+        self.bevy_index = []
+        self.bevy_length = 0
 
     def Flush(self):
         if self.IsDirty():
