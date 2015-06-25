@@ -140,11 +140,13 @@ class AFF4Map(aff4.AFF4Stream):
         for interval in sorted(self.tree[self.readptr:self.readptr+length]):
             range = interval.data
 
+            # The start of the range is ahead of us - we pad with zeros.
             if range.map_offset > self.readptr:
-                padding = range.map_offset - self.readptr
+                padding = min(length, range.map_offset - self.readptr)
                 result += "\x00" * padding
                 self.readptr += padding
                 length -= padding
+                continue
 
             target = self.targets[range.target_id]
             length_to_read_in_target = min(length, range.map_end - self.readptr)

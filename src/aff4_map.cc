@@ -64,12 +64,12 @@ AFF4Status AFF4Map::LoadFromURN() {
       while (map_stream->ReadIntoBuffer(
                  &range, sizeof(range)) == sizeof(range)) {
         map[range.map_end()] = range;
-      };
-    };
-  };
+      }
+    }
+  }
 
   return STATUS_OK;
-};
+}
 
 string AFF4Map::Read(size_t length) {
   if (length > AFF4_MAX_READ_LEN)
@@ -85,17 +85,18 @@ string AFF4Map::Read(size_t length) {
     if (map_it == map.end()) {
       result.resize(length);
       return result;
-    };
+    }
 
     Range range = map_it->second;
-    aff4_off_t length_to_start_of_range = range.map_offset - readptr;
+    aff4_off_t length_to_start_of_range = std::min(
+        (aff4_off_t)length, range.map_offset - readptr);
     if (length_to_start_of_range > 0) {
       // Null pad it.
       result.resize(result.size() + length_to_start_of_range);
       length -= length_to_start_of_range;
       readptr += length_to_start_of_range;
       continue;
-    };
+    }
 
     // The readptr is inside a range.
     URN target = targets[range.target_id];
@@ -123,7 +124,7 @@ string AFF4Map::Read(size_t length) {
     result += target_stream->Read(length_to_read_in_target);
     readptr += length_to_read_in_target;
     length -= length_to_read_in_target;
-  };
+  }
 
   return result;
 }
@@ -133,7 +134,7 @@ aff4_off_t AFF4Map::Size() {
   auto it = map.end();
   if (it == map.begin()) {
     return 0;
-  };
+  }
 
   it--;
   return it->second.map_end();
@@ -163,7 +164,7 @@ static std::vector<Range> _MergeRanges(std::vector<Range> &ranges) {
 
     last_range_set = true;
     last_range = range;
-  };
+  }
 
   // Flush the last range and start counting again.
   if (last_range_set) {
@@ -171,7 +172,7 @@ static std::vector<Range> _MergeRanges(std::vector<Range> &ranges) {
   }
 
   return result;
-};
+}
 
 
 /**
@@ -248,7 +249,7 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
     targets.push_back(key);
   } else {
     subrange.target_id = it->second;
-  };
+  }
 
   // We want to merge with the previous range. Therefore we add it to both the
   // remove and add lists. If merging is possible it will be modified in the
@@ -259,8 +260,8 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
       map_it--;
       to_remove.push_back(map_it->second);
       to_add.push_back(map_it->second);
-    };
-  };
+    }
+  }
 
   // Phase 1: Split new range into subranges.
   while (length > 0) {
@@ -278,7 +279,7 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
 
       length = 0;
       continue;
-    };
+    }
 
     Range old_range = map_it->second;
 
@@ -296,7 +297,7 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
       target_offset += subrange.length;
       length -= subrange.length;
       continue;
-    };
+    }
 
     // If we get here, the next subrange overlaps with the old range. First
     // split the subrange to consume as much as the old range as possible but
@@ -325,14 +326,14 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
 
     if (pre_old_range.length > 0) {
       to_add.push_back(pre_old_range);
-    };
+    }
 
     to_add.push_back(subrange);
 
     if (post_old_range.length > 0) {
       to_add.push_back(post_old_range);
-    };
-  };
+    }
+  }
 
   // We want to merge with the next range after the new subranges. We add and
   // remove the next existing range in the map found after the last sub range to
@@ -344,8 +345,8 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
     if (map_it != map.end()) {
       to_remove.push_back(map_it->second);
       to_add.push_back(map_it->second);
-    };
-  };
+    }
+  }
 
   // Phase 2: Merge subranges together. All the newly added ranges will be
   // merged into the smallest number of ranges possible. We then update the map
@@ -354,17 +355,17 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
     to_add = _MergeRanges(to_add);
     for (Range it : to_remove) {
       map.erase(it.map_end());
-    };
+    }
 
     for (Range it : to_add) {
       map[it.map_end()] = it;
-    };
-  };
+    }
+  }
 
   MarkDirty();
 
   return STATUS_OK;
-};
+}
 
 AFF4Status AFF4Map::Flush() {
   if (IsDirty()) {
@@ -373,14 +374,14 @@ AFF4Status AFF4Map::Flush() {
     AFF4Status res = resolver->Get(urn, AFF4_STORED, volume_urn);
     if (res != STATUS_OK) {
       return res;
-    };
+    }
 
     AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
         volume_urn);
 
     if (!volume) {
       return IO_ERROR;
-    };
+    }
 
     AFF4ScopedPtr<AFF4Stream> map_stream = volume->CreateMember(
         urn.Append("map"));
@@ -392,7 +393,7 @@ AFF4Status AFF4Map::Flush() {
       if (map_stream->Write(
               reinterpret_cast<char *>(range_it), sizeof(Range)) < 0)
         return IO_ERROR;
-    };
+    }
 
     AFF4ScopedPtr<AFF4Stream> idx_stream = volume->CreateMember(
         urn.Append("idx"));
@@ -401,11 +402,11 @@ AFF4Status AFF4Map::Flush() {
 
     for (auto it : targets) {
       idx_stream->sprintf("%s\n", it.SerializeToString().c_str());
-    };
-  };
+    }
+  }
 
   return AFF4Stream::Flush();
-};
+}
 
 
 void AFF4Map::Dump() {
@@ -413,25 +414,25 @@ void AFF4Map::Dump() {
     LOG(INFO) << "Key:" << it.first << " map_offset=" << it.second.map_offset <<
         " target_offset=" << it.second.target_offset << " length=" <<
         it.second.length << " target_id=" << it.second.target_id;
-  };
-};
+  }
+}
 
 
 std::vector<Range> AFF4Map::GetRanges() {
   vector<Range> result;
   for (auto it : map) {
     result.push_back(it.second);
-  };
+  }
 
   return result;
-};
+}
 
 
 void AFF4Map::Clear() {
   map.clear();
   target_idx_map.clear();
   targets.clear();
-};
+}
 
 
 int AFF4Map::Write(const char *data, int length) {
@@ -442,7 +443,7 @@ int AFF4Map::Write(const char *data, int length) {
     target = urn.Append("data");
   } else {
     target = last_target;
-  };
+  }
 
   AFF4ScopedPtr<AFF4Stream> stream = resolver->AFF4FactoryOpen<AFF4Stream>(
       target);
@@ -453,7 +454,7 @@ int AFF4Map::Write(const char *data, int length) {
     if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
       LOG(INFO) << "Map not stored in a volume.";
       return IO_ERROR;
-    };
+    }
 
     // Create a new stream and assign to the scoped pointer.
     stream.reset(AFF4Image::NewAFF4Image(
@@ -461,8 +462,8 @@ int AFF4Map::Write(const char *data, int length) {
     if (!stream) {
       LOG(INFO) << "Unable to create backing stream.";
       return IO_ERROR;
-    };
-  };
+    }
+  }
 
   AddRange(readptr, stream->Size(), length, target);
 
@@ -474,7 +475,7 @@ int AFF4Map::Write(const char *data, int length) {
   readptr += length;
 
   return length;
-};
+}
 
 
 static AFF4Registrar<AFF4Map> r1(AFF4_MAP_TYPE);

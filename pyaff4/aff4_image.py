@@ -13,6 +13,7 @@
 # the License.
 
 """This module implements the standard AFF4 Image."""
+import logging
 try:
     import snappy
 except ImportError:
@@ -25,6 +26,9 @@ from pyaff4 import aff4
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
+
+
+LOGGER = logging.getLogger("pyaff4")
 
 
 class AFF4Image(aff4.AFF4Stream):
@@ -99,7 +103,8 @@ class AFF4Image(aff4.AFF4Stream):
 
         if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
             compressed_chunk = zlib.compress(chunk)
-        elif snappy and self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
+        elif (snappy and self.compression ==
+              lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY):
             compressed_chunk = snappy.compress(chunk)
         elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
             compressed_chunk = chunk
@@ -174,7 +179,12 @@ class AFF4Image(aff4.AFF4Stream):
 
         initial_chunk_offset = self.readptr % self.chunk_size
         # We read this many full chunks at once.
-        chunks_to_read = length / self.chunk_size + 1
+        chunks_to_read, extra = divmod(length, self.chunk_size)
+
+        # We need a bit of data from the last chunk, read an extra chunk.
+        if extra:
+            chunks_to_read += 1
+
         chunk_id = self.readptr / self.chunk_size
         result = ""
 
@@ -231,9 +241,12 @@ class AFF4Image(aff4.AFF4Stream):
         chunk_id_in_bevy = chunk_id % self.chunks_per_segment
 
         if index_size == 0:
+            LOGGER.error("Index empty in %s: %s", self.urn, chunk_id)
             raise IOError("Index empty in %s: %s" % (self.urn, chunk_id))
         # The segment is not completely full.
         if chunk_id_in_bevy >= index_size:
+            LOGGER.error("Bevy index too short in %s: %s",
+                         self.urn, chunk_id)
             raise IOError("Bevy index too short in %s: %s" % (
                 self.urn, chunk_id))
 

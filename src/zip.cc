@@ -53,7 +53,7 @@ AFF4ScopedPtr<ZipFile> ZipFile::NewZipFile(
 
     if (result.get())
       return result;
-  };
+  }
 
   // We need to create an empty temporary object to get a new URN.
   unique_ptr<ZipFile> self(new ZipFile(resolver));
@@ -65,7 +65,7 @@ AFF4ScopedPtr<ZipFile> ZipFile::NewZipFile(
       self->urn);
 
   return result;
-};
+}
 
 
 AFF4Status ZipFile::LoadTurtleMetadata() {
@@ -82,24 +82,24 @@ AFF4Status ZipFile::LoadTurtleMetadata() {
     resolver->Set(backing_store_urn, AFF4_CONTAINS, new URN(urn));
 
     return res;
-  };
+  }
 
   return NOT_FOUND;
-};
+}
 
 
 AFF4Status ZipFile::LoadFromURN() {
   if (resolver->Get(urn, AFF4_STORED, backing_store_urn) != STATUS_OK) {
     return NOT_FOUND;
-  };
+  }
 
   // Parse the ZIP file.
   if (parse_cd() == STATUS_OK) {
     LoadTurtleMetadata();
-  };
+  }
 
   return STATUS_OK;
-};
+}
 
 
 // Locate the Zip file central directory.
@@ -112,14 +112,14 @@ AFF4Status ZipFile::parse_cd() {
     LOG(ERROR) << "Unable to open backing URN " <<
         backing_store_urn.SerializeToString().c_str();
     return IO_ERROR;
-  };
+  }
 
   // Find the End of Central Directory Record - We read about 4k of
   // data and scan for the header from the end, just in case there is
   // an archive comment appended to the end.
   if (backing_store->Seek(-BUFF_SIZE, SEEK_END) != STATUS_OK) {
     return IO_ERROR;
-  };
+  }
 
   aff4_off_t ecd_real_offset = backing_store->Tell();
   string buffer = backing_store->Read(BUFF_SIZE);
@@ -127,7 +127,7 @@ AFF4Status ZipFile::parse_cd() {
   // Not enough data to contain an EndCentralDirectory
   if (buffer.size() < sizeof(EndCentralDirectory)) {
     return PARSING_ERROR;
-  };
+  }
 
   // Scan the buffer backwards for an End of Central Directory magic
   for (int i = buffer.size() - sizeof(EndCentralDirectory); i > 0; i--) {
@@ -136,13 +136,13 @@ AFF4Status ZipFile::parse_cd() {
       ecd_real_offset += i;
       LOG(INFO) << "Found ECD at " << std::hex << ecd_real_offset;
       break;
-    };
-  };
+    }
+  }
 
   if (end_cd->magic != 0x6054b50) {
     LOG(INFO) << "Unable to find EndCentralDirectory.";
     return PARSING_ERROR;
-  };
+  }
 
   // Fetch the volume comment.
   if (end_cd->comment_len > 0) {
@@ -165,8 +165,8 @@ AFF4Status ZipFile::parse_cd() {
       resolver->Set(urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE));
       resolver->Set(urn, AFF4_STORED, new URN(backing_store_urn));
       resolver->Set(backing_store_urn, AFF4_CONTAINS, new URN(urn));
-    };
-  };
+    }
+  }
 
   aff4_off_t directory_offset = end_cd->offset_of_cd;
   directory_number_of_entries = end_cd->total_entries_in_cd;
@@ -177,7 +177,7 @@ AFF4Status ZipFile::parse_cd() {
     // offsets. This is non zero when the zip file was appended to another file.
     global_offset = (
         // Real ECD offset.
-        ecd_real_offset - sizeof(EndCentralDirectory) - end_cd->size_of_cd -
+        ecd_real_offset - end_cd->size_of_cd -
 
         // Claimed CD offset.
         directory_offset);
@@ -197,7 +197,7 @@ AFF4Status ZipFile::parse_cd() {
         locator.number_of_disks != 1) {
       LOG(INFO) << "Zip64CDLocator invalid or not supported.";
       return PARSING_ERROR;
-    };
+    }
 
     // Although it may appear that we can use the Zip64CDLocator to locate the
     // Zip64EndCD record via it's offset_of_cd record this is not quite so. If
@@ -217,7 +217,7 @@ AFF4Status ZipFile::parse_cd() {
           locator_real_offset - sizeof(Zip64EndCD);
 
       return PARSING_ERROR;
-    };
+    }
 
     directory_offset = end_cd.offset_of_cd;
     directory_number_of_entries = end_cd.number_of_entries_in_volume;
@@ -231,7 +231,7 @@ AFF4Status ZipFile::parse_cd() {
         directory_offset);
 
     LOG(INFO) << "Global offset: " << std::hex << global_offset;
-  };
+  }
 
   // Now iterate over the directory and read all the ZipInfo structs.
   aff4_off_t entry_offset = directory_offset;
@@ -246,7 +246,7 @@ AFF4Status ZipFile::parse_cd() {
           "invalid.";
 
       return PARSING_ERROR;
-    };
+    }
 
     unique_ptr<ZipInfo> zip_info(new ZipInfo());
 
@@ -274,9 +274,9 @@ AFF4Status ZipFile::parse_cd() {
           zip_info->file_size = extra.file_size;
           zip_info->compress_size = extra.compress_size;
           break;
-        };
-      };
-    };
+        }
+      }
+    }
 
     if (zip_info->local_header_offset >= 0) {
       LOG(INFO) << "Found file " << zip_info->filename.c_str() << " @ " <<
@@ -290,17 +290,17 @@ AFF4Status ZipFile::parse_cd() {
       resolver->Set(member_urn, AFF4_STORED, new URN(urn));
 
       members[zip_info->filename] = std::move(zip_info);
-    };
+    }
 
     // Go to the next entry.
     entry_offset += (sizeof(entry) +
                      entry.file_name_length +
                      entry.extra_field_len +
                      entry.file_comment_length);
-  };
+  }
 
   return STATUS_OK;
-};
+}
 
 AFF4Status ZipFile::Flush() {
   // If the zip file was changed, re-write the central directory.
@@ -310,8 +310,8 @@ AFF4Status ZipFile::Flush() {
       AFF4ScopedPtr<AFF4Object> obj = resolver->CacheGet<AFF4Object>(it);
       if (obj.get()) {
         obj->Flush();
-      };
-    };
+      }
+    }
 
     // Update the resolver into the zip file.
     {
@@ -340,7 +340,7 @@ AFF4Status ZipFile::Flush() {
       resolver->DumpToYaml(*yaml_segment);
       yaml_segment->Flush();
 #endif
-    };
+    }
 
     AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
       AFF4Stream>(backing_store_urn);
@@ -351,10 +351,10 @@ AFF4Status ZipFile::Flush() {
     AFF4Status res = write_zip64_CD(*backing_store);
     if (res != STATUS_OK)
       return res;
-  };
+  }
 
   return AFF4Volume::Flush();
-};
+}
 
 /** This writes a zip64 end of central directory and a central
     directory locator */
@@ -372,7 +372,7 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
     LOG(ERROR) << "Unable to write EOCD on non-seekable stream: " <<
         urn.SerializeToString();
     return IO_ERROR;
-  };
+  }
 
   // The real start of the ECD.
   aff4_off_t ecd_real_offset = backing_store.Tell();
@@ -383,7 +383,7 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
     ZipInfo *zip_info = it->second.get();
     LOG(INFO) << "Writing CD entry for " << it->first.c_str();
     WriteCDFileHeader(*zip_info, cd_stream);
-  };
+  }
 
   locator.offset_of_end_cd = cd_stream.Tell() + ecd_real_offset -
       global_offset;
@@ -417,7 +417,7 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
 
   return cd_stream.CopyToStream(
       backing_store, cd_stream.Size(), empty_progress);
-};
+}
 
 AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(URN child) {
   // Create a zip member with a name relative to our volume URN. So for example,
@@ -429,13 +429,13 @@ AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(URN child) {
   AFF4ScopedPtr<ZipFileSegment> result = CreateZipSegment(member_filename);
 
   return result.cast<AFF4Stream>();
-};
+}
 
 AFF4ScopedPtr<ZipFileSegment> ZipFile::OpenZipSegment(string filename) {
   auto it = members.find(filename);
   if (it == members.end()) {
     return AFF4ScopedPtr<ZipFileSegment>();
-  };
+  }
 
   // Is it already in the cache?
   URN segment_urn = _urn_from_member_name(filename);
@@ -444,14 +444,14 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::OpenZipSegment(string filename) {
     LOG(INFO) << "Openning ZipFileSegment (cached) " <<
         res->urn.SerializeToString();
     return res;
-  };
+  }
 
   ZipFileSegment *result = new ZipFileSegment(filename, *this);
 
   LOG(INFO) << "Openning ZipFileSegment " << result->urn.SerializeToString();
 
   return resolver->CachePut<ZipFileSegment>(result);
-};
+}
 
 AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
   MarkDirty();
@@ -465,7 +465,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
         res->urn.SerializeToString();
 
     return res;
-  };
+  }
 
   resolver->Set(segment_urn, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
   resolver->Set(segment_urn, AFF4_STORED, new URN(urn));
@@ -480,7 +480,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFile::CreateZipSegment(string filename) {
 
   // Add the new object to the object cache.
   return resolver->CachePut<ZipFileSegment>(result);
-};
+}
 
 
 ZipFileSegment::ZipFileSegment(DataStore *resolver): StringIO(resolver) {}
@@ -491,7 +491,7 @@ ZipFileSegment::ZipFileSegment(string filename, ZipFile &owner) {
   urn = owner._urn_from_member_name(filename);
 
   LoadFromZipFile(owner);
-};
+}
 
 AFF4ScopedPtr<ZipFileSegment> ZipFileSegment::NewZipFileSegment(
     DataStore *resolver, const URN &segment_urn, const URN &volume_urn) {
@@ -504,7 +504,7 @@ AFF4ScopedPtr<ZipFileSegment> ZipFileSegment::NewZipFileSegment(
   string member_filename = volume->_member_name_for_urn(segment_urn);
 
   return volume->CreateZipSegment(member_filename);
-};
+}
 
 
 AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
@@ -515,7 +515,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
   if (it == owner.members.end()) {
     // The owner does not have this file yet.
     return STATUS_OK;
-  };
+  }
 
   // Just borrow the reference to the ZipInfo.
   ZipInfo *zip_info = it->second.get();
@@ -527,7 +527,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
 
   if (!backing_store) {
     return IO_ERROR;
-  };
+  }
 
   backing_store->Seek(
       zip_info->local_header_offset + owner.global_offset, SEEK_SET);
@@ -538,7 +538,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
       file_header.compression_method != zip_info->compression_method) {
     LOG(INFO) << "Local file header invalid!";
     return PARSING_ERROR;
-  };
+  }
 
   // The filename should be null terminated so we force c_str().
   string file_header_filename = backing_store->Read(
@@ -546,7 +546,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
   if (file_header_filename != zip_info->filename) {
     LOG(INFO) << "Local filename different from central directory.";
     return PARSING_ERROR;
-  };
+  }
 
   backing_store->Seek(file_header.extra_field_len, SEEK_CUR);
 
@@ -562,7 +562,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
           buffer_size) {
         LOG(INFO) << "Unable to decompress file.";
         return PARSING_ERROR;
-      };
+      }
     } break;
 
     case ZIP_STORED: {
@@ -572,27 +572,27 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
     default:
       LOG(INFO) << "Unsupported compression method.";
       return NOT_IMPLEMENTED;
-  };
+  }
 
   buffer.assign(decomp_buffer.get(), buffer_size);
   return STATUS_OK;
-};
+}
 
 
 AFF4Status ZipFileSegment::LoadFromURN() {
   if (resolver->Get(urn, AFF4_STORED, owner_urn) != STATUS_OK) {
     return NOT_FOUND;
-  };
+  }
 
   AFF4ScopedPtr<ZipFile> owner = resolver->AFF4FactoryOpen<ZipFile>(
       owner_urn);
 
   if (!owner) {
     return IO_ERROR;
-  };
+  }
 
   return LoadFromZipFile(*owner);
-};
+}
 
 
 #define BUFF_SIZE 4096
@@ -610,7 +610,7 @@ static string CompressBuffer(const string &buffer) {
                   9, Z_DEFAULT_STRATEGY) != Z_OK) {
     LOG(INFO) << "Unable to initialise zlib (" <<  strm.msg << ")";
     return NULL;
-  };
+  }
 
   // Get an upper bound on the size of the compressed buffer.
   int buffer_size = deflateBound(&strm, buffer.size() + 10);
@@ -622,12 +622,12 @@ static string CompressBuffer(const string &buffer) {
   if (deflate(&strm, Z_FINISH) != Z_STREAM_END) {
     deflateEnd(&strm);
     return NULL;
-  };
+  }
 
   deflateEnd(&strm);
 
   return string(c_buffer.get(), strm.total_out);
-};
+}
 
 static unsigned int DecompressBuffer(
     char *buffer, int length, const string &c_buffer) {
@@ -645,17 +645,17 @@ static unsigned int DecompressBuffer(
   if (inflateInit2(&strm, -15) != Z_OK) {
     LOG(ERROR) << "Unable to initialise zlib (" <<  strm.msg << ")";
     return 0;
-  };
+  }
 
   if (inflate(&strm, Z_FINISH) != Z_STREAM_END) {
     inflateEnd(&strm);
     return 0;
-  };
+  }
 
   inflateEnd(&strm);
 
   return length - strm.avail_out;
-};
+}
 
 
 AFF4Status ZipFileSegment::Flush() {
@@ -676,7 +676,7 @@ AFF4Status ZipFileSegment::Flush() {
     // Append member at the end of the file.
     if (backing_store->Seek(0, SEEK_END) != STATUS_OK) {
       return IO_ERROR;
-    };
+    }
 
     // zip_info offsets are relative to the start of the zip file.
     zip_info->local_header_offset = (
@@ -703,8 +703,8 @@ AFF4Status ZipFileSegment::Flush() {
       owner->WriteZipFileHeader(*zip_info, *backing_store);
       if (backing_store->Write(buffer) < 0) {
         return IO_ERROR;
-      };
-    };
+      }
+    }
 
     // Replace ourselves in the members map.
     string member_name = owner->_member_name_for_urn(urn);
@@ -715,10 +715,10 @@ AFF4Status ZipFileSegment::Flush() {
         " is dirtied by segment " << urn.SerializeToString().c_str();
 
     owner->MarkDirty();
-  };
+  }
 
   return AFF4Stream::Flush();
-};
+}
 
 
 ZipInfo::ZipInfo() {
@@ -741,7 +741,7 @@ string ZipFile::_member_name_for_urn(const URN member) const {
   // Make sure zip members do not have leading /.
   if (filename[0] == '/') {
     filename = filename.substr(1, filename.size());
-  };
+  }
 
   // Now escape any chars which are non printable.
   for (int i = 0; i < filename.size(); i++) {
@@ -752,7 +752,7 @@ string ZipFile::_member_name_for_urn(const URN member) const {
       result << "%" << std::hex << std::setw(2) << std::setfill('0') <<
           static_cast<int>(j);
       continue;
-    };
+    }
 
     // Escape // sequences.
     if (filename[i] == '/' && i < filename.size()-1 &&
@@ -764,13 +764,13 @@ string ZipFile::_member_name_for_urn(const URN member) const {
           static_cast<int>(filename[i+1]);
       i++;
       continue;
-    };
+    }
 
     result << j;
-  };
+  }
 
   return result.str();
-};
+}
 
 URN ZipFile::_urn_from_member_name(const string member) const {
   std::stringstream result;
@@ -788,8 +788,8 @@ URN ZipFile::_urn_from_member_name(const string member) const {
       i++;
     } else {
       result << member[i];
-    };
-  };
+    }
+  }
 
   // If this is a fully qualified AFF4 URN we return it as is, else we return
   // the relative URN to our base.
@@ -797,10 +797,10 @@ URN ZipFile::_urn_from_member_name(const string member) const {
   string scheme = result_urn.Scheme();
   if (scheme == "aff4") {
     return result_urn;
-  };
+  }
 
   return urn.Append(result.str());
-};
+}
 
 
 AFF4Status ZipFile::WriteCDFileHeader(
@@ -826,7 +826,7 @@ AFF4Status ZipFile::WriteCDFileHeader(
   output.Write(reinterpret_cast<char *>(&zip64header), sizeof(zip64header));
 
   return STATUS_OK;
-};
+}
 
 AFF4Status ZipFile::WriteZipFileHeader(
     ZipInfo &zip_info, AFF4Stream &output) {
@@ -852,7 +852,7 @@ AFF4Status ZipFile::WriteZipFileHeader(
   output.Write(reinterpret_cast<char *>(&zip64header), sizeof(zip64header));
 
   return STATUS_OK;
-};
+}
 
 
 // Register ZipFile as an AFF4 object.
