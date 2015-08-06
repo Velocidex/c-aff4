@@ -230,9 +230,17 @@ class AFF4Map(aff4.AFF4Stream):
                     for interval in self.tree:
                         map_stream.Write(interval.data.Serialize())
 
+                self.resolver.Close(map_stream)
                 with volume.CreateMember(self.urn.Append("idx")) as idx_stream:
                     idx_stream.Write("\n".join(
                         [x.SerializeToString() for x in self.targets]))
+
+                self.resolver.Close(idx_stream)
+                for target in self.targets:
+                    with self.resolver.AFF4FactoryOpen(target) as stream:
+                        pass
+
+                    self.resolver.Close(stream)
 
         return super(AFF4Map, self).Flush()
 

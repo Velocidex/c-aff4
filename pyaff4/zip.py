@@ -15,7 +15,6 @@
 """An implementation of the ZipFile based AFF4 volume."""
 
 import logging
-import urllib
 import urlparse
 import re
 import string
@@ -182,7 +181,7 @@ class ZipFile(aff4.AFF4Volume):
         if urlparse.urlparse(member).scheme == "aff4":
             return member
 
-        return self.urn.Append(member)
+        return self.urn.Append(member, quote=False)
 
     @staticmethod
     def NewZipFile(resolver, backing_store_urn):
@@ -203,7 +202,7 @@ class ZipFile(aff4.AFF4Volume):
     def CreateZipSegment(self, filename):
         self.MarkDirty()
 
-        segment_urn = self.urn.Append(filename)
+        segment_urn = self.urn_from_member_name(filename)
 
         # Is it in the cache?
         res = self.resolver.CacheGet(segment_urn)

@@ -13,7 +13,6 @@
 # the License.
 
 """RDF Values are responsible for serialization."""
-import os
 import urlparse
 import rdflib
 import urllib
@@ -145,8 +144,11 @@ class URN(RDFValue):
 
         return components
 
-    def Append(self, component):
+    def Append(self, component, quote=True):
         components = self.Parse()
+        if quote:
+            component = urllib.quote(component)
+
         new_path = posixpath.normpath(posixpath.join(
             components.path, component))
 

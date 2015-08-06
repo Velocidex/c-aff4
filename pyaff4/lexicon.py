@@ -36,6 +36,9 @@ AFF4_ZIP_TYPE = (AFF4_NAMESPACE + "zip_volume")
 # AFF4Stream
 AFF4_STREAM_SIZE = (AFF4_NAMESPACE + "size")
 
+# The original filename the stream had.
+AFF4_STREAM_ORIGINAL_FILENAME = (AFF4_NAMESPACE + "original_filename")
+
 # Can be "read", "truncate", "append"
 AFF4_STREAM_WRITE_MODE = (AFF4_VOLATILE_NAMESPACE + "writable")
 

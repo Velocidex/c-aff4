@@ -38,7 +38,7 @@ class NoseTestCommand(TestCommand):
 setup(
     name='PyAFF4',
     long_description=long_description,
-    version='0.13',
+    version='0.14',
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
     author_email='scudette@gmail.com',
