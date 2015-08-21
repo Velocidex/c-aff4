@@ -54,7 +54,7 @@ class install(_install):
 setup(
     name='PyAFF4',
     long_description=long_description,
-    version='0.15',
+    version='0.16',
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
     author_email='scudette@gmail.com',

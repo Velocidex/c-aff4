@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "Python.h"
 #include <string.h>
 #include <stdio.h>
-#include <snappy-c.h>
+#include "snappy-c.h"
 #include "crc32c.h"
 
 #define MODULE_VERSION "0.4.1"
