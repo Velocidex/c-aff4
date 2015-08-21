@@ -269,5 +269,8 @@ class AFF4Image(aff4.AFF4Stream):
         if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
             return cbuffer
 
+        raise RuntimeError(
+            "Unable to process compression %s" % self.compression)
+
 
 registry.AFF4_TYPE_MAP[lexicon.AFF4_IMAGE_TYPE] = AFF4Image

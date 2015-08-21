@@ -1,0 +1,5 @@
+
+recursive-include third_party/python-snappy *
+include README.txt
+
+recursive-exclude third_party/python-snappy/build *

@@ -13,7 +13,11 @@
 # the License.
 
 """This module installs the pyaff4 library."""
+import sys
+import subprocess
+
 from distutils.core import setup
+from setuptools.command.install import install as _install
 from setuptools.command.test import test as TestCommand
 
 try:
@@ -35,17 +39,32 @@ class NoseTestCommand(TestCommand):
         nose.run_exit(argv=['nosetests'])
 
 
+class install(_install):
+    def run(self):
+        try:
+            import _snappy
+        except ImportError:
+            # Install out own version of snappy.
+            subprocess.call(
+                [sys.executable, "setup.py", "install"],
+                cwd="third_party/python-snappy")
+        _install.run(self)
+
+
 setup(
     name='PyAFF4',
     long_description=long_description,
-    version='0.14',
+    version='0.15',
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
     author_email='scudette@gmail.com',
     url='https://www.aff4.org/',
     packages=['pyaff4'],
     package_dir={"pyaff4": "."},
-    cmdclass={'test': NoseTestCommand},
+    cmdclass={
+        'test': NoseTestCommand,
+        "install": install
+    },
     install_requires=[
         "rdflib >= 4.1",
         "intervaltree >= 2.0.4",
