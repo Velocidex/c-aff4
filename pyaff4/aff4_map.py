@@ -130,7 +130,8 @@ class AFF4Map(aff4.AFF4Stream):
                     if not data:
                         break
                     range = Range.FromSerialized(data)
-                    self.tree.addi(range.map_offset, range.map_end, range)
+                    if range.length > 0:
+                       self.tree.addi(range.map_offset, range.map_end, range)
 
         except IOError:
             pass
