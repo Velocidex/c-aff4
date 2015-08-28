@@ -16,7 +16,7 @@
 import sys
 import subprocess
 
-from distutils.core import setup
+from setuptools import setup
 from setuptools.command.install import install as _install
 from setuptools.command.test import test as TestCommand
 
@@ -42,7 +42,7 @@ class NoseTestCommand(TestCommand):
 class install(_install):
     def run(self):
         try:
-            import _snappy
+            import snappy
         except ImportError:
             # Install out own version of snappy.
             subprocess.call(

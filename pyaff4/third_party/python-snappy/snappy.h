@@ -39,6 +39,11 @@
 #ifndef UTIL_SNAPPY_SNAPPY_H__
 #define UTIL_SNAPPY_SNAPPY_H__
 
+#if defined(_MSC_VER)
+#include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif
+
 #include <stddef.h>
 #include <string>
 

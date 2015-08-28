@@ -15,7 +15,11 @@
  *****************************************************************************/
 #include "crc32c.h"     /* include the header file generated with pycrc */
 #include <stdlib.h>
+#if defined(_MSC_VER)
+#include "stdint.h"
+#else
 #include <stdint.h>
+#endif
 
 /**
  * Static table used for the table_driven implementation.

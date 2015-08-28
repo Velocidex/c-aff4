@@ -24,7 +24,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import sys
-from distutils.core import setup, Extension
+from setuptools import setup, Extension
 
 version = '0.5'
 long_description = """
