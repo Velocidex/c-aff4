@@ -175,17 +175,19 @@ class AFF4Image(aff4.AFF4Stream):
         return super(AFF4Image, self).Flush()
 
     def Read(self, length):
+        if length == 0:
+            return ""
+        
         length = min(length, self.Size() - self.readptr)
 
-        initial_chunk_offset = self.readptr % self.chunk_size
+        initial_chunk_id, initial_chunk_offset = divmod(self.readptr,
+                                                        self.chunk_size)
+        final_chunk_id, final_chunk_offset = divmod(self.readptr + length - 1,
+                                                    self.chunk_size)
+
         # We read this many full chunks at once.
-        chunks_to_read, extra = divmod(length, self.chunk_size)
-
-        # We need a bit of data from the last chunk, read an extra chunk.
-        if extra:
-            chunks_to_read += 1
-
-        chunk_id = self.readptr / self.chunk_size
+        chunks_to_read = final_chunk_id - initial_chunk_id + 1
+        chunk_id = initial_chunk_id
         result = ""
 
         while chunks_to_read > 0:
@@ -200,6 +202,8 @@ class AFF4Image(aff4.AFF4Stream):
             result = result[initial_chunk_offset:]
 
         result = result[:length]
+
+        self.readptr += len(result)
 
         return result
 
