@@ -131,7 +131,7 @@ class AFF4Map(aff4.AFF4Stream):
                         break
                     range = Range.FromSerialized(data)
                     if range.length > 0:
-                       self.tree.addi(range.map_offset, range.map_end, range)
+                        self.tree.addi(range.map_offset, range.map_end, range)
 
         except IOError:
             pass
@@ -147,7 +147,9 @@ class AFF4Map(aff4.AFF4Stream):
                 result += "\x00" * padding
                 self.readptr += padding
                 length -= padding
-                continue
+
+            if length == 0:
+                break
 
             target = self.targets[range.target_id]
             length_to_read_in_target = min(length, range.map_end - self.readptr)
@@ -221,6 +223,7 @@ class AFF4Map(aff4.AFF4Stream):
 
         # Add the new interval.
         self.tree[range.map_offset:range.map_end] = range
+        self.MarkDirty()
 
     def Flush(self):
         if self.IsDirty():
@@ -244,6 +247,47 @@ class AFF4Map(aff4.AFF4Stream):
                     self.resolver.Close(stream)
 
         return super(AFF4Map, self).Flush()
+
+    def WriteWithCallback(self, read_cb):
+        """Write this map stream from the read_cb.
+
+        The callback is expected to produce tuples of (offset, data) or None to
+        signify that the stream is finished.
+
+        Note that this method produces a special casing of the more general map
+        streams: We create a single underlying data stream and store sparse data
+        into it. More complex maps streams should be created by other methods.
+        """
+        # Store the data stream in the same volume as ourselves.
+        volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
+
+        # This is the data stream.
+        target = self.urn.Append("data")
+        self.data_offset = 0
+
+        def StreamCB(_):
+            """Wrap the original stream.
+
+            Add a map entry for each read request served by the provided
+            stream. The provided stream is expected to skip invalid ranges.
+            """
+            delegate = read_cb()
+            if not delegate:
+                return ""
+
+            offset, data = delegate
+            if data:
+                self.AddRange(offset, self.data_offset, len(data), target)
+                self.data_offset += len(data)
+
+            return data
+
+        with aff4_image.AFF4Image.NewAFF4Image(
+                self.resolver, target, volume_urn) as data_stream:
+            data_stream.WriteWithCallback(StreamCB)
+
+    def WriteStream(self, stream):
+        raise NotImplementedError()
 
     def Write(self, data):
         self.MarkDirty()

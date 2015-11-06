@@ -31,6 +31,45 @@ from pyaff4 import registry
 LOGGER = logging.getLogger("pyaff4")
 
 
+class _CompressorStream(object):
+    """A stream which chunks up another stream.
+
+    Each read() operation will return a compressed chunk.
+    """
+    def __init__(self, owner, stream):
+        self.owner = owner
+        self.stream = stream
+        self.chunk_count_in_bevy = 0
+        self.size = 0
+        self.bevy_index = []
+        self.bevy_length = 0
+
+    def read(self, _):
+        # Stop copying when the bevy is full.
+        if self.chunk_count_in_bevy >= self.owner.chunks_per_segment:
+            return ""
+
+        chunk = self.stream.read(self.owner.chunk_size)
+        if not chunk:
+            return ""
+
+        self.size += len(chunk)
+
+        if self.owner.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
+            compressed_chunk = zlib.compress(chunk)
+        elif (snappy and self.owner.compression ==
+              lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY):
+            compressed_chunk = snappy.compress(chunk)
+        elif self.owner.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
+            compressed_chunk = chunk
+
+        self.bevy_index.append(self.bevy_length)
+        self.bevy_length += len(compressed_chunk)
+        self.chunk_count_in_bevy += 1
+
+        return compressed_chunk
+
+
 class AFF4Image(aff4.AFF4Stream):
 
     @staticmethod
@@ -79,6 +118,44 @@ class AFF4Image(aff4.AFF4Stream):
         self.bevy_index = []
         self.chunk_count_in_bevy = 0
         self.bevy_number = 0
+
+    def WriteStream(self, source_stream):
+        """Copy data from the read_cb into this stream.
+
+        The read_cb callback is expected to return data as strings of various
+        length. When it returns an empty string we assume the stream is complete
+        and close it.
+        """
+
+        # Write a bevy at a time.
+        while 1:
+            stream = _CompressorStream(self, source_stream)
+
+            volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
+            if not volume_urn:
+                raise IOError("Unable to find storage for urn %s" % self.urn)
+
+            bevy_urn = self.urn.Append("%08d" % self.bevy_number)
+            with self.resolver.AFF4FactoryOpen(volume_urn) as volume:
+                with volume.CreateMember(bevy_urn) as bevy:
+                    bevy.WriteStream(stream)
+
+            bevy_index_urn = bevy_urn.Append("index")
+            with volume.CreateMember(bevy_index_urn) as bevy_index:
+                bevy_index.Write(
+                    struct.pack("<" + "L" * len(stream.bevy_index),
+                                *stream.bevy_index))
+
+            # Make another bevy.
+            self.bevy_number += 1
+            self.size += stream.size
+
+            # Last iteration - the compressor stream quit before the bevy is
+            # full.
+            if stream.chunk_count_in_bevy != self.chunks_per_segment:
+                break
+
+        self._write_metadata()
 
     def Write(self, data):
         self.MarkDirty()
@@ -150,40 +227,43 @@ class AFF4Image(aff4.AFF4Stream):
         self.bevy_index = []
         self.bevy_length = 0
 
+    def _write_metadata(self):
+        self.resolver.Set(self.urn, lexicon.AFF4_TYPE,
+                          rdfvalue.URN(lexicon.AFF4_IMAGE_TYPE))
+
+        self.resolver.Set(self.urn, lexicon.AFF4_IMAGE_CHUNK_SIZE,
+                          rdfvalue.XSDInteger(self.chunk_size))
+
+        self.resolver.Set(self.urn, lexicon.AFF4_IMAGE_CHUNKS_PER_SEGMENT,
+                          rdfvalue.XSDInteger(self.chunks_per_segment))
+
+        self.resolver.Set(self.urn, lexicon.AFF4_STREAM_SIZE,
+                          rdfvalue.XSDInteger(self.Size()))
+
+        self.resolver.Set(
+            self.urn, lexicon.AFF4_IMAGE_COMPRESSION,
+            rdfvalue.URN(self.compression))
+
     def Flush(self):
         if self.IsDirty():
             # Flush the last chunk.
             self.FlushChunk(self.buffer)
             self._FlushBevy()
 
-            self.resolver.Set(self.urn, lexicon.AFF4_TYPE,
-                              rdfvalue.URN(lexicon.AFF4_IMAGE_TYPE))
-
-            self.resolver.Set(self.urn, lexicon.AFF4_IMAGE_CHUNK_SIZE,
-                              rdfvalue.XSDInteger(self.chunk_size))
-
-            self.resolver.Set(self.urn, lexicon.AFF4_IMAGE_CHUNKS_PER_SEGMENT,
-                              rdfvalue.XSDInteger(self.chunks_per_segment))
-
-            self.resolver.Set(self.urn, lexicon.AFF4_STREAM_SIZE,
-                              rdfvalue.XSDInteger(self.Size()))
-
-            self.resolver.Set(
-                self.urn, lexicon.AFF4_IMAGE_COMPRESSION,
-                rdfvalue.URN(self.compression))
+            self._write_metadata()
 
         return super(AFF4Image, self).Flush()
 
     def Read(self, length):
         if length == 0:
             return ""
-        
+
         length = min(length, self.Size() - self.readptr)
 
         initial_chunk_id, initial_chunk_offset = divmod(self.readptr,
                                                         self.chunk_size)
-        final_chunk_id, final_chunk_offset = divmod(self.readptr + length - 1,
-                                                    self.chunk_size)
+
+        final_chunk_id, _ = divmod(self.readptr + length - 1, self.chunk_size)
 
         # We read this many full chunks at once.
         chunks_to_read = final_chunk_id - initial_chunk_id + 1

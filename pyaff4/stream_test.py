@@ -1,9 +1,24 @@
-import data_store
+# Copyright 2014 Google Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not
+# use this file except in compliance with the License.  You may obtain a copy of
+# the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
+# License for the specific language governing permissions and limitations under
+# the License.
+
 import os
-import lexicon
-import rdfvalue
 import unittest
-import plugins
+
+from pyaff4 import data_store
+from pyaff4 import lexicon
+from pyaff4 import plugins
+from pyaff4 import rdfvalue
 
 
 class StreamTest(unittest.TestCase):
@@ -58,8 +73,8 @@ class StreamTest(unittest.TestCase):
             resolver.Set(filename, lexicon.AFF4_STREAM_WRITE_MODE,
                          rdfvalue.XSDString("truncate"))
 
-            file_stream = resolver.AFF4FactoryOpen(filename)
-            self.streamTest(file_stream)
+            with resolver.AFF4FactoryOpen(filename) as file_stream:
+                self.streamTest(file_stream)
         finally:
             os.unlink(filename.Parse().path)
 

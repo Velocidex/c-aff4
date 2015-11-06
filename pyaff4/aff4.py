@@ -14,6 +14,8 @@
 
 """This is the python AFF4 library."""
 import uuid
+import weakref
+
 from pyaff4 import rdfvalue
 
 
@@ -126,6 +128,10 @@ class NoneObject(object):
         return True
 
 
+# Keep track of all the AFF4 objects which are alive right now. This helps in
+# debugging memory leaks.
+AFF4_OBJECT_REFS = {}
+
 
 class AFF4Object(object):
     def __init__(self, resolver, urn=None):
@@ -135,6 +141,8 @@ class AFF4Object(object):
             urn = "aff4://%s" % uuid.uuid4()
 
         self.urn = rdfvalue.URN(urn)
+        AFF4_OBJECT_REFS[id(self)] = weakref.proxy(
+            self, lambda _, id=id(self), ref=AFF4_OBJECT_REFS: ref.pop(id))
 
     def __enter__(self):
         return self
@@ -164,22 +172,66 @@ class AFF4Volume(AFF4Object):
         raise NotImplementedError
 
 
+SEEK_SET = 0
+SEEK_CUR = 1
+SEEK_END = 2
+
+class CallbackStreamer(object):
+    """A helpful wrapper around a callable which produces data.
+
+    This class is needed to support callables which deliver insufficient data to
+    fulfill the read request.
+    """
+
+    def __init__(self, read_cb):
+        self.read_cb = read_cb
+        self.buff = ""
+
+    def read(self, length):
+        while self.read_cb:
+            if len(self.buff) > length:
+                result = self.buff[:length]
+                self.buff = self.buff[length:]
+                return result
+
+            data = self.read_cb(length - len(self.buff))
+            if not data:
+                result = self.buff
+                # Stop calling the call back any more and return whatever we
+                # have left.
+                self.read_cb = None
+                return result
+
+            self.buff += data
+
+
 class AFF4Stream(AFF4Object):
     readptr = 0
     size = 0
 
     def Read(self, length):
-        raise NotImplementedError
+        raise NotImplementedError()
 
     def Write(self, data):
-        raise NotImplementedError
+        raise NotImplementedError()
+
+    def WriteWithCallback(self, read_cb):
+        """Write this stream from a callback."""
+        return self.WriteStream(CallbackStreamer(read_cb))
+
+    def WriteStream(self, stream):
+        """Writes into this stream from a stream.
+
+        The stream is a file-like object with read and tell() methods.
+        """
+        raise NotImplementedError()
 
     def Seek(self, offset, whence=0):
-        if whence == 0:
+        if whence == SEEK_SET:
             self.readptr = offset
-        elif whence == 1:
+        elif whence == SEEK_CUR:
             self.readptr += offset
-        elif whence == 2:
+        elif whence == SEEK_END:
             self.readptr = offset + self.Size()
 
         if self.readptr < 0:

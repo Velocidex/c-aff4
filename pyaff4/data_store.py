@@ -63,13 +63,17 @@ class AFF4ObjectCache(object):
         self.lru_map = {}
         self.lru_list = AFF4ObjectCacheEntry(None, None)
 
-    def _Trim(self):
-        while len(self.lru_map) > self.max_items:
+    def _Trim(self, size=None):
+        max_items = size or self.max_items
+        while len(self.lru_map) > max_items:
             older_item = self.lru_list.prev
             LOGGER.debug("Trimming %s from cache" % older_item.key)
 
             self.lru_map.pop(older_item.key)
             older_item.unlink()
+
+            # Ensure we flush the trimmed objects.
+            older_item.aff4_obj.Flush()
 
     def Put(self, aff4_obj, in_use_state=False):
         key = aff4_obj.urn.SerializeToString()
@@ -203,6 +207,9 @@ class MemoryDataStore(object):
     def Flush(self):
         # Flush and expunge the cache.
         self.ObjectCache.Flush()
+
+    def DeleteSubject(self, subject):
+        self.store.pop(rdfvalue.URN(subject), None)
 
     def Set(self, subject, attribute, value):
         subject = rdfvalue.URN(subject)

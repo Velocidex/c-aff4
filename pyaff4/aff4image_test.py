@@ -13,6 +13,7 @@
 # the License.
 
 import os
+import StringIO
 import unittest
 
 from pyaff4 import aff4_image
@@ -43,6 +44,7 @@ class AFF4ImageTest(unittest.TestCase):
                 self.volume_urn = zip_file.urn
                 image_urn = self.volume_urn.Append(self.image_name)
 
+                # Use default compression.
                 with aff4_image.AFF4Image.NewAFF4Image(
                     resolver, image_urn, self.volume_urn) as image:
                     image.chunk_size = 10
@@ -50,13 +52,28 @@ class AFF4ImageTest(unittest.TestCase):
 
                     for i in range(100):
                         image.Write("Hello world %02d!" % i)
+
                     self.image_urn = image.urn
 
+                # Write a snappy compressed image.
                 self.image_urn_2 = self.image_urn.Append("2")
                 with aff4_image.AFF4Image.NewAFF4Image(
                     resolver, self.image_urn_2, self.volume_urn) as image_2:
                     image_2.compression = lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY
                     image_2.Write("This is a test")
+
+                # Use streaming API to write image.
+                self.image_urn_3 = self.image_urn.Append("3")
+                with aff4_image.AFF4Image.NewAFF4Image(
+                    resolver, self.image_urn_3, self.volume_urn) as image:
+                    image.chunk_size = 10
+                    image.chunks_per_segment = 3
+                    stream = StringIO.StringIO()
+                    for i in range(100):
+                        stream.write("Hello world %02d!" % i)
+
+                    stream.seek(0)
+                    image.WriteStream(stream)
 
     def testOpenImageByURN(self):
         resolver = data_store.MemoryDataStore()
@@ -85,7 +102,14 @@ class AFF4ImageTest(unittest.TestCase):
             data = image_2.Read(100)
             self.assertEquals(data, "This is a test")
 
-
+        # Now test streaming API image.
+        with resolver.AFF4FactoryOpen(self.image_urn_3) as image_3:
+            self.assertEquals(image_3.chunk_size, 10)
+            self.assertEquals(image_3.chunks_per_segment, 3)
+            self.assertEquals(
+                "Hello world 00!Hello world 01!Hello world 02!Hello world 03!"
+                "Hello world 04!Hello world 05!Hello worl",
+                image_3.Read(100))
 
 if __name__ == '__main__':
     #logging.getLogger().setLevel(logging.DEBUG)

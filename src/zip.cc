@@ -835,8 +835,8 @@ AFF4Status ZipFile::WriteZipFileHeader(
   string filename = zip_info.filename;
 
   header.crc32 = zip_info.crc32;
-  header.compress_size = zip_info.compress_size;
-  header.file_size = zip_info.file_size;
+  header.compress_size = -1;
+  header.file_size = -1;
   header.file_name_length = filename.length();
   header.compression_method = zip_info.compression_method;
   header.lastmodtime = zip_info.lastmodtime;

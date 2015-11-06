@@ -29,6 +29,7 @@ AFF4_VOLATILE_NAMESPACE = "http://aff4.org/VolatileSchema#"
 # Base AFF4Object
 AFF4_TYPE = (RDF_NAMESPACE + "type")
 AFF4_STORED = (AFF4_NAMESPACE + "stored")
+AFF4_CONTAINS = (AFF4_NAMESPACE + "contains")
 
 # AFF4 ZipFile containers.
 AFF4_ZIP_TYPE = (AFF4_NAMESPACE + "zip_volume")

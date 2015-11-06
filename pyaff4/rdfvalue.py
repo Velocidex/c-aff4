@@ -111,10 +111,10 @@ class URN(RDFValue):
     def FromFileName(cls, filename):
         return cls("file:" + urllib.pathname2url(filename))
 
-
     def ToFilename(self):
-        if self.value.startswith("file:"):
-            return urllib.url2pathname(self.value[5:])
+        components = self.Parse()
+        if components.scheme == "file":
+            return components.path
 
     def GetRaptorTerm(self):
         return rdflib.URIRef(self.SerializeToString())

@@ -56,6 +56,22 @@ class AFF4MapTest(unittest.TestCase):
 
                     self.image_urn = image.urn
 
+                # Test the stream writing interface.
+                segments = [
+                    (50, "XX - This is the position."),
+                    (0, "00 - This is the position."),
+                    (50, "50"),
+
+                    # An empty string represents end of reading.
+                    (0, ""),
+                ]
+                image_urn_2 = self.volume_urn.Append(
+                    self.image_name).Append("2")
+
+                with aff4_map.AFF4Map.NewAFF4Map(
+                    resolver, image_urn_2, self.volume_urn) as image:
+                    image.WriteWithCallback(lambda: segments.pop(0))
+
     def testAddRange(self):
         resolver = data_store.MemoryDataStore()
 
@@ -152,7 +168,15 @@ class AFF4MapTest(unittest.TestCase):
         # into a fresh empty resolver.
         with zip.ZipFile.NewZipFile(resolver, self.filename) as zip_file:
             image_urn = zip_file.urn.Append(self.image_name)
+            image_urn_2 = image_urn.Append("2")
 
+        # Check the first stream.
+        self.CheckImageURN(resolver, image_urn)
+
+        # The second stream must be the same.
+        self.CheckImageURN(resolver, image_urn_2)
+
+    def CheckImageURN(self, resolver, image_urn):
         with resolver.AFF4FactoryOpen(image_urn) as map:
             map.Seek(50)
             self.assertEquals(map.Read(2), "50")
