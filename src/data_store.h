@@ -207,13 +207,13 @@ class AFF4ScopedPtr {
     // When we destruct we return the underlying pointer to the DataStore.
     if (ptr_) {
       ptr_->Return();
-    };
+    }
   }
 
   template<class AFF4ObjectOtherType>
   AFF4ScopedPtr<AFF4ObjectOtherType> cast() {
     return AFF4ScopedPtr<AFF4ObjectOtherType>(release(), resolver_);
-  };
+  }
 
   AFF4ObjectType *operator->() const {
     CHECK(ptr_ != NULL);

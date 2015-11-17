@@ -31,7 +31,6 @@ specific language governing permissions and limitations under the License.
 #include "rdf.h"
 #include "lexicon.h"
 
-#define BUFF_SIZE 4096
 
 ZipFile::ZipFile(DataStore *resolver): AFF4Volume(resolver) {}
 
@@ -105,8 +104,8 @@ AFF4Status ZipFile::LoadFromURN() {
 // Locate the Zip file central directory.
 AFF4Status ZipFile::parse_cd() {
   EndCentralDirectory *end_cd = NULL;
-  AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen
-      <AFF4Stream>(backing_store_urn);
+  AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
+    AFF4Stream>(backing_store_urn);
 
   if (!backing_store) {
     LOG(ERROR) << "Unable to open backing URN " <<
@@ -117,12 +116,12 @@ AFF4Status ZipFile::parse_cd() {
   // Find the End of Central Directory Record - We read about 4k of
   // data and scan for the header from the end, just in case there is
   // an archive comment appended to the end.
-  if (backing_store->Seek(-BUFF_SIZE, SEEK_END) != STATUS_OK) {
+  if (backing_store->Seek(-AFF4_BUFF_SIZE, SEEK_END) != STATUS_OK) {
     return IO_ERROR;
   }
 
   aff4_off_t ecd_real_offset = backing_store->Tell();
-  string buffer = backing_store->Read(BUFF_SIZE);
+  string buffer = backing_store->Read(AFF4_BUFF_SIZE);
 
   // Not enough data to contain an EndCentralDirectory
   if (buffer.size() < sizeof(EndCentralDirectory)) {
@@ -255,7 +254,7 @@ AFF4Status ZipFile::parse_cd() {
     zip_info->compression_method = entry.compression_method;
     zip_info->compress_size = entry.compress_size;
     zip_info->file_size = entry.file_size;
-    zip_info->crc32 = entry.crc32;
+    zip_info->crc32_cs = entry.crc32_cs;
     zip_info->lastmoddate = entry.dosdate;
     zip_info->lastmodtime = entry.dostime;
 
@@ -382,7 +381,7 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   for (auto it = members.begin(); it != members.end(); it++) {
     ZipInfo *zip_info = it->second.get();
     LOG(INFO) << "Writing CD entry for " << it->first.c_str();
-    WriteCDFileHeader(*zip_info, cd_stream);
+    zip_info->WriteCDFileHeader(cd_stream);
   }
 
   locator.offset_of_end_cd = cd_stream.Tell() + ecd_real_offset -
@@ -415,8 +414,11 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream &backing_store) {
   // Now copy the cd_stream into the backing_store in one write operation.
   cd_stream.Seek(0, SEEK_SET);
 
+  // Deliberately suppress the progress.
+  ProgressContext progress;
+
   return cd_stream.CopyToStream(
-      backing_store, cd_stream.Size(), empty_progress);
+      backing_store, cd_stream.Size(), &progress);
 }
 
 AFF4ScopedPtr<AFF4Stream> ZipFile::CreateMember(URN child) {
@@ -550,12 +552,12 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
 
   backing_store->Seek(file_header.extra_field_len, SEEK_CUR);
 
-  // We write the entire file in a memory buffer.
-  unsigned int buffer_size = zip_info->file_size;
-  unique_ptr<char[]> decomp_buffer(new char[buffer_size]);
-
   switch (file_header.compression_method) {
+    // If the file is deflated we have no choice but to read it all into memory.
     case ZIP_DEFLATE: {
+      unsigned int buffer_size = zip_info->file_size;
+      unique_ptr<char[]> decomp_buffer(new char[buffer_size]);
+
       string c_buffer = backing_store->Read(zip_info->compress_size);
 
       if (DecompressBuffer(decomp_buffer.get(), buffer_size, c_buffer) !=
@@ -563,10 +565,23 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
         LOG(INFO) << "Unable to decompress file.";
         return PARSING_ERROR;
       }
+
+      buffer.assign(decomp_buffer.get(), buffer_size);
     } break;
 
     case ZIP_STORED: {
-      backing_store->ReadIntoBuffer(decomp_buffer.get(), buffer_size);
+      // If the file is just stored we only need to map a slice of it.
+      if (0) {
+        unsigned int buffer_size = zip_info->file_size;
+        unique_ptr<char[]> decomp_buffer(new char[buffer_size]);
+
+        backing_store->ReadIntoBuffer(decomp_buffer.get(), buffer_size);
+        buffer.assign(decomp_buffer.get(), buffer_size);
+      } else {
+        _backing_store_urn = owner.backing_store_urn;
+        _backing_store_start_offset = backing_store->Tell();
+        _backing_store_length = zip_info->file_size;
+      }
     } break;
 
     default:
@@ -574,9 +589,65 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile &owner) {
       return NOT_IMPLEMENTED;
   }
 
-  buffer.assign(decomp_buffer.get(), buffer_size);
   return STATUS_OK;
 }
+
+string ZipFileSegment::Read(size_t length) {
+  if (_backing_store_start_offset < 0) {
+    return StringIO::Read(length);
+  }
+
+  AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen
+      <AFF4Stream>(_backing_store_urn);
+  if (!backing_store || readptr > _backing_store_length) {
+    return "";
+  }
+
+  aff4_off_t offset = _backing_store_start_offset + readptr;
+  size_t to_read = std::min((aff4_off_t)length,
+                            (aff4_off_t)_backing_store_length - readptr);
+
+  backing_store->Seek(offset, SEEK_SET);
+
+  string result = backing_store->Read(to_read);
+  readptr += result.size();
+
+  return result;
+}
+
+aff4_off_t ZipFileSegment::Size() {
+  if (_backing_store_start_offset < 0)
+    return StringIO::Size();
+
+  return _backing_store_length;
+}
+
+
+AFF4Status ZipFileSegment::Truncate() {
+  // Ensure we stop mapping the backing file.
+  _backing_store_start_offset = -1;
+
+  return StringIO::Truncate();
+}
+
+int ZipFileSegment::Write(const char *data, int length) {
+  // The segment is mapped from the backing store and the user wants to modify
+  // it. We need to make a local copy.
+  if (_backing_store_start_offset > 0) {
+    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen
+        <AFF4Stream>(_backing_store_urn);
+
+    if (!backing_store)
+      return 0;
+
+    backing_store->Seek(_backing_store_start_offset, SEEK_SET);
+    buffer = backing_store->Read(_backing_store_length);
+    _backing_store_length = -1;
+  }
+
+  return StringIO::Write(data, length);
+}
+
 
 
 AFF4Status ZipFileSegment::LoadFromURN() {
@@ -594,8 +665,6 @@ AFF4Status ZipFileSegment::LoadFromURN() {
   return LoadFromZipFile(*owner);
 }
 
-
-#define BUFF_SIZE 4096
 
 // In AFF4 we use smallish buffers, therefore we just do everything in memory.
 static string CompressBuffer(const string &buffer) {
@@ -683,9 +752,11 @@ AFF4Status ZipFileSegment::Flush() {
         backing_store->Tell() - owner->global_offset);
 
     zip_info->filename = owner->_member_name_for_urn(urn);
-    zip_info->file_size = buffer.size();
-    zip_info->crc32 = crc32(
-        0, reinterpret_cast<Bytef*>(const_cast<char *>(buffer.data())),
+    zip_info->file_size = Size();
+
+    zip_info->crc32_cs = crc32(
+        zip_info->crc32_cs,
+        reinterpret_cast<Bytef*>(const_cast<char *>(buffer.data())),
         buffer.size());
 
     if (compression_method == ZIP_DEFLATE) {
@@ -693,14 +764,14 @@ AFF4Status ZipFileSegment::Flush() {
       zip_info->compress_size = cdata.size();
       zip_info->compression_method = ZIP_DEFLATE;
 
-      owner->WriteZipFileHeader(*zip_info, *backing_store);
+      zip_info->WriteFileHeader(*backing_store);
       if (backing_store->Write(cdata) < 0)
         return IO_ERROR;
 
     } else {
       zip_info->compress_size = buffer.size();
 
-      owner->WriteZipFileHeader(*zip_info, *backing_store);
+      zip_info->WriteFileHeader(*backing_store);
       if (backing_store->Write(buffer) < 0) {
         return IO_ERROR;
       }
@@ -720,7 +791,24 @@ AFF4Status ZipFileSegment::Flush() {
   return AFF4Stream::Flush();
 }
 
+// Copy the stream into this new segment.
+AFF4Status ZipFileSegment::WriteStream(
+    AFF4Stream *source, ProgressContext *progress) {
+  AFF4ScopedPtr<ZipFile> owner = resolver->AFF4FactoryOpen<ZipFile>(
+      owner_urn);
 
+  if (!owner) {
+    LOG(ERROR) << "Unable to open owner volume of ZipFileSegment " <<
+        urn.SerializeToString().c_str();
+    return IO_ERROR;
+  }
+
+  return owner->StreamAddMember(urn, *source, compression_method, progress);
+}
+
+//-------------------------------------------------------------------------
+// ZipInfo Class.
+//-------------------------------------------------------------------------
 ZipInfo::ZipInfo() {
   struct tm now;
   time_t epoch_time;
@@ -732,8 +820,70 @@ ZipInfo::ZipInfo() {
       (now.tm_mon + 1) << 5 | now.tm_mday;
   lastmodtime = now.tm_hour << 11 | now.tm_min << 5 |
       now.tm_sec / 2;
+
+  file_header_offset = -1;
+
+  // Initialize the crc32.
+  crc32_cs = crc32(0L, Z_NULL, 0);
 }
 
+AFF4Status ZipInfo::WriteFileHeader(AFF4Stream &output) {
+  // Remember where we wrote the file header.
+  if (file_header_offset < 0) {
+    file_header_offset = output.Tell();
+  }
+
+  struct ZipFileHeader header;
+  struct Zip64FileHeaderExtensibleField zip64header;
+
+  header.crc32_cs = crc32_cs;
+  header.compress_size = -1;
+  header.file_size = -1;
+  header.file_name_length = filename.length();
+  header.compression_method = compression_method;
+  header.lastmodtime = lastmodtime;
+  header.lastmoddate = lastmoddate;
+  header.extra_field_len = sizeof(zip64header);
+
+  output.Seek(file_header_offset, SEEK_SET);
+  output.Write(reinterpret_cast<char *>(&header), sizeof(header));
+  output.Write(filename);
+
+  zip64header.file_size = file_size;
+  zip64header.compress_size = compress_size;
+  zip64header.relative_offset_local_header = local_header_offset;
+  output.Write(reinterpret_cast<char *>(&zip64header), sizeof(zip64header));
+
+  return STATUS_OK;
+}
+
+AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream &output) {
+  struct CDFileHeader header;
+  struct Zip64FileHeaderExtensibleField zip64header;
+
+  header.compression_method = compression_method;
+  header.crc32_cs = crc32_cs;
+  header.file_name_length = filename.length();
+  header.dostime = lastmodtime;
+  header.dosdate = lastmoddate;
+  header.extra_field_len = sizeof(zip64header);
+
+  output.Write(reinterpret_cast<char *>(&header), sizeof(header));
+  output.Write(filename);
+
+  zip64header.file_size = file_size;
+  zip64header.compress_size = compress_size;
+  zip64header.relative_offset_local_header = local_header_offset;
+
+  output.Write(reinterpret_cast<char *>(&zip64header), sizeof(zip64header));
+
+  return STATUS_OK;
+}
+
+
+//-------------------------------------------------------------------------
+// ZipFile Class.
+//-------------------------------------------------------------------------
 string ZipFile::_member_name_for_urn(const URN member) const {
   string filename = urn.RelativePath(member);
   std::stringstream result;
@@ -803,53 +953,141 @@ URN ZipFile::_urn_from_member_name(const string member) const {
 }
 
 
-AFF4Status ZipFile::WriteCDFileHeader(
-    ZipInfo &zip_info, AFF4Stream &output) {
-  struct CDFileHeader header;
-  struct Zip64FileHeaderExtensibleField zip64header;
-  string filename = zip_info.filename;
+AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream &stream,
+                                    int compression_method,
+                                    ProgressContext *progress) {
+  if (resolver->Get(urn, AFF4_STORED, backing_store_urn) != STATUS_OK) {
+    return NOT_FOUND;
+  }
 
-  header.compression_method = zip_info.compression_method;
-  header.crc32 = zip_info.crc32;
-  header.file_name_length = filename.length();
-  header.dostime = zip_info.lastmodtime;
-  header.dosdate = zip_info.lastmoddate;
-  header.extra_field_len = sizeof(zip64header);
+  MarkDirty();
 
-  output.Write(reinterpret_cast<char *>(&header), sizeof(header));
-  output.Write(filename);
+  AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
+    AFF4Stream>(backing_store_urn);
 
-  zip64header.file_size = zip_info.file_size;
-  zip64header.compress_size = zip_info.compress_size;
-  zip64header.relative_offset_local_header = zip_info.local_header_offset;
+  if (!backing_store) {
+    LOG(ERROR) << "Unable to open backing URN " <<
+        backing_store_urn.SerializeToString().c_str();
+    return IO_ERROR;
+  }
 
-  output.Write(reinterpret_cast<char *>(&zip64header), sizeof(zip64header));
 
-  return STATUS_OK;
-}
+  LOG(INFO) << "Writing member %s" << member_urn.SerializeToString().c_str();
 
-AFF4Status ZipFile::WriteZipFileHeader(
-    ZipInfo &zip_info, AFF4Stream &output) {
-  struct ZipFileHeader header;
-  struct Zip64FileHeaderExtensibleField zip64header;
-  string filename = zip_info.filename;
+  // Append member at the end of the file.
+  backing_store->Seek(0, SEEK_END);
 
-  header.crc32 = zip_info.crc32;
-  header.compress_size = -1;
-  header.file_size = -1;
-  header.file_name_length = filename.length();
-  header.compression_method = zip_info.compression_method;
-  header.lastmodtime = zip_info.lastmodtime;
-  header.lastmoddate = zip_info.lastmoddate;
-  header.extra_field_len = sizeof(zip64header);
+  // zip_info offsets are relative to the start of the zip file (take
+  // global_offset into account).
+  unique_ptr<ZipInfo> zip_info(new ZipInfo());
+  zip_info->filename = _member_name_for_urn(member_urn);
+  zip_info->local_header_offset = backing_store->Tell() - global_offset;
 
-  output.Write(reinterpret_cast<char *>(&header), sizeof(header));
-  output.Write(filename);
+  // For now we do not support streamed writing so we need to seek back
+  // to this position later with an updated crc32.
+  zip_info->WriteFileHeader(*backing_store);
 
-  zip64header.file_size = zip_info.file_size;
-  zip64header.compress_size = zip_info.compress_size;
-  zip64header.relative_offset_local_header = zip_info.local_header_offset;
-  output.Write(reinterpret_cast<char *>(&zip64header), sizeof(zip64header));
+  if (compression_method == ZIP_DEFLATE) {
+    zip_info->compression_method = ZIP_DEFLATE;
+
+    z_stream strm;
+
+    memset(&strm, 0, sizeof(strm));
+
+    // Make some room for output buffer.
+    std::unique_ptr<char[]> c_buffer(new char[AFF4_BUFF_SIZE]);
+
+    strm.next_out = reinterpret_cast<Bytef *>(c_buffer.get());
+    strm.avail_out = AFF4_BUFF_SIZE;
+
+    if (deflateInit2(&strm, 9, Z_DEFLATED, -15,
+                     9, Z_DEFAULT_STRATEGY) != Z_OK) {
+      LOG(INFO) << "Unable to initialise zlib (" <<  strm.msg << ")";
+      return FATAL_ERROR;
+    }
+
+    while (1) {
+      string buffer(stream.Read(AFF4_BUFF_SIZE));
+
+      if (buffer.size() == 0)
+        break;
+
+      strm.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data()));
+      strm.avail_in = buffer.size();
+
+      if (deflate(&strm, Z_PARTIAL_FLUSH) != Z_OK) {
+        deflateEnd(&strm);
+        return IO_ERROR;
+      }
+
+      int output_bytes = AFF4_BUFF_SIZE - strm.avail_out;
+      zip_info->crc32_cs = crc32(
+          zip_info->crc32_cs,
+          reinterpret_cast<Bytef*>(const_cast<char *>(buffer.data())),
+          buffer.size() - strm.avail_in);
+
+      // Report progress.
+      if (!progress->Report(stream.Tell())) {
+        deflateEnd(&strm);
+        return ABORTED;
+      }
+
+      backing_store->Write(c_buffer.get(), output_bytes);
+
+      // Give the compressor more room.
+      strm.next_out = reinterpret_cast<Bytef *>(c_buffer.get());
+      strm.avail_out = AFF4_BUFF_SIZE;
+    }
+
+    // Give the compressor more room.
+    strm.next_out = reinterpret_cast<Bytef *>(c_buffer.get());
+    strm.avail_out = AFF4_BUFF_SIZE;
+
+    // Flush the compressor.
+    if (deflate(&strm, Z_FINISH) != Z_STREAM_END) {
+      deflateEnd(&strm);
+      return GENERIC_ERROR;
+    }
+
+    zip_info->file_size = strm.total_in;
+    zip_info->compress_size = strm.total_out;
+    backing_store->Write(c_buffer.get(), AFF4_BUFF_SIZE - strm.avail_out);
+
+    deflateEnd(&strm);
+
+  } else if (compression_method == ZIP_STORED) {
+    zip_info->compression_method = ZIP_STORED;
+
+    while (1) {
+      string buffer(stream.Read(AFF4_BUFF_SIZE));
+
+      if (buffer.size() == 0)
+        break;
+
+      zip_info->compress_size += buffer.size();
+      zip_info->file_size += buffer.size();
+      zip_info->crc32_cs = crc32(
+          zip_info->crc32_cs,
+          reinterpret_cast<Bytef*>(const_cast<char *>(buffer.data())),
+          buffer.size());
+
+      // Report progress.
+      if (!progress->Report(stream.Tell())) {
+        return ABORTED;
+      }
+
+      backing_store->Write(buffer.data(), buffer.size());
+    }
+  } else {
+    return NOT_IMPLEMENTED;
+  }
+
+  // Update the local file header now that CRC32 is calculated.
+  zip_info->WriteFileHeader(*backing_store);
+  members[zip_info->filename] = std::move(zip_info);
+
+  // Keep track of all the segments we issue.
+  children.insert(member_urn.SerializeToString());
 
   return STATUS_OK;
 }

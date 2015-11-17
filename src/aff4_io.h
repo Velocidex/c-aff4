@@ -13,8 +13,8 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef     AFF4_IO_H_
-#define     AFF4_IO_H_
+#ifndef     SRC_AFF4_IO_H_
+#define     SRC_AFF4_IO_H_
 
 #include <unordered_map>
 #include <unordered_set>
@@ -32,6 +32,9 @@ using std::unordered_map;
 using std::ofstream;
 using std::ifstream;
 
+// A constant for various buffers used by the AFF4 library.
+#define AFF4_BUFF_SIZE (32 * 1024)
+
 
 struct AFF4StreamProperties {
   bool seekable = true;                 /**< Set if the stream is non seekable
@@ -41,19 +44,36 @@ struct AFF4StreamProperties {
   bool writable = false;                /**< Can we write to this file. */
 };
 
-struct ProgressContext {
+class ProgressContext {
+ public:
   // Maintained by the callback.
   uint64_t last_time = 0;
   aff4_off_t last_offset = 0;
 
-  // Set by CopyToStream
+  // The following are set in advance by users in order to get accurate progress
+  // reports.
+
+  // Start offset of this current range.
   aff4_off_t start = 0;
+
+  // Total length for this operation.
   aff4_off_t length = 0;
+
+  // This will be called periodically to report the progress. Note that readptr
+  // is specified relative to the start of the range operation (WriteStream and
+  // CopyToStream)
+  virtual bool Report(aff4_off_t readptr) {return true;}
+  virtual ~ProgressContext() {}
 };
 
-bool default_progress(aff4_off_t readptr, ProgressContext &context);
-bool empty_progress(aff4_off_t readptr, ProgressContext &context);
+// The empty progress renderer is always available.
+extern ProgressContext empty_progress;
 
+
+// Some default progress functions that come out of the box.
+class DefaultProgress: public ProgressContext {
+  virtual bool Report(aff4_off_t readptr);
+};
 
 class AFF4Stream: public AFF4Object {
  protected:
@@ -63,7 +83,7 @@ class AFF4Stream: public AFF4Object {
  public:
   AFF4StreamProperties properties;
 
-  AFF4Stream(DataStore *result): AFF4Object(result), readptr(0), size(0) {};
+  AFF4Stream(DataStore *result): AFF4Object(result), readptr(0), size(0) {}
 
   // Convenience methods.
   int Write(const unique_ptr<string> &data);
@@ -76,11 +96,16 @@ class AFF4Stream: public AFF4Object {
   int ReadIntoBuffer(void *buffer, size_t length);
 
   // Copies length bytes from this stream to the output stream.
-  AFF4Status CopyToStream(
+  virtual AFF4Status CopyToStream(
       AFF4Stream &output, aff4_off_t length,
-      std::function<
-      bool(aff4_off_t, ProgressContext&)> progress=default_progress,
-      size_t buffer_size=10*1024*1024);
+      ProgressContext *progress = nullptr,
+      size_t buffer_size = 10*1024*1024);
+
+  // Copies the entire source stream into this stream. This is the opposite of
+  // CopyToStream. By default we copy from the start to the end of the stream.
+  virtual AFF4Status WriteStream(
+      AFF4Stream *source,
+      ProgressContext *progress = nullptr);
 
   // The following should be overriden by derived classes.
   virtual AFF4Status Seek(aff4_off_t offset, int whence);
@@ -98,7 +123,7 @@ class AFF4Stream: public AFF4Object {
   virtual AFF4Status Prepare() {
     Seek(0, SEEK_SET);
     return STATUS_OK;
-  };
+  }
 
   /**
    * Streams can be truncated. This means the older stream data will be removed
@@ -109,22 +134,22 @@ class AFF4Stream: public AFF4Object {
    */
   virtual AFF4Status Truncate() {
     return NOT_IMPLEMENTED;
-  };
+  }
 };
 
 class StringIO: public AFF4Stream {
  public:
   string buffer;
-  StringIO(DataStore *resolver): AFF4Stream(resolver) {};
-  StringIO(): AFF4Stream(NULL) {};
-  StringIO(string data): AFF4Stream(NULL), buffer(data) {};
+  explicit StringIO(DataStore *resolver): AFF4Stream(resolver) {}
+  StringIO(): AFF4Stream(NULL) {}
+  explicit StringIO(string data): AFF4Stream(NULL), buffer(data) {}
 
   // Convenience constructors.
   static unique_ptr<StringIO> NewStringIO() {
     unique_ptr<StringIO> result(new StringIO());
 
     return result;
-  };
+  }
 
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
@@ -138,7 +163,7 @@ class StringIO: public AFF4Stream {
 
 class FileBackedObject: public AFF4Stream {
  public:
-  FileBackedObject(DataStore *resolver): AFF4Stream(resolver) {};
+  explicit FileBackedObject(DataStore *resolver): AFF4Stream(resolver) {}
   virtual ~FileBackedObject();
 
   virtual string Read(size_t length);
@@ -186,9 +211,14 @@ class AFF4Volume: public AFF4Object {
   // This is a list of URNs contained in this volume.
   std::unordered_set<string> children;
 
-  AFF4Volume(DataStore *resolver): AFF4Object(resolver) {};
+  explicit AFF4Volume(DataStore *resolver): AFF4Object(resolver) {}
   virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
 };
 
 
-#endif      /* !AFF4_IO_H_ */
+// Flip this to True to abort the current imager. Note: This is a global setting
+// so it is only suitable for setting in a signal handler when a single imager
+// is running. To abort a specific imager, call its Abort() method.
+extern bool aff4_abort_signaled;
+
+#endif  // SRC_AFF4_IO_H_

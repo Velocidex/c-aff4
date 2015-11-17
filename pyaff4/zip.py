@@ -366,29 +366,31 @@ class ZipFileSegment(FileBackedObject):
                 msg = (u"Local filename %s different from "
                        u"central directory %s.") % (
                            file_header_filename, zip_info.filename)
-                logging.error(msg)
+                LOGGER.error(msg)
                 raise IOError(msg)
 
             backing_store.Seek(file_header.extra_field_len, aff4.SEEK_CUR)
 
-            # We write the entire file in a memory buffer.
             buffer_size = zip_info.file_size
             if file_header.compression_method == ZIP_DEFLATE:
+                # We write the entire file in a memory buffer if we need to
+                # deflate it.
                 self.compression_method = ZIP_DEFLATE
                 c_buffer = backing_store.Read(zip_info.compress_size)
                 decomp_buffer = DecompressBuffer(c_buffer)
                 if len(decomp_buffer) != buffer_size:
-                    logging.info("Unable to decompress file %s", self.urn)
+                    LOGGER.info("Unable to decompress file %s", self.urn)
                     raise IOError()
 
                 self.fd = StringIO.StringIO(decomp_buffer)
 
             elif file_header.compression_method == ZIP_STORED:
+                # Otherwise we map a slice into it.
                 self.fd = FileWrapper(self.resolver, backing_store_urn,
                                       backing_store.Tell(), buffer_size)
 
             else:
-                logging.info("Unsupported compression method.")
+                LOGGER.info("Unsupported compression method.")
                 raise NotImplementedError()
 
     def WriteStream(self, stream):
@@ -433,15 +435,15 @@ class ZipFile(aff4.AFF4Volume):
             end_cd, buffer_offset = EndCentralDirectory.FromBuffer(buffer)
             ecd_real_offset += buffer_offset
 
-            logging.info("Found ECD at %#x", ecd_real_offset)
+            LOGGER.info("Found ECD at %#x", ecd_real_offset)
 
             # Fetch the volume comment.
             if end_cd.comment_len > 0:
                 backing_store.Seek(ecd_real_offset + end_cd.sizeof())
                 urn_string = backing_store.Read(end_cd.comment_len)
 
-                logging.info("Loaded AFF4 volume URN %s from zip file.",
-                             urn_string)
+                LOGGER.info("Loaded AFF4 volume URN %s from zip file.",
+                            urn_string)
 
             # There is a catch 22 here - before we parse the ZipFile we dont
             # know the Volume's URN, but we need to know the URN so the
@@ -476,7 +478,7 @@ class ZipFile(aff4.AFF4Volume):
                     # Claimed CD offset.
                     directory_offset)
 
-                logging.info("Global offset: %#x", self.global_offset)
+                LOGGER.info("Global offset: %#x", self.global_offset)
 
             # This is a 64 bit archive, find the Zip64EndCD.
             else:
@@ -501,8 +503,8 @@ class ZipFile(aff4.AFF4Volume):
                     backing_store.Read(Zip64EndCD.sizeof()))
 
                 if not end_cd.IsValid():
-                    logging.error("Zip64EndCD magic not correct @%#x",
-                                  locator_real_offset - Zip64EndCD.sizeof())
+                    LOGGER.error("Zip64EndCD magic not correct @%#x",
+                                 locator_real_offset - Zip64EndCD.sizeof())
                     raise RuntimeError("Zip64EndCD magic not correct")
 
                 directory_offset = end_cd.offset_of_cd
@@ -517,7 +519,7 @@ class ZipFile(aff4.AFF4Volume):
                     # The directory offset in zip file offsets.
                     directory_offset)
 
-                logging.info("Global offset: %#x", self.global_offset)
+                LOGGER.info("Global offset: %#x", self.global_offset)
 
             # Now iterate over the directory and read all the ZipInfo structs.
             entry_offset = directory_offset
@@ -527,7 +529,7 @@ class ZipFile(aff4.AFF4Volume):
                     backing_store.Read(CDFileHeader.sizeof()))
 
                 if not entry.IsValid():
-                    logging.info(
+                    LOGGER.info(
                         "CDFileHeader at offset %#x invalid", entry_offset)
                     raise RuntimeError()
 
@@ -559,8 +561,8 @@ class ZipFile(aff4.AFF4Volume):
                             break
 
                 if zip_info.local_header_offset >= 0:
-                    logging.info("Found file %s @ %#x", zip_info.filename,
-                                 zip_info.local_header_offset)
+                    LOGGER.info("Found file %s @ %#x", zip_info.filename,
+                                zip_info.local_header_offset)
 
                     # Store this information in the resolver. Ths allows
                     # segments to be directly opened by URN.
@@ -658,13 +660,13 @@ class ZipFile(aff4.AFF4Volume):
         res = self.resolver.CacheGet(segment_urn)
 
         if res:
-            logging.info("Openning ZipFileSegment (cached) %s", res.urn)
+            LOGGER.info("Openning ZipFileSegment (cached) %s", res.urn)
             return res
 
         result = ZipFileSegment(resolver=self.resolver, urn=segment_urn)
         result.LoadFromZipFile(owner=self)
 
-        logging.info("Openning ZipFileSegment %s", result.urn)
+        LOGGER.info("Openning ZipFileSegment %s", result.urn)
 
         return self.resolver.CachePut(result)
 
@@ -693,12 +695,14 @@ class ZipFile(aff4.AFF4Volume):
 
         Args:
           member_urn: The new member URN to be added.
-          read_cb: A callback that generates data to be written as the member.
+          stream: A file-like object (with read() method) that generates data to
+            be written as the member.
           compression_method: How to compress the member.
+
         """
         backing_store_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
         with self.resolver.AFF4FactoryOpen(backing_store_urn) as backing_store:
-            logging.info("Writing member %s", member_urn)
+            LOGGER.info("Writing member %s", member_urn)
 
             # Append member at the end of the file.
             backing_store.Seek(0, aff4.SEEK_END)
@@ -793,7 +797,7 @@ class ZipFile(aff4.AFF4Volume):
 
             total_entries = len(self.members)
             for urn, zip_info in self.members.iteritems():
-                logging.info("Writing CD entry for %s", urn)
+                LOGGER.info("Writing CD entry for %s", urn)
                 zip_info.WriteCDFileHeader(cd_stream)
 
             locator = Zip64CDLocator(
@@ -815,14 +819,14 @@ class ZipFile(aff4.AFF4Volume):
                 total_entries_in_cd=len(self.members),
                 comment_len=len(urn_string))
 
-            logging.info("Writing Zip64EndCD at %#x",
-                         cd_stream.tell() + ecd_real_offset)
+            LOGGER.info("Writing Zip64EndCD at %#x",
+                        cd_stream.tell() + ecd_real_offset)
 
             cd_stream.write(end_cd.Pack())
             cd_stream.write(locator.Pack())
 
-            logging.info("Writing ECD at %#x",
-                         cd_stream.tell() + ecd_real_offset)
+            LOGGER.info("Writing ECD at %#x",
+                        cd_stream.tell() + ecd_real_offset)
 
             cd_stream.write(end.Pack())
             cd_stream.write(urn_string)

@@ -1,3 +1,18 @@
+/*
+Copyright 2015 Google Inc. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License.  You may obtain a copy of the
+License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations under the License.
+*/
+
 #include <gtest/gtest.h>
 #include <libaff4.h>
 #include <unistd.h>
@@ -13,7 +28,7 @@ class ZipTest: public ::testing::Test {
   // Remove the file on teardown.
   virtual void TearDown() {
     unlink(filename.c_str());
-  };
+  }
 
   // Create an initial Zip file for each test.
   virtual void SetUp() {
@@ -51,8 +66,22 @@ class ZipTest: public ::testing::Test {
       AFF4ScopedPtr<AFF4Stream> segment2 = zip->CreateMember(segment_urn);
       segment2->Seek(0, SEEK_END);
       segment2->Write(data2);
-    };
-  };
+    }
+
+    // Test the streamed interface.
+    {
+      URN streamed_urn = segment_urn.Append("streamed");
+      unique_ptr<AFF4Stream> test_stream = StringIO::NewStringIO();
+      test_stream->Write(data1);
+      test_stream->Seek(0, SEEK_SET);
+
+      AFF4ScopedPtr<ZipFileSegment> segment = zip->CreateZipSegment(
+          zip->_member_name_for_urn(streamed_urn));
+
+      segment->compression_method = ZIP_DEFLATE;
+      segment->WriteStream(test_stream.get());
+    }
+  }
 };
 
 TEST_F(ZipTest, CreateMember) {
@@ -117,8 +146,8 @@ TEST_F(ZipTest, CreateMember) {
     EXPECT_STREQ(zip->_urn_from_member_name(
         member_name).SerializeToString().c_str(),
                  test.SerializeToString().c_str());
-  };
-};
+  }
+}
 
 
 /**
@@ -134,7 +163,7 @@ TEST_F(ZipTest, OpenMemberByURN) {
     segment_urn = zip->urn.Append(segment_name);
 
     ASSERT_TRUE(zip.get()) << "Unable to open zipfile: " << filename;
-  };
+  }
 
   {
     // The generic AFF4Volume interface must refer to members by their full
@@ -143,7 +172,7 @@ TEST_F(ZipTest, OpenMemberByURN) {
         segment_name);
 
     ASSERT_TRUE(!segment) << "Wrong segment opened.";
-  };
+  }
 
   // Try with the full URN.
   AFF4ScopedPtr<AFF4Stream> segment = resolver.AFF4FactoryOpen<AFF4Stream>(
@@ -154,7 +183,7 @@ TEST_F(ZipTest, OpenMemberByURN) {
 
   string expected = data1 + data2;
   EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
-};
+}
 
 /**
  * Test that we can handle concatenated volumes (i.e. an AFF4 volume appended to
@@ -167,7 +196,8 @@ TEST_F(ZipTest, ConcatenatedVolumes) {
 
     string concate_filename = filename + "_con.zip";
 
-    resolver.Set(concate_filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+    resolver.Set(concate_filename, AFF4_STREAM_WRITE_MODE, new XSDString(
+        "truncate"));
 
     // Copy the files across.
     {
@@ -176,8 +206,8 @@ TEST_F(ZipTest, ConcatenatedVolumes) {
 
       ASSERT_TRUE(file.get()) << "Unable to create file";
 
-      AFF4ScopedPtr<AFF4Stream> concate_file = resolver.AFF4FactoryOpen<AFF4Stream>(
-          concate_filename);
+      AFF4ScopedPtr<AFF4Stream> concate_file = resolver.AFF4FactoryOpen<
+        AFF4Stream>(concate_filename);
 
       ASSERT_TRUE(concate_file.get()) << "Unable to create file";
 
@@ -186,7 +216,9 @@ TEST_F(ZipTest, ConcatenatedVolumes) {
     }
 
     // Now open the zip file from the concatenated file.
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, concate_filename);
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
+        &resolver, concate_filename);
+
     ASSERT_TRUE(zip.get()) << "Unable to create zip file";
 
     AFF4ScopedPtr<ZipFileSegment> segment(zip->OpenZipSegment(segment_name));
@@ -214,4 +246,26 @@ TEST_F(ZipTest, ConcatenatedVolumes) {
 
   // New data should be there.
   EXPECT_STREQ("foobar", (segment->Read(1000).c_str()));
-};
+}
+
+
+TEST_F(ZipTest, testStreamedSegment) {
+  MemoryDataStore resolver;
+  URN segment_urn;
+
+  // Open the resulting ZipFile.
+  {
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
+    segment_urn = zip->urn.Append(segment_name).Append("streamed");
+
+    ASSERT_TRUE(zip.get()) << "Unable to open zipfile: " << filename;
+  }
+
+  AFF4ScopedPtr<AFF4Stream> segment = resolver.AFF4FactoryOpen<AFF4Stream>(
+          segment_urn);
+
+  ASSERT_TRUE(segment.get());
+
+  string expected = data1;
+  EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
+}

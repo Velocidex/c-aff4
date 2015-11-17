@@ -13,8 +13,8 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef _AFF4_IMAGE_H_
-#define _AFF4_IMAGE_H_
+#ifndef SRC_AFF4_IMAGE_H_
+#define SRC_AFF4_IMAGE_H_
 
 #include "aff4_io.h"
 
@@ -55,23 +55,17 @@ specific language governing permissions and limitations under the License.
 
  */
 
+// Compression methods we support.
+AFF4Status CompressZlib_(const char *data, size_t length, string *output);
+AFF4Status DeCompressZlib_(const char *data, size_t length, string *output);
+AFF4Status CompressSnappy_(const char *data, size_t length, string *output);
+AFF4Status DeCompressSnappy_(const char *data, size_t length, string *output);
+
+
 class AFF4Image: public AFF4Stream {
  protected:
   // Delegates to the workers for support compression methods.
   AFF4Status FlushChunk(const char *data, size_t length);
-
-  // Compression methods we support.
-  AFF4Status CompressZlib_(const char *data, size_t length,
-                           string *output);
-
-  AFF4Status DeCompressZlib_(const char *data, size_t length,
-                             string *output);
-
-  AFF4Status CompressSnappy_(const char *data, size_t length,
-                             string *output);
-
-  AFF4Status DeCompressSnappy_(const char *data, size_t length,
-                               string *output);
 
   AFF4Status _FlushBevy();
 
@@ -95,10 +89,13 @@ class AFF4Image: public AFF4Stream {
 
   URN volume_urn;                       /**< The Volume we are stored on. */
 
- public:
-  AFF4Image(DataStore *resolver): AFF4Stream(resolver) {};
+  AFF4Status _write_metadata();
 
-  unsigned int chunk_size = 32*1024;    /**< The number of bytes in each chunk. */
+ public:
+  explicit AFF4Image(DataStore *resolver): AFF4Stream(resolver) {}
+
+  unsigned int chunk_size = 32*1024;    /**< The number of bytes in each
+                                         * chunk. */
   unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
                                            * Bevy. */
 
@@ -130,6 +127,14 @@ class AFF4Image: public AFF4Stream {
    */
   virtual AFF4Status LoadFromURN();
 
+
+  /**
+   * An optimized WriteStream() API.
+   */
+  virtual AFF4Status WriteStream(
+      AFF4Stream *source,
+      ProgressContext *progress = nullptr);
+
   virtual int Write(const char *data, int length);
 
   /**
@@ -149,4 +154,4 @@ class AFF4Image: public AFF4Stream {
 
 
 
-#endif // _AFF4_IMAGE_H_
+#endif  // SRC_AFF4_IMAGE_H_

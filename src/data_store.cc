@@ -44,8 +44,8 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
       if (!verbose &&
           suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
         continue;
-      };
-    };
+      }
+    }
 
     for (const auto &attr_it : it.second) {
       URN predicate(attr_it.first);
@@ -54,19 +54,21 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
       if (!verbose && 0 == predicate.SerializeToString().compare(
              0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
         continue;
-      };
+      }
 
-      LOG(ERROR) << attr_it.first << " : " << attr_it.second->SerializeToString();
+      LOG(ERROR) << attr_it.first << " : " <<
+          attr_it.second->SerializeToString();
       subject_node[attr_it.first] = attr_it.second->SerializeToString();
       emitted_statements++;
-    };
+    }
 
     if (emitted_statements) {
-      LOG(ERROR) << "Node : " << subject.SerializeToString() << subject_node.size();
+      LOG(ERROR) << "Node : " << subject.SerializeToString() <<
+          subject_node.size();
       node[subject.SerializeToString()] = subject_node;
       subject_statements++;
-    };
-  };
+    }
+  }
 
   // Unfortunately if we try to dump and empty node yaml-cpp will crash.
   if (subject_statements) {
@@ -74,14 +76,14 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream &output, bool verbose) {
     output.Write(out.c_str());
 
     LOG(ERROR) << "Yaml output: " << out.c_str();
-  };
+  }
 
   return STATUS_OK;
-};
+}
 
 AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream &stream) {
   return NOT_IMPLEMENTED;
-};
+}
 
 #endif
 
@@ -96,12 +98,10 @@ DataStore::DataStore() {
   namespaces.push_back(std::pair<string, string>("aff4", AFF4_NAMESPACE));
   namespaces.push_back(std::pair<string, string>("xsd", XSD_NAMESPACE));
   namespaces.push_back(std::pair<string, string>("rdf", RDF_NAMESPACE));
-};
+}
 
 
-DataStore::~DataStore() {
-};
-
+DataStore::~DataStore() {}
 
 
 class RaptorSerializer {
@@ -136,10 +136,10 @@ class RaptorSerializer {
       raptor_serializer_set_namespace(result->serializer, uri,
                                       (const unsigned char *)it.first.c_str());
       raptor_free_uri(uri);
-    };
+    }
 
     return result;
-  };
+  }
 
   AFF4Status AddStatement(const URN &subject, const URN &predicate,
                           const RDFValue *value) {
@@ -155,23 +155,23 @@ class RaptorSerializer {
     triple->object = value->GetRaptorTerm(world);
     if (!triple->object) {
       return INCOMPATIBLE_TYPES;
-    };
+    }
 
     raptor_serializer_serialize_statement(serializer, triple);
     raptor_free_statement(triple);
 
     return STATUS_OK;
-  };
+  }
 
   string Finalize() {
     raptor_serializer_serialize_end(serializer);
     return string(reinterpret_cast<char *>(output), length);
-  };
+  }
 
   ~RaptorSerializer() {
     raptor_free_serializer(serializer);
     raptor_free_world(world);
-  };
+  }
 };
 
 
@@ -182,7 +182,7 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
     unique_ptr<RDFValue> result(new URN(uri));
     raptor_free_memory(uri);
     return result;
-  };
+  }
 
   if (term->type == RAPTOR_TERM_TYPE_LITERAL) {
     // Does it have a special data type?
@@ -197,7 +197,7 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
         LOG(INFO) << "Unable to handle RDF type " << uri;
         raptor_free_memory(uri);
         return NULL;
-      };
+      }
 
       raptor_free_memory(uri);
 
@@ -207,7 +207,7 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
       if (result->UnSerializeFromString(value_string) != STATUS_OK) {
         LOG(ERROR) << "Unable to parse " << value_string.c_str();
         return NULL;
-      };
+      }
 
       return result;
 
@@ -217,10 +217,10 @@ static unique_ptr<RDFValue> RDFValueFromRaptorTerm(
                           term->value.literal.string_len);
 
       return unique_ptr<RDFValue>(new XSDString(value_string));
-    };
-  };
+    }
+  }
   return NULL;
-};
+}
 
 
 static void statement_handler(void *user_data,
@@ -240,12 +240,12 @@ static void statement_handler(void *user_data,
 
     if (object.get()) {
       resolver->Set(URN(subject), URN(predicate), std::move(object));
-    };
+    }
 
     raptor_free_memory(subject);
     raptor_free_memory(predicate);
-  };
-};
+  }
+}
 
 
 class RaptorParser {
@@ -254,7 +254,7 @@ class RaptorParser {
   raptor_parser *parser;
   DataStore *resolver;
 
-  RaptorParser(DataStore *resolver): resolver(resolver) {}
+  explicit RaptorParser(DataStore *resolver): resolver(resolver) {}
 
  public:
   static unique_ptr<RaptorParser> NewRaptorParser(DataStore *resolver) {
@@ -276,22 +276,22 @@ class RaptorParser {
     if (raptor_parser_parse_start(result->parser, uri)) {
       LOG(ERROR) << "Unable to initialize the parser.";
       return NULL;
-    };
+    }
 
     raptor_free_uri(uri);
 
     return result;
-  };
+  }
 
   AFF4Status Parse(string buffer) {
     if (raptor_parser_parse_chunk(
            parser, (const unsigned char *)buffer.data(),
            buffer.size(), 1)) {
       return PARSING_ERROR;
-    };
+    }
 
     return STATUS_OK;
-  };
+  }
 
   ~RaptorParser() {
     // Flush the parser.
@@ -299,7 +299,7 @@ class RaptorParser {
 
     raptor_free_parser(parser);
     raptor_free_world(world);
-  };
+  }
 };
 
 
@@ -309,7 +309,7 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream, URN base,
       RaptorSerializer::NewRaptorSerializer(base, namespaces));
   if (!serializer) {
     return MEMORY_ERROR;
-  };
+  }
 
   for (const auto &it : store) {
     URN subject(it.first);
@@ -320,8 +320,8 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream, URN base,
       if (!verbose &&
           suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
         continue;
-      };
-    };
+      }
+    }
 
     for (const auto &attr_it : it.second) {
       URN predicate(attr_it.first);
@@ -330,17 +330,17 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream, URN base,
       if (!verbose && 0 == predicate.value.compare(
              0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
         continue;
-      };
+      }
 
       serializer->AddStatement(
           subject, predicate, attr_it.second.get());
-    };
-  };
+    }
+  }
 
   output_stream.Write(serializer->Finalize());
 
   return STATUS_OK;
-};
+}
 
 
 AFF4Status MemoryDataStore::LoadFromTurtle(AFF4Stream &stream) {
@@ -348,19 +348,19 @@ AFF4Status MemoryDataStore::LoadFromTurtle(AFF4Stream &stream) {
       RaptorParser::NewRaptorParser(this));
   if (!parser) {
     return MEMORY_ERROR;
-  };
+  }
 
   while (1) {
     string buffer = stream.Read(1000000);
     if (buffer.size() == 0) {
       break;
-    };
+    }
 
     AFF4Status res = parser->Parse(buffer);
     if (res != STATUS_OK) {
       return res;
-    };
-  };
+    }
+  }
 
   return STATUS_OK;
 }
@@ -373,14 +373,14 @@ void MemoryDataStore::Set(const URN &urn, const URN &attribute,
   // Automatically create needed keys.
   store[urn.SerializeToString()][attribute.SerializeToString()] = (
       std::move(unique_value));
-};
+}
 
 void MemoryDataStore::Set(const URN &urn, const URN &attribute,
                           unique_ptr<RDFValue> value) {
   // Automatically create needed keys.
   store[urn.SerializeToString()][attribute.SerializeToString()] = (
       std::move(value));
-};
+}
 
 AFF4Status MemoryDataStore::Get(const URN &urn, const URN &attribute,
                                 RDFValue &value) {
@@ -396,35 +396,35 @@ AFF4Status MemoryDataStore::Get(const URN &urn, const URN &attribute,
   // The RDFValue type is incompatible with what the caller provided.
   if (typeid(value) != typeid(*attribute_itr->second)) {
     return INCOMPATIBLE_TYPES;
-  };
+  }
 
   return value.UnSerializeFromString(
       attribute_itr->second->SerializeToString());
-};
+}
 
 
 AFF4Status MemoryDataStore::DeleteSubject(const URN &urn) {
   store.erase(urn.SerializeToString());
 
   return STATUS_OK;
-};
+}
 
 AFF4Status MemoryDataStore::Flush() {
   ObjectCache.Flush();
 
   return STATUS_OK;
-};
+}
 
 AFF4Status MemoryDataStore::Clear() {
   ObjectCache.Flush();
 
   store.clear();
   return STATUS_OK;
-};
+}
 
 MemoryDataStore::~MemoryDataStore() {
   Flush();
-};
+}
 
 void DataStore::Dump(bool verbose) {
   StringIO output;
@@ -434,7 +434,7 @@ void DataStore::Dump(bool verbose) {
   std::cout << output.buffer;
 
   ObjectCache.Dump();
-};
+}
 
 
 AFF4Status AFF4ObjectCache::Flush() {
@@ -443,10 +443,18 @@ AFF4Status AFF4ObjectCache::Flush() {
   // It is an error to flush the object cache while there are still items in
   // use.
   if (in_use.size() > 0) {
+#ifndef WIN32
+    // In Windows if the user pressed ctrl-C, destructors sometimes do not get
+    // called and this sometimes happen. The output volume is incomplete but at
+    // least we make it somewhat readable.
     Dump();
-    CHECK_EQ(in_use.size(), 0) <<
-        "ObjectCache flushed while some objects in use!";
-  };
+    LOG(ERROR) << "ObjectCache flushed while some objects in use!";
+#endif
+
+    for (auto it : in_use) {
+      it.second->object->Flush();
+    }
+  }
 
   // First flush all objects without deleting them since some flushed objects
   // may still want to use other cached objects. It is also possible that new
@@ -465,24 +473,24 @@ AFF4Status AFF4ObjectCache::Flush() {
           it->flush_failed = true;
         } else {
           dirty_objects_found = true;
-        };
-      };
-    };
+        }
+      }
+    }
 
     if (!dirty_objects_found)
       break;
-  };
+  }
 
   // Now delete all entries.
   for (auto it : lru_map) {
     delete it.second;
-  };
+  }
 
   // Clear the map.
   lru_map.clear();
 
   return res;
-};
+}
 
 
 void AFF4ObjectCache::Dump() {
@@ -490,14 +498,14 @@ void AFF4ObjectCache::Dump() {
   std::cout << "Objects in use:\n";
   for (auto it : in_use) {
     std::cout << it.first << " - " << it.second->use_count << "\n";
-  };
+  }
 
   std::cout << "Objects in cache:\n";
   for (AFF4ObjectCacheEntry *it = lru_list.next; it != &lru_list;
        it = it->next) {
     std::cout << it->key << " - " << it->use_count << "\n";
-  };
-};
+  }
+}
 
 
 AFF4Status AFF4ObjectCache::Trim_() {
@@ -526,10 +534,10 @@ AFF4Status AFF4ObjectCache::Trim_() {
     older_item->use_count--;
 
     delete older_item;
-  };
+  }
 
   return res;
-};
+}
 
 
 AFF4Status AFF4ObjectCache::Put(AFF4Object *object, bool in_use_state) {
@@ -550,7 +558,7 @@ AFF4Status AFF4ObjectCache::Put(AFF4Object *object, bool in_use_state) {
     entry->use_count = 1;
     in_use[key] = entry;
     return STATUS_OK;
-  };
+  }
 
   // Newest items go on the front.
   lru_list.append(entry);
@@ -573,13 +581,13 @@ AFF4Object *AFF4ObjectCache::Get(const URN urn) {
     in_use_itr->second->use_count++;
 
     return in_use_itr->second->object;
-  };
+  }
 
   auto iter = lru_map.find(key);
   if (iter == lru_map.end()) {
     // Key not found.
     return NULL;
-  };
+  }
 
   // Hold onto the entry.
   AFF4ObjectCacheEntry *entry = iter->second;
@@ -593,7 +601,7 @@ AFF4Object *AFF4ObjectCache::Get(const URN urn) {
   in_use[key] = entry;
 
   return entry->object;
-};
+}
 
 void AFF4ObjectCache::Return(AFF4Object *object) {
   string key = object->urn.SerializeToString();
@@ -623,8 +631,8 @@ void AFF4ObjectCache::Return(AFF4Object *object) {
 
     // The cache has grown - check we dont exceed the limit.
     Trim_();
-  };
-};
+  }
+}
 
 AFF4Status AFF4ObjectCache::Remove(AFF4Object *object) {
   string key = object->urn.SerializeToString();
@@ -640,7 +648,7 @@ AFF4Status AFF4ObjectCache::Remove(AFF4Object *object) {
     lru_map.erase(it);
 
     return res;
-  };
+  }
 
   // Is the item in use?
   auto in_use_it = in_use.find(key);
@@ -654,11 +662,11 @@ AFF4Status AFF4ObjectCache::Remove(AFF4Object *object) {
     in_use.erase(in_use_it);
 
     return res;
-  };
+  }
 
   // This is a fatal error.
   LOG(FATAL) << "Object " << key <<
       " removed from cache, but was never there.";
 
   return FATAL_ERROR;
-};
+}

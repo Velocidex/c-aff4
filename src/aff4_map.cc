@@ -17,6 +17,16 @@ specific language governing permissions and limitations under the License.
 #include "aff4_image.h"
 
 
+string Range::SerializeToString() {
+  BinaryRange result;
+  result.map_offset = map_offset;
+  result.target_offset = target_offset;
+  result.length = length;
+  result.target_id = target_id;
+
+  return  string(reinterpret_cast<char *>(&result), sizeof(result));
+}
+
 AFF4ScopedPtr<AFF4Map> AFF4Map::NewAFF4Map(
     DataStore *resolver, const URN &object_urn, const URN &volume_urn) {
   AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
@@ -60,9 +70,10 @@ AFF4Status AFF4Map::LoadFromURN() {
       // Clear the map so we start with a fresh map.
       Clear();
     } else {
-      Range range;
+      BinaryRange binary_range;
       while (map_stream->ReadIntoBuffer(
-                 &range, sizeof(range)) == sizeof(range)) {
+                 &binary_range, sizeof(binary_range)) == sizeof(binary_range)) {
+        Range range(binary_range);
         map[range.map_end()] = range;
       }
     }
@@ -89,7 +100,7 @@ string AFF4Map::Read(size_t length) {
 
     Range range = map_it->second;
     aff4_off_t length_to_start_of_range = std::min(
-        (aff4_off_t)length, range.map_offset - readptr);
+        (aff4_off_t)length, (aff4_off_t)range.map_offset - readptr);
     if (length_to_start_of_range > 0) {
       // Null pad it.
       result.resize(result.size() + length_to_start_of_range);
@@ -173,6 +184,103 @@ static std::vector<Range> _MergeRanges(std::vector<Range> &ranges) {
 
   return result;
 }
+
+class _MapStreamHelper: public AFF4Stream {
+  friend AFF4Map;
+
+ protected:
+  aff4_off_t range_offset = 0;
+  std::map<aff4_off_t, Range>::iterator current_range;
+
+ public:
+  AFF4Map *source;   // The map we are reading from.
+  AFF4Map *destination;  // The map we are creating.
+
+  explicit _MapStreamHelper(
+      DataStore *resolver, AFF4Map *source, AFF4Map *destination):
+      AFF4Stream(resolver), source(source), destination(destination) {
+    current_range = source->map.begin();
+  }
+
+  /* Just read data from the ranges consecutively. */
+  virtual string Read(size_t length) {
+    string result;
+
+    // This is the target data stream of the map.
+    URN target;
+    AFF4Status res = destination->GetBackingStream(target);
+    if (res != STATUS_OK) {
+      return "";
+    }
+
+    // Need more data - read more.
+    while (result.size() < length) {
+      // We are done! All source ranges read.
+      if (current_range == source->map.end()) {
+        break;
+      }
+
+      // Add a range if we are at the beginning of a range.
+      if (range_offset == 0)
+        destination->AddRange(current_range->second.map_offset,
+                              // This is the current offset in the data stream.
+                              readptr,
+                              current_range->second.length,
+                              target);
+
+      // Read as much data as possible from this range.
+      size_t to_read;
+      to_read = std::min(
+          // How much we need.
+          (aff4_off_t)(length - result.size()),
+          // How much is available in this range.
+          (aff4_off_t)current_range->second.length - range_offset);
+
+      // Range is exhausted - get the next range.
+      if (to_read == 0) {
+        current_range++;
+        range_offset = 0;
+        continue;
+      }
+
+      // Read and copy the data.
+      URN source_urn = source->targets[current_range->second.target_id];
+      AFF4ScopedPtr<AFF4Stream> source = resolver->AFF4FactoryOpen<AFF4Stream>(
+          source_urn);
+
+      if (!source) {
+        LOG(ERROR) << "Unable to open URN " <<
+            source_urn.SerializeToString().c_str();
+        break;
+      }
+
+      source->Seek(
+          current_range->second.target_offset + range_offset, SEEK_SET);
+
+      string data = source->Read(to_read);
+      if (data.size() == 0) {
+        break;
+      }
+
+      /*
+      LOG(ERROR) << "Reading " << to_read << " from " << std::hex <<
+          current_range->second.map_offset + range_offset << " :" <<
+          current_range->second.target_offset + range_offset << ": " <<
+          current_range->second.length << " To " <<
+          readptr << " range offset: " << range_offset << " Got " << data.size();
+      */
+      result += data;
+      range_offset += data.size();
+
+      // Keep track of all the data we have released.
+      readptr += data.size();
+    }
+
+    return result;
+  }
+
+  virtual ~_MapStreamHelper() {}
+};
 
 
 /**
@@ -286,8 +394,9 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
     // Old range starts after the begining of this range. This means this
     // subrange is not covered by the old range.
     if (old_range.map_offset > map_offset) {
-      subrange.length = std::min((aff4_off_t)length,
-                                 old_range.map_offset - map_offset);
+      subrange.length = std::min(
+          (aff4_off_t)length,
+          (aff4_off_t)old_range.map_offset - map_offset);
 
       // Subrange is not covered by old range, just add it to the map.
       to_add.push_back(subrange);
@@ -302,8 +411,9 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
     // If we get here, the next subrange overlaps with the old range. First
     // split the subrange to consume as much as the old range as possible but
     // not exceed it. Then we split the old range into three subranges.
-    subrange.length = std::min((aff4_off_t)length,
-                               old_range.map_end() - subrange.map_offset);
+    subrange.length = std::min(
+        (aff4_off_t)length,
+        (aff4_off_t)(old_range.map_end() - subrange.map_offset));
 
     map_offset += subrange.length;
     target_offset += subrange.length;
@@ -314,8 +424,9 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
 
     pre_old_range.length = subrange.map_offset - old_range.map_offset;
 
-    post_old_range.length = std::min(post_old_range.length,
-                                     old_range.map_end() - subrange.map_end());
+    post_old_range.length = std::min(
+        (aff4_off_t)post_old_range.length,
+        old_range.map_end() - subrange.map_end());
 
     post_old_range.map_offset = old_range.map_end() - post_old_range.length;
     post_old_range.target_offset = (old_range.target_end() -
@@ -390,8 +501,7 @@ AFF4Status AFF4Map::Flush() {
 
     for (auto it : map) {
       Range *range_it = &it.second;
-      if (map_stream->Write(
-              reinterpret_cast<char *>(range_it), sizeof(Range)) < 0)
+      if (map_stream->Write(range_it->SerializeToString()) < 0)
         return IO_ERROR;
     }
 
@@ -434,17 +544,17 @@ void AFF4Map::Clear() {
   targets.clear();
 }
 
-
-int AFF4Map::Write(const char *data, int length) {
-  URN target;
-
+AFF4Status AFF4Map::GetBackingStream(URN &target) {
   // Using the write API we automatically select the last target used.
   if (targets.size() == 0) {
     target = urn.Append("data");
   } else {
+    // If we had this target before, we assume it exists.
     target = last_target;
+    return STATUS_OK;
   }
 
+  // Try to ensure the target exists.
   AFF4ScopedPtr<AFF4Stream> stream = resolver->AFF4FactoryOpen<AFF4Stream>(
       target);
 
@@ -465,6 +575,19 @@ int AFF4Map::Write(const char *data, int length) {
     }
   }
 
+  return STATUS_OK;
+}
+
+
+int AFF4Map::Write(const char *data, int length) {
+  URN target;
+  if (GetBackingStream(target) != STATUS_OK) {
+    return -1;
+  }
+
+  AFF4ScopedPtr<AFF4Stream> stream = resolver->AFF4FactoryOpen<AFF4Stream>(
+      target);
+
   AddRange(readptr, stream->Size(), length, target);
 
   // Append the data on the end of the stream.
@@ -475,6 +598,50 @@ int AFF4Map::Write(const char *data, int length) {
   readptr += length;
 
   return length;
+}
+
+// This is the default WriteStream() which operates on linear streams. We just
+// copy the source into our data stream and then add a single range to the map
+// to encapsulate it.
+AFF4Status AFF4Map::WriteStream(AFF4Stream *source, ProgressContext *progress) {
+  URN data_stream_urn;
+  AFF4Status result = GetBackingStream(data_stream_urn);
+  if (result == STATUS_OK) {
+    AFF4ScopedPtr<AFF4Stream> data_stream = resolver->AFF4FactoryOpen<
+      AFF4Stream>(data_stream_urn);
+
+    if (!data_stream)
+      return IO_ERROR;
+
+    result = data_stream->WriteStream(source, progress);
+
+    // Add a single range to cover the bulk of the image.
+    AddRange(0, data_stream->Size(), data_stream->Size(), data_stream->urn);
+  }
+
+  return result;
+}
+
+
+// This specialized version of WriteStream() operates on another AFF4Map. All
+// ranges in the source are copied in order into this map's data stream and this
+// map is adjusted to reflect the source's ranges. The result is a direct and
+// efficient copy of the source - preserving the sparseness.
+AFF4Status AFF4Map::WriteStream(AFF4Map *source, ProgressContext *progress) {
+  URN data_stream_urn;
+  AFF4Status result = GetBackingStream(data_stream_urn);
+  if (result == STATUS_OK) {
+    AFF4ScopedPtr<AFF4Stream> data_stream = resolver->AFF4FactoryOpen<
+      AFF4Stream>(data_stream_urn);
+
+    if (!data_stream)
+      return IO_ERROR;
+
+    _MapStreamHelper helper(resolver, source, this);
+    result = data_stream->WriteStream(&helper, progress);
+  }
+
+  return result;
 }
 
 

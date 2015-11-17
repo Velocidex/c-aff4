@@ -13,8 +13,8 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef     AFF4_ZIP_H_
-#define     AFF4_ZIP_H_
+#ifndef     SRC_ZIP_H_
+#define     SRC_ZIP_H_
 
 #include "aff4_errors.h"
 #include "aff4_io.h"
@@ -53,7 +53,7 @@ struct CDFileHeader {
   uint16_t compression_method;
   uint16_t dostime;
   uint16_t dosdate;
-  uint32_t crc32;
+  uint32_t crc32_cs;
   int32_t compress_size = -1;
   int32_t file_size = -1;
   uint16_t file_name_length;
@@ -73,7 +73,7 @@ struct ZipFileHeader {
   uint16_t compression_method;
   uint16_t lastmodtime;
   uint16_t lastmoddate;
-  uint32_t crc32;
+  uint32_t crc32_cs;
   uint32_t compress_size;
   uint32_t file_size;
   uint16_t file_name_length;
@@ -132,6 +132,14 @@ class ZipFileSegment: public StringIO {
  protected:
   URN owner_urn;                        /**< The zip file who owns us. */
 
+  // If this is set, we are backing a backing store for reading. Otherwise we
+  // use our own StringIO buffers.
+  URN _backing_store_urn;
+
+  // The start offset for the backing store.
+  aff4_off_t _backing_store_start_offset = -1;
+  size_t _backing_store_length = 0;
+
  public:
   /**
    * A convenience function to add a new segment to an existing ZipFile volume.
@@ -155,6 +163,15 @@ class ZipFileSegment: public StringIO {
   virtual AFF4Status LoadFromZipFile(ZipFile &owner);
 
   virtual AFF4Status Flush();
+  virtual AFF4Status Truncate();
+
+  virtual string Read(size_t length);
+  virtual int Write(const char *data, int length);
+
+  virtual aff4_off_t Size();
+
+  virtual AFF4Status WriteStream(
+      AFF4Stream *source, ProgressContext *progress = nullptr);
 
   using AFF4Stream::Write;
 };
@@ -175,9 +192,15 @@ class ZipInfo {
   uint64_t file_size = 0;
   string filename;
   off_t local_header_offset = 0;
-  int crc32;
-  int lastmoddate;
-  int lastmodtime;
+  int crc32_cs = 0;
+  int lastmoddate = 0;
+  int lastmodtime = 0;
+
+  // Where the zip file header is located.
+  off_t file_header_offset = -1;
+
+  AFF4Status WriteFileHeader(AFF4Stream &output);
+  AFF4Status WriteCDFileHeader(AFF4Stream &output);
 };
 
 /**
@@ -225,8 +248,6 @@ class ZipFile: public AFF4Volume {
 
  private:
   AFF4Status write_zip64_CD(AFF4Stream &backing_store);
-  AFF4Status WriteCDFileHeader(ZipInfo &zip_info, AFF4Stream &output);
-  AFF4Status WriteZipFileHeader(ZipInfo &zip_info, AFF4Stream &output);
 
  protected:
   int directory_number_of_entries = -1;
@@ -292,7 +313,8 @@ class ZipFile: public AFF4Volume {
    *
    * @return A new ZipFile reference.
    */
-  static AFF4ScopedPtr<ZipFile> NewZipFile(DataStore *resolver, URN backing_store_urn);
+  static AFF4ScopedPtr<ZipFile> NewZipFile(
+      DataStore *resolver, URN backing_store_urn);
 
   // Generic volume interface.
   virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child);
@@ -309,6 +331,18 @@ class ZipFile: public AFF4Volume {
   AFF4ScopedPtr<ZipFileSegment> CreateZipSegment(string filename);
   AFF4ScopedPtr<ZipFileSegment> OpenZipSegment(string filename);
 
+  // Supports a stream interface.
+  // An efficient interface to add a new archive member.
+  //
+  // Args:
+  //   member_urn: The new member URN to be added.
+  //   stream: A file-like object (with read() method) that generates data to
+  //     be written as the member.
+  //   compression_method: How to compress the member.
+  virtual AFF4Status StreamAddMember(URN child, AFF4Stream &stream,
+                                     int compression_method,
+                                     ProgressContext *progress = nullptr);
+
   // Load the ZipFile from its URN and the information in the oracle.
   virtual AFF4Status LoadFromURN();
 
@@ -321,4 +355,4 @@ class ZipFile: public AFF4Volume {
   unordered_map<string, unique_ptr<ZipInfo>> members;
 };
 
-#endif   // AFF4_ZIP_H_
+#endif   // SRC_ZIP_H_

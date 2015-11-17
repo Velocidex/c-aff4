@@ -120,40 +120,35 @@ class AFF4Image(aff4.AFF4Stream):
         self.bevy_number = 0
 
     def WriteStream(self, source_stream):
-        """Copy data from the read_cb into this stream.
+        """Copy data from a source stream into this stream."""
+        volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
+        if not volume_urn:
+            raise IOError("Unable to find storage for urn %s" %
+                          self.urn)
 
-        The read_cb callback is expected to return data as strings of various
-        length. When it returns an empty string we assume the stream is complete
-        and close it.
-        """
+        with self.resolver.AFF4FactoryOpen(volume_urn) as volume:
+            # Write a bevy at a time.
+            while 1:
+                stream = _CompressorStream(self, source_stream)
 
-        # Write a bevy at a time.
-        while 1:
-            stream = _CompressorStream(self, source_stream)
-
-            volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
-            if not volume_urn:
-                raise IOError("Unable to find storage for urn %s" % self.urn)
-
-            bevy_urn = self.urn.Append("%08d" % self.bevy_number)
-            with self.resolver.AFF4FactoryOpen(volume_urn) as volume:
+                bevy_urn = self.urn.Append("%08d" % self.bevy_number)
                 with volume.CreateMember(bevy_urn) as bevy:
                     bevy.WriteStream(stream)
 
-            bevy_index_urn = bevy_urn.Append("index")
-            with volume.CreateMember(bevy_index_urn) as bevy_index:
-                bevy_index.Write(
-                    struct.pack("<" + "L" * len(stream.bevy_index),
-                                *stream.bevy_index))
+                bevy_index_urn = bevy_urn.Append("index")
+                with volume.CreateMember(bevy_index_urn) as bevy_index:
+                    bevy_index.Write(
+                        struct.pack("<" + "L" * len(stream.bevy_index),
+                                    *stream.bevy_index))
 
-            # Make another bevy.
-            self.bevy_number += 1
-            self.size += stream.size
+                # Make another bevy.
+                self.bevy_number += 1
+                self.size += stream.size
 
-            # Last iteration - the compressor stream quit before the bevy is
-            # full.
-            if stream.chunk_count_in_bevy != self.chunks_per_segment:
-                break
+                # Last iteration - the compressor stream quit before the bevy is
+                # full.
+                if stream.chunk_count_in_bevy != self.chunks_per_segment:
+                    break
 
         self._write_metadata()
 

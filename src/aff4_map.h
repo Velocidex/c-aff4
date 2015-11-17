@@ -13,48 +13,53 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef _AFF4_MAP_H_
-#define _AFF4_MAP_H_
+#ifndef SRC_AFF4_MAP_H_
+#define SRC_AFF4_MAP_H_
 
 #include "aff4_io.h"
 #include <map>
 
+class AFF4Map;
+
+
 // This is the type written to the map stream in this exact binary layout.
 struct BinaryRange {
-  int64_t map_offset;
-  int64_t target_offset;
-  int64_t length;
-  uint32_t target_id;
+  uint64_t map_offset = 0;
+  uint64_t target_offset = 0;
+  uint64_t length = 0;
+  uint32_t target_id = 0;
 }__attribute__((packed));
 
 
 class Range: public BinaryRange {
-
  public:
-  int64_t map_end() {
+  explicit Range(BinaryRange range): BinaryRange(range) {}
+  Range(): BinaryRange() {}
+
+  aff4_off_t map_end() {
     return map_offset + length;
-  };
+  }
 
-  int64_t target_end() {
+  aff4_off_t target_end() {
     return target_offset + length;
-  };
+  }
 
-
+  string SerializeToString();
 };
 
 
 class AFF4Map: public AFF4Stream {
  protected:
+  // The URN that will be used as the target of the next Write() operation.
+  URN last_target;
+
+ public:
   // The target list.
   vector<URN> targets;
   std::map<string, int> target_idx_map;
   std::map<aff4_off_t, Range> map;
 
-  // The URN that will be used as the target of the next Write() operation.
-  URN last_target;
-
- public:
-  AFF4Map(DataStore *resolver): AFF4Stream(resolver) {};
+  explicit AFF4Map(DataStore *resolver): AFF4Stream(resolver) {}
 
   static AFF4ScopedPtr<AFF4Map> NewAFF4Map(
       DataStore *resolver, const URN &object_urn, const URN &volume_urn);
@@ -63,6 +68,14 @@ class AFF4Map: public AFF4Stream {
 
   virtual string Read(size_t length);
   virtual int Write(const char *data, int length);
+
+  virtual AFF4Status WriteStream(
+      AFF4Stream *source,
+      ProgressContext *progress = nullptr);
+
+  virtual AFF4Status WriteStream(
+      AFF4Map *source,
+      ProgressContext *progress = nullptr);
 
   AFF4Status Flush();
 
@@ -73,6 +86,9 @@ class AFF4Map: public AFF4Stream {
 
   std::vector<Range> GetRanges();
 
+  // Creates or retrieves the underlying map data stream.
+  AFF4Status GetBackingStream(URN &target);
+
   void Clear();
 
   virtual aff4_off_t Size();
@@ -81,4 +97,4 @@ class AFF4Map: public AFF4Stream {
 };
 
 
-#endif // _AFF4_MAP_H_
+#endif  // SRC_AFF4_MAP_H_
