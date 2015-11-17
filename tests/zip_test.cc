@@ -76,7 +76,7 @@ class ZipTest: public ::testing::Test {
       test_stream->Seek(0, SEEK_SET);
 
       AFF4ScopedPtr<ZipFileSegment> segment = zip->CreateZipSegment(
-          zip->_member_name_for_urn(streamed_urn));
+          member_name_for_urn(streamed_urn, zip->urn, true));
 
       segment->compression_method = ZIP_DEFLATE;
       segment->WriteStream(test_stream.get());
@@ -111,40 +111,43 @@ TEST_F(ZipTest, CreateMember) {
   // Test conversion between urn and zip.
   {
     URN test = zip->urn.Append("URN-with!special$chars/and/path");
-    string member_name = zip->_member_name_for_urn(test.SerializeToString());
+    string member_name = member_name_for_urn(test.SerializeToString(),
+                                             zip->urn, true);
     EXPECT_STREQ(member_name.c_str(),
                  "URN-with%21special%24chars/and/path");
 
     // Check that the reverse works.
-    EXPECT_STREQ(zip->_urn_from_member_name(
-        member_name).SerializeToString().c_str(),
+    EXPECT_STREQ(urn_from_member_name(
+        member_name, zip->urn).SerializeToString().c_str(),
                  test.SerializeToString().c_str());
   }
 
   {
     // A windows based URN.
     URN test = zip->urn.Append("/C:/Windows/notepad.exe");
-    string member_name = zip->_member_name_for_urn(test.SerializeToString());
+    string member_name = member_name_for_urn(test.SerializeToString(),
+                                             zip->urn, true);
     EXPECT_STREQ(member_name.c_str(),
                  "C%3a/Windows/notepad.exe");
 
     // Check that the reverse works.
-    EXPECT_STREQ(zip->_urn_from_member_name(
-        member_name).SerializeToString().c_str(),
+    EXPECT_STREQ(urn_from_member_name(
+        member_name, zip->urn).SerializeToString().c_str(),
                  test.SerializeToString().c_str());
   }
 
   {
     // An AFF4 URN not based at zip->urn should be emitted fully escaped.
     URN test("aff4://123456/URN-with!special$chars/and/path");
-    string member_name = zip->_member_name_for_urn(test.SerializeToString());
+    string member_name = member_name_for_urn(test.SerializeToString(),
+                                             zip->urn, true);
     EXPECT_STREQ(member_name.c_str(),
                  "aff4%3a%2f%2f123456/URN-with%21special%24chars/and/path");
 
     // When recovered it should not be merged with the base URN since it is a
     // fully qualified URN.
-    EXPECT_STREQ(zip->_urn_from_member_name(
-        member_name).SerializeToString().c_str(),
+    EXPECT_STREQ(urn_from_member_name(
+        member_name, zip->urn).SerializeToString().c_str(),
                  test.SerializeToString().c_str());
   }
 }

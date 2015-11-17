@@ -183,11 +183,15 @@ raptor_term *URN::GetRaptorTerm(raptor_world *world) const {
       world,
       (const unsigned char *)value_string.c_str(),
       value_string.size());
-};
+}
 
 URN URN::Append(const string &component) const {
-  return URN(value + _NormalizePath(component));
-};
+  int i = value.size()-1;
+  while (i > 0 && (value[i] == '/' || value[i] == '\\'))
+    i--;
+
+  return URN(value.substr(0, i+1) + _NormalizePath(component));
+}
 
 
 string URN::RelativePath(const URN other) const {
@@ -197,18 +201,17 @@ string URN::RelativePath(const URN other) const {
   if (0 == my_urn.compare(0, my_urn.size(), other_urn,
                           0, my_urn.size())) {
     return other_urn.substr(my_urn.size(), string::npos);
-  };
+  }
 
   return other_urn;
-};
-
+}
 
 
 static string _NormalizePath(const string &component) {
   vector<string> result;
   size_t i = 0, j = 0;
 
-  while(j < component.size()) {
+  while (j < component.size()) {
     j = component.find("/", i);
     if (j == std::string::npos)
       j = component.size();
@@ -216,29 +219,29 @@ static string _NormalizePath(const string &component) {
     string sub_component = component.substr(i, j - i);
     i = j + 1;
     if (sub_component == "..") {
-      if(!result.empty()) {
+      if (!result.empty()) {
         result.pop_back();
-      };
+      }
 
       continue;
-    };
+    }
 
     if (sub_component == "." || sub_component == "") {
       continue;
-    };
+    }
 
     result.push_back(sub_component);
-  };
+  }
 
   string result_component = "/";
-  for(auto sub_component: result) {
+  for (auto sub_component: result) {
     result_component.append(sub_component);
     result_component.append("/");
-  };
+  }
 
   result_component.pop_back();
   return result_component;
-};
+}
 
 
 #ifdef _WIN32
@@ -258,7 +261,7 @@ static string abspath(string path) {
     char buffer[buffer_len];
     GetFullPathName(path.c_str(), buffer_len, buffer, NULL);
     return buffer;
-  };
+  }
 
   return path;
 }
@@ -267,11 +270,11 @@ static string abspath(string path) {
  * does a reasonable job but misses some important edge cases. Microsoft
  * recommends that we use the provided API to cater to all weird edge cases.
  */
-string URN::ToFilename() {
+string URN::ToFilename() const {
   // Alas Microsoft's implementation is also incomplete. Here we check for some
   // edge cases and manually hack around them.
   pcrepp::Pcre volume_regex("^file://./([a-zA-Z]):$");  // file://./c: -> \\.\c:
-  if(volume_regex.search(value))
+  if (volume_regex.search(value))
     return volume_regex.replace(value, "\\\\.\\$1:");
 
   const int bytesNeeded = std::max(value.size() + 1, (size_t)MAX_PATH);
@@ -280,7 +283,7 @@ string URN::ToFilename() {
   HRESULT res;
 
   res = PathCreateFromUrl(value.c_str(), path, &path_length, 0);
-  if(res == S_FALSE || res == S_OK) {
+  if (res == S_FALSE || res == S_OK) {
     LOG(INFO) << "Converted " << value << " into " << path;
     return path;
 
@@ -289,11 +292,11 @@ string URN::ToFilename() {
     if (uriUriStringToWindowsFilenameA(value.c_str(), path) !=
       URI_SUCCESS) {
       return "";
-    };
+    }
 
     return path;
   }
-};
+}
 
 #else
 
@@ -310,36 +313,36 @@ static string abspath(string path) {
       path[0] == '\\' ||
       path[1] == ':') {
     return path;
-  };
+  }
 
   // Prepend the CWD to the path.
   int path_len = PATH_MAX;
-  while(1) {
+  while (1) {
     char cwd[path_len];
 
     // Try again with a bigger size.
-    if(NULL==getcwd(cwd, path_len) && errno == ERANGE) {
+    if (NULL==getcwd(cwd, path_len) && errno == ERANGE) {
       path_len += PATH_MAX;
       continue;
-    };
+    }
 
     // Remove . and .. sequences.
     return _NormalizePath(string(cwd) + "/" + path);
-  };
-};
+  }
+}
 
 // Unix version to ToFilename().
-string URN::ToFilename() {
+string URN::ToFilename() const {
   const int bytesNeeded = value.size() + 1;
   char path[bytesNeeded];
 
   if (uriUriStringToUnixFilenameA(value.c_str(), path) !=
       URI_SUCCESS) {
     return "";
-  };
+  }
 
   return path;
-};
+}
 
 #endif
 
@@ -378,17 +381,17 @@ URN URN::NewURNFromOSFilename(string filename, bool windows_filename,
       if (uriWindowsFilenameToUriStringA(
               filename.c_str(), tmp) == URI_SUCCESS) {
         result.value = tmp;
-      };
+      }
     };
 
     // Unix filename
   } else if (uriUnixFilenameToUriStringA(filename.c_str(), tmp) ==
             URI_SUCCESS) {
     result.value = tmp;
-  };
+  }
 
   return result;
-};
+}
 
 
 URN URN::NewURNFromFilename(string filename, bool absolute_path) {
@@ -407,15 +410,15 @@ URN URN::NewURNFromFilename(string filename, bool absolute_path) {
     filename = abspath(filename);
     if (filename[0] != '/') {
       windows_filename = true;
-    };
+    }
   }
 
   return NewURNFromOSFilename(filename, windows_filename, absolute_path);
-};
+}
 
 string XSDInteger::SerializeToString() const {
     return aff4_sprintf("%lld", value);
-};
+}
 
 AFF4Status XSDInteger::UnSerializeFromString(const char *data, int length) {
   string s_data = string(data, length);
@@ -427,10 +430,10 @@ AFF4Status XSDInteger::UnSerializeFromString(const char *data, int length) {
 
   if (errno != 0 || *end != 0) {
     return PARSING_ERROR;
-  };
+  }
 
   return STATUS_OK;
-};
+}
 
 
 raptor_term *XSDInteger::GetRaptorTerm(raptor_world *world) const {
@@ -438,7 +441,7 @@ raptor_term *XSDInteger::GetRaptorTerm(raptor_world *world) const {
   raptor_uri *uri = raptor_new_uri(
       world, (const unsigned char *)XSD_NAMESPACE "integer");
 
-  raptor_term *result= raptor_new_term_from_counted_literal(
+  raptor_term *result = raptor_new_term_from_counted_literal(
       world,
       (const unsigned char *)value_string.c_str(),
       value_string.size(),
@@ -448,25 +451,25 @@ raptor_term *XSDInteger::GetRaptorTerm(raptor_world *world) const {
   raptor_free_uri(uri);
 
   return result;
-};
+}
 
 
 string XSDBoolean::SerializeToString() const {
   return value ? "true": "false";
-};
+}
 
 AFF4Status XSDBoolean::UnSerializeFromString(const char *data, int length) {
   string s_data = string(data, length);
   if (s_data == "true" || s_data == "1") {
     value = true;
-  } else if(s_data == "false" || s_data == "0") {
+  } else if (s_data == "false" || s_data == "0") {
     value = false;
   } else {
     return PARSING_ERROR;
-  };
+  }
 
   return STATUS_OK;
-};
+}
 
 
 raptor_term *XSDBoolean::GetRaptorTerm(raptor_world *world) const {
@@ -474,7 +477,7 @@ raptor_term *XSDBoolean::GetRaptorTerm(raptor_world *world) const {
   raptor_uri *uri = raptor_new_uri(
       world, (const unsigned char *)XSD_NAMESPACE "boolean");
 
-  raptor_term *result= raptor_new_term_from_counted_literal(
+  raptor_term *result = raptor_new_term_from_counted_literal(
       world,
       (const unsigned char *)value_string.c_str(),
       value_string.size(),
@@ -484,7 +487,7 @@ raptor_term *XSDBoolean::GetRaptorTerm(raptor_world *world) const {
   raptor_free_uri(uri);
 
   return result;
-};
+}
 
 
 // A Global Registry for RDFValue. This factory will provide the correct

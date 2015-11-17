@@ -86,10 +86,12 @@ TEST(URNTest, Append) {
 
 TEST(URNTest, RelativePath) {
   URN parent("aff4://e21659ea-c7d6-4f4d-8070-919178aa4c7b");
-  URN child("aff4://e21659ea-c7d6-4f4d-8070-919178aa4c7b/bin/../bin/ls/00000000/index");
+  URN child(
+      "aff4://e21659ea-c7d6-4f4d-8070-919178aa4c7b/bin/../bin/ls/"
+      "00000000/index");
 
   EXPECT_EQ(parent.RelativePath(child), "/bin/ls/00000000/index");
-};
+}
 
 // Test that XSDInteger can accomodate very large values.
 TEST(XSDIntegerTest, SerializeToString) {

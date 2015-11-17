@@ -92,6 +92,7 @@ class AFF4Image: public AFF4Stream {
   AFF4Status _write_metadata();
 
  public:
+  AFF4Image(DataStore *resolver, URN urn): AFF4Stream(resolver, urn) {}
   explicit AFF4Image(DataStore *resolver): AFF4Stream(resolver) {}
 
   unsigned int chunk_size = 32*1024;    /**< The number of bytes in each
@@ -152,6 +153,6 @@ class AFF4Image: public AFF4Stream {
   using AFF4Stream::Write;
 };
 
-
+extern void aff4_image_init();
 
 #endif  // SRC_AFF4_IMAGE_H_

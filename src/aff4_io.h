@@ -37,11 +37,26 @@ using std::ifstream;
 
 
 struct AFF4StreamProperties {
-  bool seekable = true;                 /**< Set if the stream is non seekable
-                                         * (e.g. a pipe). */
-  bool sizeable = true;                 /**< Do we know the size of this file? */
+  // Set if the stream is non seekable (e.g. a pipe).
+  bool seekable = true;
 
-  bool writable = false;                /**< Can we write to this file. */
+  // Do we know the size of this file?
+  bool sizeable = true;
+
+  // Can we write to this file.
+  bool writable = false;
+};
+
+
+struct AFF4VolumeProperties {
+  // Supports compression?
+  bool supports_compression = true;
+
+  // Can we write to this volume?
+  bool writable = false;
+
+  // Can file and directory names co-exist? (e.g. can we have a/b and a/b/c).
+  bool files_are_directories = true;
 };
 
 class ProgressContext {
@@ -83,7 +98,15 @@ class AFF4Stream: public AFF4Object {
  public:
   AFF4StreamProperties properties;
 
-  AFF4Stream(DataStore *result): AFF4Object(result), readptr(0), size(0) {}
+  // Compression method supported by this stream. Note that not all compression
+  // methods are supported by all streams.
+  int compression_method = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
+
+  AFF4Stream(DataStore *resolver, URN urn):
+      AFF4Object(resolver, urn) {}
+
+  explicit AFF4Stream(DataStore *result):
+      AFF4Object(result), readptr(0), size(0) {}
 
   // Convenience methods.
   int Write(const unique_ptr<string> &data);
@@ -161,33 +184,6 @@ class StringIO: public AFF4Stream {
 };
 
 
-class FileBackedObject: public AFF4Stream {
- public:
-  explicit FileBackedObject(DataStore *resolver): AFF4Stream(resolver) {}
-  virtual ~FileBackedObject();
-
-  virtual string Read(size_t length);
-  virtual int Write(const char *data, int length);
-
-  /**
-   * Load the file from a file:/ URN.
-   *
-   *
-   * @return STATUS_OK if we were able to open it successfully.
-   */
-  virtual AFF4Status LoadFromURN();
-
-  virtual AFF4Status Truncate();
-
-  // We provide access to the underlying file handle so callers can do other
-  // things with the stream (i.e. ioctl on raw devices).
-#if defined(_WIN32)
-  HANDLE fd;
-#else
-  int fd;
-#endif
-};
-
 /**
    Volumes allow for other objects to be stored within them.
 
@@ -208,10 +204,16 @@ class FileBackedObject: public AFF4Stream {
 */
 class AFF4Volume: public AFF4Object {
  public:
+  AFF4VolumeProperties properties;
+
   // This is a list of URNs contained in this volume.
   std::unordered_set<string> children;
-
+  AFF4Volume(DataStore *resolver, URN urn): AFF4Object(resolver, urn) {}
   explicit AFF4Volume(DataStore *resolver): AFF4Object(resolver) {}
+
+  // Create a new contained member. Note that if the member already exists you
+  // should be able to just open it with the factory - so this is only for
+  // creating new members.
   virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
 };
 

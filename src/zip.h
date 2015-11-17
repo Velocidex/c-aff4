@@ -154,10 +154,8 @@ class ZipFileSegment: public StringIO {
   static AFF4ScopedPtr<ZipFileSegment> NewZipFileSegment(
       DataStore *resolver, const URN &segment_urn, const URN &volume_urn);
 
-  ZipFileSegment(DataStore *resolver);
+  explicit ZipFileSegment(DataStore *resolver);
   ZipFileSegment(string filename, ZipFile &zipfile);
-
-  int compression_method = ZIP_STORED;  /**< Compression method. */
 
   virtual AFF4Status LoadFromURN();
   virtual AFF4Status LoadFromZipFile(ZipFile &owner);
@@ -277,39 +275,14 @@ class ZipFile: public AFF4Volume {
   AFF4Status LoadTurtleMetadata();
 
  public:
-  /**
-   * Convert from a child URN to the zip member name.
-   *
-   * The AFF4 ZipFile stores AFF4 objects (with fully qualified URNs) in zip
-   * archives. The zip members name is based on the object's URN with the
-   * following rules:
-
-   1. If the object's URN is an extension of the volume's URN, the member's name
-   will be the relative name. So for example:
-
-   Object: aff4://9db79393-53fa-4147-b823-5c3e1d37544d/Foobar.txt
-   Volume: aff4://9db79393-53fa-4147-b823-5c3e1d37544d
-
-   Member name: Foobar.txt
-
-   2. All charaters outside the range [a-zA-Z0-9_] shall be escaped according to
-   their hex encoding.
-
-   * @param name
-   *
-   * @return The member name in the zip archive.
-   */
-  string _member_name_for_urn(const URN object) const;
-  URN _urn_from_member_name(const string member) const;
-
-  ZipFile(DataStore *resolver);
+  explicit ZipFile(DataStore *resolver);
 
   /**
    * Creates a new ZipFile object.
    *
-   * @param stream: An AFF4Stream to write the zip file onto. Note that we first
-   *                read and preserve the objects in the existing volume and
-   *                just append new objects to it.
+   * @param backing_store_urn: An URN of an object to write the zip file
+   *                onto. Note that we first read and preserve the objects in
+   *                the existing volume and just append new objects to it.
    *
    * @return A new ZipFile reference.
    */

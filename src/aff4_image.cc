@@ -33,6 +33,10 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
   resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
   resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
 
+  // We need to use the resolver here instead of just making a new object, in
+  // case the object already exists. If it is already known we will get the
+  // existing object from the cache through the factory. If the object does not
+  // already exist, then the factory will make a new one.
   return resolver->AFF4FactoryOpen<AFF4Image>(image_urn);
 }
 
@@ -355,6 +359,9 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream *source,
   // Write a bevy at a time.
   while (1) {
     _CompressorStream stream(resolver, this, source);
+
+    // TODO(scudette): This scheme is problematic on filesystems that
+    // distinguish between files and directories.
     URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number)));
     URN bevy_index_urn(bevy_urn.Append("index"));
 
@@ -364,6 +371,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream *source,
       if (!bevy) {
         LOG(ERROR) << "Unable to create bevy " <<
             bevy_urn.SerializeToString().c_str();
+        return IO_ERROR;
       }
 
       AFF4Status res = bevy->WriteStream(&stream, progress);
@@ -385,6 +393,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream *source,
       if (!bevy_index) {
         LOG(ERROR) << "Unable to create bevy_index " <<
             bevy_index_urn.SerializeToString().c_str();
+        return IO_ERROR;
       }
 
       if (bevy_index->Write(stream.bevy_index.buffer) < 0) {
@@ -617,3 +626,5 @@ AFF4Status AFF4Image::Flush() {
 }
 
 static AFF4Registrar<AFF4Image> r1(AFF4_IMAGE_TYPE);
+
+void aff4_image_init() {}

@@ -92,7 +92,10 @@ DataStore::DataStore() {
   // By default suppress ZipFileSegment objects since all their metadata comes
   // directly from the ZIP container. This keeps the turtle files a bit cleaner.
   suppressed_rdftypes.insert(AFF4_ZIP_SEGMENT_TYPE);
+
+  // The following are obvious due to the type of the container.
   suppressed_rdftypes.insert(AFF4_ZIP_TYPE);
+  suppressed_rdftypes.insert(AFF4_DIRECTORY_TYPE);
 
   // Add these default namespace.
   namespaces.push_back(std::pair<string, string>("aff4", AFF4_NAMESPACE));
@@ -246,7 +249,6 @@ static void statement_handler(void *user_data,
     raptor_free_memory(predicate);
   }
 }
-
 
 class RaptorParser {
  protected:
@@ -409,6 +411,19 @@ AFF4Status MemoryDataStore::DeleteSubject(const URN &urn) {
   return STATUS_OK;
 }
 
+vector<URN> MemoryDataStore::SelectSubjectsByPrefix(const URN &prefix) {
+  vector<URN> result;
+
+  for (const auto &it : store) {
+    URN subject(it.first);
+    if (subject.RelativePath(prefix) != subject.SerializeToString()) {
+      result.push_back(subject);
+    }
+  }
+
+  return result;
+}
+
 AFF4Status MemoryDataStore::Flush() {
   ObjectCache.Flush();
 
@@ -440,10 +455,14 @@ void DataStore::Dump(bool verbose) {
 AFF4Status AFF4ObjectCache::Flush() {
   AFF4Status res = STATUS_OK;
 
+  // Stop trimming operations of the cache while we flush it. It is possible
+  // that the trimmer will remove an object which we are just flushing.
+  trimming_disabled = true;
+
   // It is an error to flush the object cache while there are still items in
   // use.
   if (in_use.size() > 0) {
-#ifndef WIN32
+#ifndef _WIN32
     // In Windows if the user pressed ctrl-C, destructors sometimes do not get
     // called and this sometimes happen. The output volume is incomplete but at
     // least we make it somewhat readable.
@@ -489,6 +508,9 @@ AFF4Status AFF4ObjectCache::Flush() {
   // Clear the map.
   lru_map.clear();
 
+  // The cache is empty now.
+  trimming_disabled = false;
+
   return res;
 }
 
@@ -510,6 +532,10 @@ void AFF4ObjectCache::Dump() {
 
 AFF4Status AFF4ObjectCache::Trim_() {
   AFF4Status res = STATUS_OK;
+
+  // Skip trimming for now.
+  if (trimming_disabled)
+    return res;
 
   // First check that the cache is not full.
   while (lru_map.size() > max_items) {

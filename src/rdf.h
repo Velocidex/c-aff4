@@ -13,8 +13,8 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef AFF4_RDF_H_
-#define AFF4_RDF_H_
+#ifndef  SRC_RDF_H_
+#define  SRC_RDF_H_
 
 #include <string>
 #include <memory>
@@ -41,7 +41,7 @@ using std::vector;
  */
 
 class DataStore;
-
+class URN;
 
 /**
  * An RDFValue object is one which knows how to serialize itself from a string
@@ -53,31 +53,31 @@ class RDFValue {
   DataStore *resolver;
 
  public:
-  RDFValue(DataStore *resolver): resolver(resolver) {};
-  RDFValue(): resolver(NULL) {};
+  explicit RDFValue(DataStore *resolver): resolver(resolver) {}
+  RDFValue(): resolver(NULL) {}
 
   virtual raptor_term *GetRaptorTerm(raptor_world *world) const {
     return NULL;
-  };
+  }
 
   // RDFValues must provide methods for serializing and unserializing.
   virtual string SerializeToString() const {
     return "";
-  };
+  }
 
   virtual AFF4Status UnSerializeFromString(const char *data, int length) {
     return GENERIC_ERROR;
-  };
+  }
 
   AFF4Status UnSerializeFromString(const string data) {
     return UnSerializeFromString(data.data(), data.size());
-  };
+  }
 
   AFF4Status Set(const string data) {
     return UnSerializeFromString(data.c_str(), data.size());
-  };
+  }
 
-  virtual ~RDFValue(){};
+  virtual ~RDFValue() {}
 };
 
 
@@ -89,11 +89,12 @@ extern ClassFactory<RDFValue> RDFValueRegistry;
 template<class T>
 class RDFValueRegistrar {
  public:
-  RDFValueRegistrar(string name) {
+  explicit RDFValueRegistrar(string name) {
     // register the class factory function
     RDFValueRegistry.RegisterFactoryFunction(
         name,
-        [](DataStore *resolver) -> RDFValue * { return new T(resolver);});
+        [](DataStore *resolver, const URN *urn) -> RDFValue * {
+          return new T(resolver);});
   }
 };
 
@@ -109,15 +110,15 @@ class RDFBytes: public RDFValue {
  public:
   string value;
 
-  RDFBytes(string data):
-      RDFBytes(data.c_str(), data.size()) {};
+  explicit RDFBytes(string data):
+      RDFBytes(data.c_str(), data.size()) {}
 
   RDFBytes(const char * data, unsigned int length):
       RDFValue(), value(data, length) {}
 
-  RDFBytes(DataStore *resolver): RDFValue(resolver) {};
+  explicit RDFBytes(DataStore *resolver): RDFValue(resolver) {}
 
-  RDFBytes() {};
+  RDFBytes() {}
 
   string SerializeToString() const;
   AFF4Status UnSerializeFromString(const char *data, int length);
@@ -130,7 +131,6 @@ class RDFBytes: public RDFValue {
   bool operator==(const string& other) const {
     return this->value == other;
   }
-
 };
 
 /**
@@ -139,16 +139,15 @@ class RDFBytes: public RDFValue {
  */
 class XSDString: public RDFBytes {
  public:
-
   XSDString(string data):
-      RDFBytes(data.c_str(), data.size()) {};
+      RDFBytes(data.c_str(), data.size()) {}
 
   XSDString(const char * data):
-      RDFBytes(data, strlen(data)) {};
+      RDFBytes(data, strlen(data)) {}
 
-  XSDString(DataStore *resolver): RDFBytes(resolver) {};
+  explicit XSDString(DataStore *resolver): RDFBytes(resolver) {}
 
-  XSDString() {};
+  XSDString() {}
 
   string SerializeToString() const;
   AFF4Status UnSerializeFromString(const char *data, int length);
@@ -165,13 +164,13 @@ class XSDInteger: public RDFValue {
  public:
   uint64_t value;
 
-  XSDInteger(uint64_t data):
-      RDFValue(NULL), value(data) {};
+  explicit XSDInteger(uint64_t data):
+      RDFValue(NULL), value(data) {}
 
-  XSDInteger(DataStore *resolver):
-      RDFValue(resolver) {};
+  explicit XSDInteger(DataStore *resolver):
+      RDFValue(resolver) {}
 
-  XSDInteger() {};
+  XSDInteger() {}
 
   string SerializeToString() const;
 
@@ -189,13 +188,13 @@ class XSDBoolean: public RDFValue {
  public:
   bool value;
 
-  XSDBoolean(bool data):
-      RDFValue(NULL), value(data) {};
+  explicit XSDBoolean(bool data):
+      RDFValue(NULL), value(data) {}
 
-  XSDBoolean(DataStore *resolver):
-      RDFValue(resolver) {};
+  explicit XSDBoolean(DataStore *resolver):
+      RDFValue(resolver) {}
 
-  XSDBoolean() {};
+  XSDBoolean() {}
 
   string SerializeToString() const;
 
@@ -235,7 +234,7 @@ class URN: public XSDString {
    * @return a URN object.
    */
   static URN NewURNFromOSFilename(string filename, bool windows_filename,
-                                  bool absolute_path=true);
+                                  bool absolute_path = true);
 
   /**
    * Create a URN from filename.
@@ -247,7 +246,7 @@ class URN: public XSDString {
    *
    * @return
    */
-  static URN NewURNFromFilename(string filename, bool absolute_path=true);
+  static URN NewURNFromFilename(string filename, bool absolute_path = true);
 
   /**
    * Returns the current URN as a filename.
@@ -255,11 +254,11 @@ class URN: public XSDString {
    *
    * @return If this is a file:// URN, returns the filename, else "".
    */
-  string ToFilename();
+  string ToFilename() const;
 
   URN(const char * data);
   URN(const string data): URN(data.c_str()) {};
-  URN(DataStore *resolver): URN() {};
+  explicit URN(DataStore *resolver): URN() {};
   URN() {};
 
   URN Append(const string &component) const;
@@ -270,15 +269,15 @@ class URN: public XSDString {
   // Convenience methods for Parse()
   string Scheme() const {
     return Parse().scheme;
-  };
+  }
 
   string Path() const {
     return Parse().path;
-  };
+  }
 
   string Domain() const {
     return Parse().domain;
-  };
+  }
 
   /**
    * returns the path of the URN relative to ourselves.
@@ -295,9 +294,8 @@ class URN: public XSDString {
   AFF4Status Set(const URN data) {
     value = data.SerializeToString();
     return STATUS_OK;
-  };
-
+  }
 };
 
 
-#endif // AFF4_RDF_H_
+#endif  // SRC_RDF_H_

@@ -235,6 +235,7 @@ class BasicImager {
   virtual AFF4Status Run(int argc, char** argv);
 
   virtual void Abort();
+  virtual ~BasicImager() {}
 };
 
 #endif  // SRC_AFF4_IMAGER_UTILS_H_

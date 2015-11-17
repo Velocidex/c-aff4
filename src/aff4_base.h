@@ -13,10 +13,20 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef AFF4_BASE_H
-#define AFF4_BASE_H
+#ifndef SRC_AFF4_BASE_H_
+#define SRC_AFF4_BASE_H_
 
 #include <iostream>
+
+
+#ifdef _WIN32
+#define PATH_SEP '\\'
+#define PATH_SEP_STR "\\"
+#else
+#define PATH_SEP '/'
+#define PATH_SEP_STR "/"
+#endif
+
 
 /**
  * @file
@@ -94,14 +104,14 @@ class AFF4Object {
   AFF4Object(DataStore *resolver);
   AFF4Object(DataStore *resolver, URN new_urn): AFF4Object(resolver) {
     urn = new_urn;
-  };
+  }
 
   // Return this object to the resolver.
   void Return();
 
   // By defining a virtual destructor this allows the destructor of derived
   // objects to be called when deleting a pointer to a base object.
-  virtual ~AFF4Object() {};
+  virtual ~AFF4Object() {}
 
   /**
    * Load this AFF4 object from the URN provided.
@@ -111,7 +121,7 @@ class AFF4Object {
    */
   virtual AFF4Status LoadFromURN() {
     return NOT_IMPLEMENTED;
-  };
+  }
 
   /**
    * Prepares an object for re-use. Since AFF4Objects can be cached, we need a
@@ -125,7 +135,7 @@ class AFF4Object {
    */
   virtual AFF4Status Prepare() {
     return STATUS_OK;
-  };
+  }
 
   /**
    * Flush the object state to the resolver data store.
@@ -143,7 +153,7 @@ class AFF4Object {
    */
   virtual bool IsDirty() {
     return _dirty;
-  };
+  }
 
   /**
    * Mark the object as dirty. Note that the only way the object can become
@@ -151,7 +161,7 @@ class AFF4Object {
    */
   virtual void MarkDirty() {
     _dirty = true;
-  };
+  }
 };
 
 
@@ -180,14 +190,18 @@ static AFF4Registrar<ZipFile> r1(AFF4_ZIP_TYPE);
 template<class T>
 class AFF4Registrar {
  public:
-  AFF4Registrar(string name) {
+  string name;
+  explicit AFF4Registrar(string name) {
+    this->name = name;
+
     GetAFF4ClassFactory()->RegisterFactoryFunction(
         name,
-        [](DataStore *resolver) -> T *{ return new T(resolver); });
-  };
+        [](DataStore *resolver, const URN *urn) -> T *{
+          return new T(resolver); });
+  }
 };
 
 // In the AFF4 library all offsets are 64 bits - even on windows!
 typedef int64_t aff4_off_t;
 
-#endif // AFF4_BASE_H
+#endif  // SRC_AFF4_BASE_H_

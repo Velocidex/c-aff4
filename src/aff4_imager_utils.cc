@@ -91,14 +91,14 @@ AFF4Status ExtractStream(DataStore &resolver, URN input_urn,
       output_urn);
 
   if (!input) {
-    LOG(ERROR) << "Failed to open input stream. " << input_urn.value.c_str()
-               << ".\n";
+    LOG(ERROR) << "Failed to open input stream. " <<
+        input_urn.SerializeToString() << "\n";
     return IO_ERROR;
   }
 
   if (!output) {
-    LOG(ERROR) << "Failed to create output file: " << output_urn.value.c_str()
-               << ".\n";
+    LOG(ERROR) << "Failed to create output file: " <<
+        output_urn.SerializeToString() << "\n";
     return IO_ERROR;
   }
 
@@ -189,15 +189,31 @@ AFF4Status BasicImager::handle_aff4_volumes() {
       "aff4_volumes")->getValue();
 
   for (unsigned int i = 0; i < v.size(); i++) {
-    LOG(INFO) << "Preloading AFF4 Volume: " << v[i];
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, v[i]);
-    if (zip->members.size() == 0) {
-      LOG(ERROR) << "Unable to load " << v[i]
-                 << " as an existing AFF4 Volume.";
-      return IO_ERROR;
-    }
+    URN urn = URN::NewURNFromFilename(v[i]);
+    LOG(INFO) << "Preloading AFF4 Volume: " << urn.SerializeToString();
 
-    volume_URN = zip->urn;
+    // Currently we support AFF4Directory and ZipFile:
+    if (AFF4Directory::IsDirectory(urn)) {
+      AFF4ScopedPtr<AFF4Directory> volume = AFF4Directory::NewAFF4Directory(
+          &resolver, urn);
+
+      if (!volume) {
+        LOG(ERROR) << "Directory " << v[i] << " does not appear to be "
+            "a valid AFF4 volume.";
+        return IO_ERROR;
+      }
+
+      volume_URN = volume->urn;
+    } else {
+      AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
+      if (zip->members.size() == 0) {
+        LOG(ERROR) << "Unable to load " << v[i]
+                   << " as an existing AFF4 Volume.";
+        return IO_ERROR;
+      }
+
+      volume_URN = zip->urn;
+    }
   }
 
   return CONTINUE;
@@ -224,6 +240,9 @@ AFF4Status BasicImager::process_input() {
   if (res != STATUS_OK)
     return res;
 
+  AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
+      volume_urn);
+
   for (string glob : inputs) {
     for (string input : GlobFilename(glob)) {
       URN input_urn(URN::NewURNFromFilename(input, false));
@@ -245,16 +264,23 @@ AFF4Status BasicImager::process_input() {
       // Create a new AFF4Image in this volume.
       URN image_urn = volume_urn.Append(input_urn.Parse().path);
 
-      // For very small streams, it is more efficient to just store them in a
-      // ZipFileSegment.
-      if (input_stream->Size() < 10 * 1024 * 1024) {
-        AFF4ScopedPtr<ZipFileSegment> image_stream = ZipFileSegment::
-            NewZipFileSegment(&resolver, image_urn, volume_urn);
+      // Store the original filename.
+      resolver.Set(image_urn, AFF4_STREAM_ORIGINAL_FILENAME,
+                    new XSDString(input));
+
+      // For very small streams, it is more efficient to just store them without
+      // compression.
+      if (compression == AFF4_IMAGE_COMPRESSION_ENUM_STORED ||
+          input_stream->Size() < 10 * 1024 * 1024) {
+        AFF4ScopedPtr<AFF4Stream> image_stream = volume->CreateMember(
+            image_urn);
 
         if (!image_stream)
           return IO_ERROR;
 
-        image_stream->compression_method = ZIP_DEFLATE;
+        // If the underlying stream supports compression, lets do that.
+        image_stream->compression_method = compression;
+
         // Copy the input stream to the output stream.
         res = image_stream->WriteStream(input_stream.get(), &empty_progress);
         if (res != STATUS_OK)
@@ -317,6 +343,15 @@ AFF4Status BasicImager::handle_export() {
   resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE,
                new XSDString("truncate"));
 
+  // Hold the volume in use while we extract the stream for efficiency.
+  AFF4ScopedPtr <AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
+      volume_URN);
+
+  if (!volume) {
+    LOG(ERROR) << "Unable to open volume " << volume_URN.SerializeToString();
+    return IO_ERROR;
+  }
+
   cout << "Extracting " << export_urn.value << " into " <<
       output_urn.value << "\n";
   AFF4Status res = ExtractStream(
@@ -353,12 +388,29 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN &volume_urn) {
     resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
   }
 
+  // The output is a directory volume.
+  if (AFF4Directory::IsDirectory(output_path)) {
+    AFF4ScopedPtr<AFF4Directory> volume = AFF4Directory::NewAFF4Directory(
+        &resolver, output_urn);
+
+    if (!volume) {
+      return IO_ERROR;
+    }
+
+    volume_urn = volume->urn;
+    output_volume_urn = volume->urn;
+
+    cout << "Creating output AFF4 Directory structure.\n";
+    return STATUS_OK;
+  }
+
+  // The output is a ZipFile volume.
   AFF4ScopedPtr<AFF4Stream> output_stream = resolver.AFF4FactoryOpen
       <AFF4Stream>(output_urn);
 
   if (!output_stream) {
     LOG(ERROR) << "Failed to create output file: " <<
-        output_urn.SerializeToString();
+        output_urn.SerializeToString() << ":" << GetLastErrorMessage();
 
     return IO_ERROR;
   }
@@ -372,6 +424,8 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN &volume_urn) {
 
   volume_urn = zip->urn;
   output_volume_urn = zip->urn;
+
+  cout << "Creating output AFF4 ZipFile.\n";
 
   return STATUS_OK;
 }
@@ -406,19 +460,23 @@ vector<string> BasicImager::GlobFilename(string glob) const {
   vector<string> result;
   WIN32_FIND_DATA ffd;
   unsigned int found = glob.find_last_of("/\\");
-  string path;
+  string path = "";
 
-  if (found == string::npos) {
-    path = glob;
-  } else {
+  // The path before the last PATH_SEP
+  if (found != string::npos) {
     path = glob.substr(0, found);
   }
 
   HANDLE hFind = FindFirstFile(glob.c_str(), &ffd);
   if (INVALID_HANDLE_VALUE != hFind) {
     do {
+      // If it is not a directory, add a result.
       if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-        result.push_back(path + "/" + ffd.cFileName);
+        if (path.size() > 0) {
+          result.push_back(path + PATH_SEP_STR + ffd.cFileName);
+        } else {
+          result.push_back(ffd.cFileName);
+        }
       }
     } while (FindNextFile(hFind, &ffd) != 0);
   }

@@ -262,13 +262,6 @@ class _MapStreamHelper: public AFF4Stream {
         break;
       }
 
-      /*
-      LOG(ERROR) << "Reading " << to_read << " from " << std::hex <<
-          current_range->second.map_offset + range_offset << " :" <<
-          current_range->second.target_offset + range_offset << ": " <<
-          current_range->second.length << " To " <<
-          readptr << " range offset: " << range_offset << " Got " << data.size();
-      */
       result += data;
       range_offset += data.size();
 
@@ -558,24 +551,46 @@ AFF4Status AFF4Map::GetBackingStream(URN &target) {
   AFF4ScopedPtr<AFF4Stream> stream = resolver->AFF4FactoryOpen<AFF4Stream>(
       target);
 
-  // If the backing stream does not already exist, we make one.
-  if (!stream) {
-    URN volume_urn;
-    if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-      LOG(INFO) << "Map not stored in a volume.";
-      return IO_ERROR;
-    }
-
-    // Create a new stream and assign to the scoped pointer.
-    stream.reset(AFF4Image::NewAFF4Image(
-        resolver, target, volume_urn).release());
-    if (!stream) {
-      LOG(INFO) << "Unable to create backing stream.";
-      return IO_ERROR;
-    }
+  // Backing stream is fine - just use it.
+  if (stream.get()) {
+    return STATUS_OK;
   }
 
-  return STATUS_OK;
+  // If the backing stream does not already exist, we make one.
+
+  // Get the containing volume.
+  URN volume_urn;
+  if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
+    LOG(INFO) << "Map not stored in a volume.";
+    return IO_ERROR;
+  }
+
+  URN compression_urn;
+  resolver->Get(target, AFF4_IMAGE_COMPRESSION, compression_urn);
+  AFF4_IMAGE_COMPRESSION_ENUM compression = CompressionMethodFromURN(
+      compression_urn);
+
+  LOG(INFO) << "Stream will be compressed with " <<
+      compression_urn.SerializeToString();
+
+  // If the stream should not be compressed, it is more efficient to use a
+  // native volume member (e.g. ZipFileSegment or FileBackedObjects) than
+  // the more complex bevy based images.
+  if (compression == AFF4_IMAGE_COMPRESSION_ENUM_STORED) {
+    AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
+        volume_urn);
+
+    if (volume.get()) {
+      volume->CreateMember(target);
+      return STATUS_OK;
+    }
+  } else {
+    AFF4ScopedPtr<AFF4Image> stream = AFF4Image::NewAFF4Image(
+        resolver, target, volume_urn);
+    if (stream.get())
+      return STATUS_OK;
+  }
+  return IO_ERROR;
 }
 
 
