@@ -15,6 +15,7 @@
 import os
 import unittest
 
+from pyaff4 import aff4_file
 from pyaff4 import aff4_map
 from pyaff4 import data_store
 from pyaff4 import lexicon
@@ -39,10 +40,11 @@ class AFF4MapTest(unittest.TestCase):
 
             with zip.ZipFile.NewZipFile(resolver, self.filename) as zip_file:
                 self.volume_urn = zip_file.urn
-                image_urn = self.volume_urn.Append(self.image_name)
+                self.image_urn = self.volume_urn.Append(self.image_name)
 
+                #  # Write Map image sequentially (Seek/Write method).
                 with aff4_map.AFF4Map.NewAFF4Map(
-                    resolver, image_urn, self.volume_urn) as image:
+                    resolver, self.image_urn, self.volume_urn) as image:
                     # Maps are written in random order.
                     image.Seek(50)
                     image.Write("XX - This is the position.")
@@ -54,23 +56,28 @@ class AFF4MapTest(unittest.TestCase):
                     image.Seek(50)
                     image.Write("50")
 
-                    self.image_urn = image.urn
+                # Test the Stream method.
+                with resolver.CachePut(
+                        aff4_file.AFF4MemoryStream(resolver)) as source:
+                    # Fill it with data.
+                    source.Write("AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH")
 
-                # Test the stream writing interface.
-                segments = [
-                    (50, "XX - This is the position."),
-                    (0, "00 - This is the position."),
-                    (50, "50"),
+                    # Make a temporary map that defines our plan.
+                    helper_map = aff4_map.AFF4Map(resolver)
 
-                    # An empty string represents end of reading.
-                    (0, ""),
-                ]
-                image_urn_2 = self.volume_urn.Append(
-                    self.image_name).Append("2")
+                    helper_map.AddRange(4, 0, 4, source.urn)  # 0000AAAA
+                    helper_map.AddRange(0, 12, 4, source.urn) # DDDDAAAA
+                    helper_map.AddRange(12, 16, 4, source.urn)# DDDDAAAA0000EEEE
 
-                with aff4_map.AFF4Map.NewAFF4Map(
-                    resolver, image_urn_2, self.volume_urn) as image:
-                    image.WriteWithCallback(lambda: segments.pop(0))
+                    image_urn_2 = self.volume_urn.Append(
+                        self.image_name).Append("streamed")
+
+                    with aff4_map.AFF4Map.NewAFF4Map(
+                        resolver, image_urn_2, self.volume_urn) as image:
+
+                        # Now we create the real map by copying the temporary
+                        # map stream.
+                        image.WriteStream(helper_map)
 
     def testAddRange(self):
         resolver = data_store.MemoryDataStore()
@@ -168,13 +175,22 @@ class AFF4MapTest(unittest.TestCase):
         # into a fresh empty resolver.
         with zip.ZipFile.NewZipFile(resolver, self.filename) as zip_file:
             image_urn = zip_file.urn.Append(self.image_name)
-            image_urn_2 = image_urn.Append("2")
+            image_urn_2 = image_urn.Append("streamed")
 
         # Check the first stream.
         self.CheckImageURN(resolver, image_urn)
 
         # The second stream must be the same.
-        self.CheckImageURN(resolver, image_urn_2)
+        self.CheckStremImageURN(resolver, image_urn_2)
+
+    def CheckStremImageURN(self, resolver, image_urn_2):
+        with resolver.AFF4FactoryOpen(image_urn_2) as map:
+            self.assertEquals(map.Size(), 16)
+            self.assertEquals(map.Read(100), "DDDDAAAA\x00\x00\x00\x00EEEE")
+
+        # The data stream should be packed without gaps.
+        with resolver.AFF4FactoryOpen(image_urn_2.Append("data")) as image:
+            self.assertEquals(image.Read(100), "DDDDAAAAEEEE")
 
     def CheckImageURN(self, resolver, image_urn):
         with resolver.AFF4FactoryOpen(image_urn) as map:

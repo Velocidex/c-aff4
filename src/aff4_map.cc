@@ -612,6 +612,8 @@ int AFF4Map::Write(const char *data, int length) {
 
   readptr += length;
 
+  MarkDirty();
+
   return length;
 }
 

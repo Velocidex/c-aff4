@@ -15,6 +15,7 @@
 """This module installs the pyaff4 library."""
 import sys
 import subprocess
+import versioneer
 
 from setuptools import setup
 from setuptools.command.install import install as _install
@@ -51,22 +52,23 @@ class install(_install):
         _install.run(self)
 
 
+commands = versioneer.get_cmdclass()
+commands["test"] = NoseTestCommand
+commands["install"] = install
+
 setup(
     name='PyAFF4',
     long_description=long_description,
-    version='0.18',
+    version=versioneer.get_version(),
+    cmdclass=commands,
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
     author_email='scudette@gmail.com',
     url='https://www.aff4.org/',
     packages=['pyaff4'],
     package_dir={"pyaff4": "."},
-    cmdclass={
-        'test': NoseTestCommand,
-        "install": install
-    },
     install_requires=[
-        "rdflib >= 4.1",
-        "intervaltree >= 2.0.4",
+        "rdflib >= 4.2.1",
+        "intervaltree >= 2.1.0",
     ],
 )

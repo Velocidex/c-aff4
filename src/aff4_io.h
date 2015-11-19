@@ -59,6 +59,7 @@ struct AFF4VolumeProperties {
   bool files_are_directories = true;
 };
 
+
 class ProgressContext {
  public:
   // Maintained by the callback.

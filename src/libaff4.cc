@@ -385,6 +385,7 @@ URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method) {
   }
 }
 
+
 // Utilities
 string member_name_for_urn(const URN member, const URN base_urn,
                            bool slash_ok) {

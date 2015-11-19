@@ -1,4 +1,4 @@
-# Copyright 2014 Google Inc. All rights reserved.
+# Copyright 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
 # use this file except in compliance with the License.  You may obtain a copy of
@@ -12,9 +12,7 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
-from pyaff4 import aff4
-from pyaff4 import aff4_directory
-from pyaff4 import aff4_file
-from pyaff4 import aff4_image
-from pyaff4 import aff4_map
-from pyaff4 import zip
+"""Utilities for AFF4 imaging.
+
+These are mostly high level utilities used by the command line imager.
+"""

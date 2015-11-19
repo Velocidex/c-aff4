@@ -218,24 +218,6 @@ bool AFF4Directory::IsDirectory(const URN &urn) {
 
 #ifdef _WIN32
 
-// Automatically closes a search handle upon destruction
-class SearchHandleScope {
-  // Initializes a new search handle closer
-  // searchHandle: Search handle that will be closed on destruction
- public:
-  explicit SearchHandleScope(HANDLE searchHandle): searchHandle(searchHandle) {}
-
-  // Closes the search handle
- public:
-  ~SearchHandleScope() {
-    ::FindClose(this->searchHandle);
-  }
-
-  // Search handle that will be closed when the instance is destroyed
- private:
-  HANDLE searchHandle;
-};
-
 // Recursively deletes the specified directory and all its contents
 //   path: Absolute path of the directory that will be deleted
 

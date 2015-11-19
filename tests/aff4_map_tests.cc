@@ -37,7 +37,7 @@ class AFF4MapTest: public ::testing::Test {
     image_urn = volume_urn.Append(image_name);
 
     // Write Map image sequentially (Seek/Write method).
-    if (1) {
+    {
       AFF4ScopedPtr<AFF4Map> image = AFF4Map::NewAFF4Map(
           &resolver, image_urn, zip->urn);
 
@@ -55,26 +55,19 @@ class AFF4MapTest: public ::testing::Test {
 
     // Test the Stream method.
     {
-      // First create a stream. Note: This can not be a StringIO because it
-      // requires a stable URN to be stored in the map.
-      URN source_urn = URN::NewURNFromFilename(source_filename);
+      // First create a stream and add it to the Cache.
+      AFF4ScopedPtr<AFF4Stream> source = resolver.CachePut<AFF4Stream>(
+          new StringIO(&resolver));
 
-      // We are allowed to write on the output filename.
-      resolver.Set(source_urn, AFF4_STREAM_WRITE_MODE,
-                   new XSDString("truncate"));
-
-      AFF4ScopedPtr<AFF4Stream> source = resolver.AFF4FactoryOpen<AFF4Stream>(
-          source_urn);
-
+      // Fill it with data.
       source->Write("AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH");
-      source->Flush();
 
       // Make a temporary map that defines our plan.
       AFF4Map helper_map(&resolver);
 
-      helper_map.AddRange(4, 0, 4, source_urn);    // 0000AAAA
-      helper_map.AddRange(0, 12, 4, source_urn);   // DDDDAAAA
-      helper_map.AddRange(12, 16, 4, source_urn);  // DDDDAAAA0000EEEE
+      helper_map.AddRange(4, 0, 4, source->urn);    // 0000AAAA
+      helper_map.AddRange(0, 12, 4, source->urn);   // DDDDAAAA
+      helper_map.AddRange(12, 16, 4, source->urn);  // DDDDAAAA0000EEEE
 
       AFF4ScopedPtr<AFF4Map> image = AFF4Map::NewAFF4Map(
           &resolver, image_urn.Append("streamed"), zip->urn);

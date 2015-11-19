@@ -13,6 +13,9 @@
 # the License.
 
 """This is the python AFF4 library."""
+import platform
+import sys
+import time
 import uuid
 import weakref
 
@@ -133,6 +136,17 @@ class NoneObject(object):
 AFF4_OBJECT_REFS = {}
 
 
+class AFF4StreamProperties(object):
+    seekable = True
+    sizeable = True
+    writable = False
+
+class AFF4VolumeProperties(object):
+    supports_compression = True
+    writable = False
+    files_are_directories = True
+
+
 class AFF4Object(object):
     def __init__(self, resolver, urn=None):
         self.resolver = resolver
@@ -168,6 +182,10 @@ class AFF4Object(object):
 
 
 class AFF4Volume(AFF4Object):
+    def __init__(self, *args, **kwargs):
+        super(AFF4Volume, self).__init__(*args, **kwargs)
+        self.properties = AFF4VolumeProperties()
+
     def CreateMember(self, child):
         raise NotImplementedError
 
@@ -176,38 +194,14 @@ SEEK_SET = 0
 SEEK_CUR = 1
 SEEK_END = 2
 
-class CallbackStreamer(object):
-    """A helpful wrapper around a callable which produces data.
-
-    This class is needed to support callables which deliver insufficient data to
-    fulfill the read request.
-    """
-
-    def __init__(self, read_cb):
-        self.read_cb = read_cb
-        self.buff = ""
-
-    def read(self, length):
-        while self.read_cb:
-            if len(self.buff) > length:
-                result = self.buff[:length]
-                self.buff = self.buff[length:]
-                return result
-
-            data = self.read_cb(length - len(self.buff))
-            if not data:
-                result = self.buff
-                # Stop calling the call back any more and return whatever we
-                # have left.
-                self.read_cb = None
-                return result
-
-            self.buff += data
-
 
 class AFF4Stream(AFF4Object):
     readptr = 0
     size = 0
+
+    def __init__(self, *args, **kwargs):
+        super(AFF4Stream, self).__init__(*args, **kwargs)
+        self.properties = AFF4StreamProperties()
 
     def Read(self, length):
         raise NotImplementedError()
@@ -215,11 +209,7 @@ class AFF4Stream(AFF4Object):
     def Write(self, data):
         raise NotImplementedError()
 
-    def WriteWithCallback(self, read_cb):
-        """Write this stream from a callback."""
-        return self.WriteStream(CallbackStreamer(read_cb))
-
-    def WriteStream(self, stream):
+    def WriteStream(self, source):
         """Writes into this stream from a stream.
 
         The stream is a file-like object with read and tell() methods.
@@ -257,3 +247,60 @@ class AFF4Stream(AFF4Object):
 
     def flush(self):
         self.Flush()
+
+    def Prepare(self):
+        self.Seek(0)
+
+
+class ProgressContext(object):
+    last_time = 0
+    last_offset = 0
+
+    # The following are set in advance by users in order to get accurate
+    # progress reports.
+
+    # Start offset of this current range.
+    start = 0
+    length = 0
+
+    def __init__(self, length=0):
+        self.length = length
+
+    def Report(self, readptr):
+        """This will be called periodically to report the progress.
+
+        Note that readptr is specified relative to the start of the range
+        operation (WriteStream and CopyToStream)
+        """
+        readptr = readptr + self.start
+        now = time.time() * 1e6
+        if now > self.last_time + 1000000/4:
+            # Rate in MB/s.
+            rate = ((readptr - self.last_offset) /
+                    (now - self.last_time) * 1000000 / 1024/1024)
+
+            sys.stdout.write(" Reading %sMiB / %sMiB  %s MiB/s\r\n" % (
+                readptr/1024/1024,
+                self.length/1024/1024,
+                rate))
+            sys.stdout.flush()
+
+            self.last_time = now
+            self.last_offset = readptr
+
+        if aff4_abort_signaled:
+            sys.stdout.write("\n\nAborted!\n")
+            raise RuntimeError("Aborted")
+
+aff4_abort_signaled = False
+
+
+class EmptyProgressContext(ProgressContext):
+    def Report(self, _):
+        pass
+
+DEFAULT_PROGRESS = ProgressContext()
+EMPTY_PROGRESS = EmptyProgressContext()
+
+
+WIN32 = platform.system() == "Windows"

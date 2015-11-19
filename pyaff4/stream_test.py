@@ -67,7 +67,7 @@ class StreamTest(unittest.TestCase):
                           stream.Read(1000))
 
     def testFileBackedStream(self):
-        filename = rdfvalue.URN("/tmp/test_filename.bin")
+        filename = rdfvalue.URN.FromFileName("/tmp/test_filename.bin")
         resolver = data_store.MemoryDataStore()
         try:
             resolver.Set(filename, lexicon.AFF4_STREAM_WRITE_MODE,

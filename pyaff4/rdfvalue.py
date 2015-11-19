@@ -83,6 +83,9 @@ class XSDString(RDFValue):
     def Set(self, data):
         self.value = unicode(data)
 
+    def __unicode__(self):
+        return unicode(self.value)
+
 
 class XSDInteger(RDFValue):
     datatype = rdflib.XSD.integer
@@ -109,6 +112,10 @@ class URN(RDFValue):
 
     @classmethod
     def FromFileName(cls, filename):
+        return cls("file:" + urllib.pathname2url(filename))
+
+    @classmethod
+    def NewURNFromFilename(cls, filename):
         return cls("file:" + urllib.pathname2url(filename))
 
     def ToFilename(self):
@@ -143,6 +150,10 @@ class URN(RDFValue):
             components = components._replace(scheme="file")
 
         return components
+
+    def Scheme(self):
+        components = self.Parse()
+        return components.scheme
 
     def Append(self, component, quote=True):
         components = self.Parse()

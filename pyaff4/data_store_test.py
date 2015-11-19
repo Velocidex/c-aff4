@@ -19,6 +19,9 @@ from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 import unittest
 
+import StringIO
+
+
 class DataStoreTest(unittest.TestCase):
     def setUp(self):
         self.store = data_store.MemoryDataStore()
@@ -49,7 +52,7 @@ class DataStoreTest(unittest.TestCase):
     def testTurtleSerialization(self):
         data = self.store.DumpToTurtle(verbose=True)
         new_store = data_store.MemoryDataStore()
-        new_store.LoadFromTurtle(data)
+        new_store.LoadFromTurtle(StringIO.StringIO(data))
         res = new_store.Get(rdfvalue.URN("hello"), rdfvalue.URN("World"))
         self.assertEquals(res, "foo")
 

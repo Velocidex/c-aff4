@@ -15,13 +15,12 @@
 """An implementation of the ZipFile based AFF4 volume."""
 
 import logging
-import urlparse
-import re
-import string
 import StringIO
 import zlib
 
 from pyaff4 import aff4
+from pyaff4 import aff4_file
+from pyaff4 import aff4_utils
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
@@ -228,65 +227,6 @@ class ZipInfo(object):
         backing_store.write(zip64header.Pack())
 
 
-class FileBackedObject(aff4.AFF4Stream):
-    def LoadFromURN(self):
-        components = self.urn.Parse()
-        if components.scheme != "file":
-            raise TypeError("Only file:// URNs are supported.")
-
-        mode = (self.resolver.Get(self.urn, lexicon.AFF4_STREAM_WRITE_MODE)
-                or "read")
-        if mode == "truncate":
-            flags = "w+b"
-        elif mode == "append":
-            flags = "a+b"
-        else:
-            flags = "rb"
-
-        filename = self.urn.ToFilename()
-        self.fd = open(filename, flags)
-
-    def Read(self, length):
-        self.fd.seek(self.readptr)
-        result = self.fd.read(length)
-        self.readptr += len(result)
-        return result
-
-    def WriteStream(self, stream):
-        """Copy the stream into this stream."""
-        while True:
-            data = stream.read(BUFF_SIZE)
-            if not data:
-                break
-
-            self.Write(data)
-
-    def Write(self, data):
-        self.MarkDirty()
-
-        self.fd.seek(self.readptr)
-        self.fd.write(data)
-        self.fd.flush()
-        self.readptr += len(data)
-
-    def Flush(self):
-        if self.IsDirty():
-            self.fd.flush()
-        super(FileBackedObject, self).Flush()
-
-    def Prepare(self):
-        self.readptr = 0
-
-    def Truncate(self):
-        self.fd.truncate(0)
-
-    def Size(self):
-        self.fd.seek(0, 2)
-        return self.fd.tell()
-
-
-registry.AFF4_TYPE_MAP["file"] = FileBackedObject
-
 class FileWrapper(object):
     """Maps a slice from a file URN."""
 
@@ -329,7 +269,7 @@ def DecompressBuffer(buffer):
     return result + decompressor.flush()
 
 
-class ZipFileSegment(FileBackedObject):
+class ZipFileSegment(aff4_file.FileBackedObject):
     compression_method = ZIP_STORED
 
     def LoadFromURN(self):
@@ -339,7 +279,7 @@ class ZipFileSegment(FileBackedObject):
 
     def LoadFromZipFile(self, owner):
         """Read the segment data from the ZipFile owner."""
-        member_name = owner.member_name_for_urn(self.urn)
+        member_name = aff4_utils.member_name_for_urn(self.urn, owner.urn)
 
         # Parse the ZipFileHeader for this filename.
         zip_info = owner.members.get(member_name)
@@ -393,11 +333,12 @@ class ZipFileSegment(FileBackedObject):
                 LOGGER.info("Unsupported compression method.")
                 raise NotImplementedError()
 
-    def WriteStream(self, stream):
+    def WriteStream(self, stream, progress=None):
         owner_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
         with self.resolver.AFF4FactoryOpen(owner_urn) as owner:
             owner.StreamAddMember(
-                self.urn, stream, compression_method=self.compression_method)
+                self.urn, stream, compression_method=self.compression_method,
+                progress=progress)
 
     def Flush(self):
         if self.IsDirty():
@@ -416,11 +357,8 @@ class ZipFile(aff4.AFF4Volume):
     def __init__(self, *args, **kwargs):
         super(ZipFile, self).__init__(*args, **kwargs)
         self.children = set()
-        self.printables = set(string.printable)
         self.members = {}
         self.global_offset = 0
-        for i in "!$\\:*%?\"<>|]":
-            self.printables.discard(i)
 
     def parse_cd(self, backing_store_urn):
         with self.resolver.AFF4FactoryOpen(backing_store_urn) as backing_store:
@@ -566,7 +504,8 @@ class ZipFile(aff4.AFF4Volume):
 
                     # Store this information in the resolver. Ths allows
                     # segments to be directly opened by URN.
-                    member_urn = self.urn_from_member_name(zip_info.filename)
+                    member_urn = aff4_utils.urn_from_member_name(
+                        zip_info.filename, self.urn)
 
                     self.resolver.Set(
                         member_urn, lexicon.AFF4_TYPE, rdfvalue.URN(
@@ -582,31 +521,6 @@ class ZipFile(aff4.AFF4Volume):
                                  entry.extra_field_len +
                                  entry.file_comment_length)
 
-    def member_name_for_urn(self, member_urn):
-        filename = self.urn.RelativePath(member_urn)
-        if filename.startswith("/"):
-            filename = filename[1:]
-
-        # Escape chars which are non printable.
-        escaped_filename = []
-        for c in filename:
-            if c in self.printables:
-                escaped_filename.append(c)
-            else:
-                escaped_filename.append("%%%02x" % ord(c))
-
-        return "".join(escaped_filename)
-
-    def urn_from_member_name(self, member):
-        # Remove %xx escapes.
-        member = re.sub(
-            "%(..)", lambda x: chr(int("0x" + x.group(1), 0)),
-            member)
-        if urlparse.urlparse(member).scheme == "aff4":
-            return member
-
-        return self.urn.Append(member, quote=False)
-
     @staticmethod
     def NewZipFile(resolver, backing_store_urn):
         result = ZipFile(resolver, urn=None)
@@ -620,13 +534,13 @@ class ZipFile(aff4.AFF4Volume):
         return resolver.AFF4FactoryOpen(result.urn)
 
     def CreateMember(self, child_urn):
-        member_filename = self.member_name_for_urn(child_urn)
+        member_filename = aff4_utils.member_name_for_urn(child_urn, self.urn)
         return self.CreateZipSegment(member_filename)
 
     def CreateZipSegment(self, filename):
         self.MarkDirty()
 
-        segment_urn = self.urn_from_member_name(filename)
+        segment_urn = aff4_utils.urn_from_member_name(filename, self.urn)
 
         # Is it in the cache?
         res = self.resolver.CacheGet(segment_urn)
@@ -656,7 +570,7 @@ class ZipFile(aff4.AFF4Volume):
             raise IOError("Segment %s does not exist yet" % filename)
 
         # Is it already in the cache?
-        segment_urn = self.urn_from_member_name(filename)
+        segment_urn = aff4_utils.urn_from_member_name(filename, self.urn)
         res = self.resolver.CacheGet(segment_urn)
 
         if res:
@@ -686,11 +600,11 @@ class ZipFile(aff4.AFF4Volume):
 
         # Load the turtle metadata.
         with self.OpenZipSegment("information.turtle") as fd:
-            turtle_data = fd.read(1000000)
-            self.resolver.LoadFromTurtle(turtle_data)
+            self.resolver.LoadFromTurtle(fd)
 
     def StreamAddMember(self, member_urn, stream,
-                        compression_method=ZIP_STORED):
+                        compression_method=ZIP_STORED,
+                        progress=None):
         """An efficient interface to add a new archive member.
 
         Args:
@@ -700,6 +614,9 @@ class ZipFile(aff4.AFF4Volume):
           compression_method: How to compress the member.
 
         """
+        if progress is None:
+            progress = aff4.EMPTY_PROGRESS
+
         backing_store_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
         with self.resolver.AFF4FactoryOpen(backing_store_urn) as backing_store:
             LOGGER.info("Writing member %s", member_urn)
@@ -711,7 +628,7 @@ class ZipFile(aff4.AFF4Volume):
             # global_offset into account).
             zip_info = ZipInfo(
                 local_header_offset=backing_store.Tell() - self.global_offset,
-                filename=self.member_name_for_urn(member_urn),
+                filename=aff4_utils.member_name_for_urn(member_urn, self.urn),
                 file_size=0, crc32=0)
 
             # For now we do not support streamed writing so we need to seek back
@@ -732,6 +649,7 @@ class ZipFile(aff4.AFF4Volume):
                     zip_info.file_size += len(data)
                     zip_info.crc32 = zlib.crc32(data, zip_info.crc32)
                     backing_store.Write(c_data)
+                    progress.Report(zip_info.file_size)
 
                 # Finalize the compressor.
                 c_data = compressor.flush()
@@ -749,6 +667,7 @@ class ZipFile(aff4.AFF4Volume):
                     zip_info.compress_size += len(data)
                     zip_info.file_size += len(data)
                     zip_info.crc32 = zlib.crc32(data, zip_info.crc32)
+                    progress.Report(zip_info.file_size)
                     backing_store.Write(data)
             else:
                 raise RuntimeError("Unsupported compression method")
@@ -773,7 +692,7 @@ class ZipFile(aff4.AFF4Volume):
             with self.CreateZipSegment("information.turtle") as turtle_segment:
                 turtle_segment.compression_method = ZIP_DEFLATE
 
-                turtle_segment.Write(self.resolver.DumpToTurtle())
+                self.resolver.DumpToTurtle(stream=turtle_segment)
                 turtle_segment.Flush()
 
             # Write the central directory.

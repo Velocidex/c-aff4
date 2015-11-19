@@ -27,7 +27,7 @@ class AFF4DirectoryTest: public ::testing::Test {
     AFF4Directory::RemoveDirectory(root_path);
   }
 
-  // Create an initial Zip file for each test.
+  // Create an initial container for each test.
   virtual void SetUp() {
     MemoryDataStore resolver;
     URN root_urn = URN::NewURNFromFilename(root_path);
@@ -35,6 +35,7 @@ class AFF4DirectoryTest: public ::testing::Test {
     // We are allowed to write on the output filename.
     resolver.Set(root_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
 
+    // Create a new directory.
     AFF4ScopedPtr<AFF4Directory> volume = AFF4Directory::NewAFF4Directory(
         &resolver, root_urn);
 
@@ -58,6 +59,7 @@ TEST_F(AFF4DirectoryTest, CreateMember) {
   MemoryDataStore resolver;
   URN root_urn = URN::NewURNFromFilename(root_path);
 
+  // Open the Directory volume:
   AFF4ScopedPtr<AFF4Directory> directory = AFF4Directory::NewAFF4Directory(
       &resolver, root_urn);
 

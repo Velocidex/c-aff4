@@ -44,6 +44,9 @@ class _CompressorStream(object):
         self.bevy_index = []
         self.bevy_length = 0
 
+    def tell(self):
+        return self.stream.tell()
+
     def read(self, _):
         # Stop copying when the bevy is full.
         if self.chunk_count_in_bevy >= self.owner.chunks_per_segment:
@@ -119,8 +122,11 @@ class AFF4Image(aff4.AFF4Stream):
         self.chunk_count_in_bevy = 0
         self.bevy_number = 0
 
-    def WriteStream(self, source_stream):
+    def WriteStream(self, source_stream, progress=None):
         """Copy data from a source stream into this stream."""
+        if progress is None:
+            progress = aff4.DEFAULT_PROGRESS
+
         volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
         if not volume_urn:
             raise IOError("Unable to find storage for urn %s" %
@@ -132,10 +138,14 @@ class AFF4Image(aff4.AFF4Stream):
                 stream = _CompressorStream(self, source_stream)
 
                 bevy_urn = self.urn.Append("%08d" % self.bevy_number)
-                with volume.CreateMember(bevy_urn) as bevy:
-                    bevy.WriteStream(stream)
-
                 bevy_index_urn = bevy_urn.Append("index")
+
+                progress.start = (self.bevy_number *
+                                  self.chunks_per_segment *
+                                  self.chunk_size)
+                with volume.CreateMember(bevy_urn) as bevy:
+                    bevy.WriteStream(stream, progress=progress)
+
                 with volume.CreateMember(bevy_index_urn) as bevy_index:
                     bevy_index.Write(
                         struct.pack("<" + "L" * len(stream.bevy_index),
@@ -144,6 +154,7 @@ class AFF4Image(aff4.AFF4Stream):
                 # Make another bevy.
                 self.bevy_number += 1
                 self.size += stream.size
+                self.readptr += stream.size
 
                 # Last iteration - the compressor stream quit before the bevy is
                 # full.

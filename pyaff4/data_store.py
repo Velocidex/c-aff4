@@ -241,7 +241,7 @@ class MemoryDataStore(object):
     def Close(self, obj):
         self.ObjectCache.Remove(obj)
 
-    def DumpToTurtle(self, base="", verbose=False):
+    def DumpToTurtle(self, stream=None, verbose=False):
         g = rdflib.Graph()
 
         for urn, items in self.store.iteritems():
@@ -261,11 +261,16 @@ class MemoryDataStore(object):
                 attr = rdflib.URIRef(attr)
                 g.add((urn, attr, value.GetRaptorTerm()))
 
-        return g.serialize(format='turtle')
+        result = g.serialize(format='turtle')
+        if stream:
+            stream.write(result)
+        return result
 
-    def LoadFromTurtle(self, string):
+    def LoadFromTurtle(self, stream):
+        data = stream.read(1000000)
+
         g = rdflib.Graph()
-        g.parse(data=string, format="turtle")
+        g.parse(data=data, format="turtle")
 
         for urn, attr, value in g:
             urn = rdfvalue.URN(str(urn))
@@ -326,3 +331,9 @@ class MemoryDataStore(object):
             for pred, value in data.iteritems():
                 if pred == predicate:
                     yield subject, predicate, value
+
+    def SelectSubjectsByPrefix(self, prefix):
+        prefix = str(prefix)
+        for subject in self.store:
+            if subject.startswith(prefix):
+                yield subject

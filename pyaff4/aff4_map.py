@@ -15,6 +15,7 @@
 """This module implements the standard AFF4 Image."""
 import collections
 import intervaltree
+import logging
 import struct
 
 from pyaff4 import aff4
@@ -22,6 +23,8 @@ from pyaff4 import aff4_image
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
+
+LOGGER = logging.getLogger("pyaff4")
 
 
 class Range(collections.namedtuple(
@@ -65,14 +68,16 @@ class Range(collections.namedtuple(
         start = min(self.map_offset, other.map_offset)
         end = max(self.map_end, other.map_end)
 
-        return self._replace(
+        result = self._replace(
             map_offset=start,
             length=end-start,
             target_offset=self.target_offset_at_map_offset(start))
 
+        return result
+
     def left_clip(self, offset):
         """Clip this range at the left side with offset."""
-        if not self.map_offset <= offset < self.map_end:
+        if not self.map_offset <= offset <= self.map_end:
             raise ValueError("clip offset is not inside range")
 
         adjustment = offset - self.map_offset
@@ -82,12 +87,81 @@ class Range(collections.namedtuple(
 
     def right_clip(self, offset):
         """Clip this range at the right side with offset."""
-        if not self.map_offset < offset < self.map_end:
+        if not self.map_offset <= offset <= self.map_end:
             raise ValueError("clip offset is not inside range")
 
         adjustment = self.map_end - offset
         return self._replace(length=self.length - adjustment)
 
+
+class _MapStreamHelper(object):
+
+    def __init__(self, resolver, source, destination):
+        self.resolver = resolver
+        self.range_offset = 0
+        self.readptr = 0
+        self.source = source
+        self.destination = destination
+        self.source_ranges = sorted(source.tree)
+        if not self.source_ranges:
+            raise RuntimeError("Source map is empty when calling WriteStream()")
+        self.current_range_idx = 0
+
+    def tell(self):
+        return self.source.tell()
+
+    def read(self, length):
+        # This is the data stream of the map we are writing to (i.e. the new
+        # image we are creating).
+        target = self.destination.GetBackingStream()
+        result = ""
+
+        # Need more data - read more.
+        while len(result) < length:
+            # We are done! All source ranges read.
+            if self.current_range_idx >= len(self.source_ranges):
+                break
+
+            current_range = self.source_ranges[self.current_range_idx].data
+
+            # Add a range if we are at the beginning of a range.
+            if self.range_offset == 0:
+                self.destination.AddRange(
+                    current_range.map_offset,
+                    # This is the current offset in the data stream.
+                    self.readptr,
+                    current_range.length,
+                    target)
+
+            # Read as much data as possible from this range.
+            to_read = min(
+                # How much we need.
+                length - len(result),
+                # How much is available in this range.
+                current_range.length - self.range_offset)
+
+            # Range is exhausted - get the next range.
+            if to_read == 0:
+                self.current_range_idx += 1
+                self.range_offset = 0
+                continue
+
+            # Read and copy the data.
+            source_urn = self.source.targets[current_range.target_id]
+            with self.resolver.AFF4FactoryOpen(source_urn) as source:
+                source.Seek(current_range.target_offset + self.range_offset)
+
+                data = source.Read(to_read)
+                if not data:
+                    break
+
+                result += data
+                self.range_offset += len(data)
+
+                # Keep track of all the data we have released.
+                self.readptr += len(data)
+
+        return result
 
 class AFF4Map(aff4.AFF4Stream):
 
@@ -194,8 +268,18 @@ class AFF4Map(aff4.AFF4Stream):
                 range = range.Merge(left_interval.data)
             except ValueError:
                 left_range = left_interval.data.right_clip(range.map_offset)
-                self.tree.addi(
-                    left_range.map_offset, left_range.map_end, left_range)
+                # If the interval has not changed, then adding it to three will
+                # not result in an additional interval (since the tree tries to
+                # de-dup intervals). Therefore we will end up removing the
+                # interval completely below. Therefore if clipping the interval
+                # does not change it, we must discard the interval completely.
+                if left_range == left_interval.data:
+                    left_interval = None
+                else:
+                    self.tree.addi(
+                        left_range.map_offset,
+                        left_range.map_end,
+                        left_range)
 
         # Try to merge with the right interval.
         right_interval = self.tree[range.map_end+1]
@@ -206,11 +290,16 @@ class AFF4Map(aff4.AFF4Stream):
                 range = range.Merge(right_interval.data)
             except ValueError:
                 right_range = right_interval.data.left_clip(range.map_end)
-                self.tree.addi(
-                    right_range.map_offset, right_range.map_end, right_range)
+                if right_range == right_interval.data:
+                    right_interval = None
+                else:
+                    self.tree.addi(
+                        right_range.map_offset,
+                        right_range.map_end,
+                        right_range)
 
         # Remove the left and right intervals now. This must be done at this
-        # point # to allow for the case where left interval == right interval
+        # point to allow for the case where left interval == right interval
         # (i.e. the same interval intersects both start and end).
         if left_interval:
             self.tree.remove(left_interval)
@@ -248,50 +337,24 @@ class AFF4Map(aff4.AFF4Stream):
 
         return super(AFF4Map, self).Flush()
 
-    def WriteWithCallback(self, read_cb):
-        """Write this map stream from the read_cb.
+    def WriteStream(self, source, progress=None):
+        data_stream_urn = self.GetBackingStream()
+        with self.resolver.AFF4FactoryOpen(data_stream_urn) as data_stream:
+            # If we write from another map we need to wrap the map in the
+            # helper, otherwise we just copy the source into our data stream and
+            # create a single range over the whole stream.
+            if isinstance(source, AFF4Map):
+                data_stream.WriteStream(
+                    _MapStreamHelper(self.resolver, source, self), progress)
+            else:
+                data_stream.WriteStream(source, progress)
 
-        The callback is expected to produce tuples of (offset, data) or None to
-        signify that the stream is finished.
+                # Add a single range to cover the bulk of the image.
+                self.AddRange(0, data_stream.Size(), data_stream.Size(),
+                              data_stream.urn)
 
-        Note that this method produces a special casing of the more general map
-        streams: We create a single underlying data stream and store sparse data
-        into it. More complex maps streams should be created by other methods.
-        """
-        # Store the data stream in the same volume as ourselves.
-        volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
-
-        # This is the data stream.
-        target = self.urn.Append("data")
-        self.data_offset = 0
-
-        def StreamCB(_):
-            """Wrap the original stream.
-
-            Add a map entry for each read request served by the provided
-            stream. The provided stream is expected to skip invalid ranges.
-            """
-            delegate = read_cb()
-            if not delegate:
-                return ""
-
-            offset, data = delegate
-            if data:
-                self.AddRange(offset, self.data_offset, len(data), target)
-                self.data_offset += len(data)
-
-            return data
-
-        with aff4_image.AFF4Image.NewAFF4Image(
-                self.resolver, target, volume_urn) as data_stream:
-            data_stream.WriteWithCallback(StreamCB)
-
-    def WriteStream(self, stream):
-        raise NotImplementedError()
-
-    def Write(self, data):
-        self.MarkDirty()
-
+    def GetBackingStream(self):
+        """Returns the URN of the backing data stream of this map."""
         if self.targets:
             target = self.last_target
         else:
@@ -299,26 +362,43 @@ class AFF4Map(aff4.AFF4Stream):
 
         try:
             with self.resolver.AFF4FactoryOpen(target) as stream:
-                self.AddRange(self.readptr, stream.Size(), len(data), target)
-
-                # Append the data on the end of the stream.
-                stream.Seek(stream.Size())
-                stream.Write(data)
-
-                self.readptr += len(data)
+                # Backing stream is fine - just use it.
+                return stream.urn
 
         except IOError:
             # If the backing stream does not already exist, we make one.
             volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
+            compression_urn = self.resolver.Get(
+                target, lexicon.AFF4_IMAGE_COMPRESSION)
+
+            LOGGER.info("Stream will be compressed with %s", compression_urn)
+
+            # If the stream should not be compressed, it is more efficient to
+            # use a native volume member (e.g. ZipFileSegment or
+            # FileBackedObjects) than the more complex bevy based images.
+            if compression_urn == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
+                with self.resolver.AFF4FactoryOpen(volume_urn) as volume:
+                    with volume.CreateMember(target) as member:
+                        return member.urn
 
             with aff4_image.AFF4Image.NewAFF4Image(
                     self.resolver, target, volume_urn) as stream:
-                self.AddRange(self.readptr, stream.Size(), len(data), target)
+                return stream.urn
 
-                # Append the data on the end of the stream.
-                stream.Seek(stream.Size())
-                stream.Write(data)
-                self.readptr += len(data)
+    def Write(self, data):
+        self.MarkDirty()
+
+        target = self.GetBackingStream()
+        with self.resolver.AFF4FactoryOpen(target) as stream:
+            self.AddRange(self.readptr, stream.Size(), len(data), target)
+
+            # Append the data on the end of the stream.
+            stream.Seek(stream.Size())
+            stream.Write(data)
+
+            self.readptr += len(data)
+
+        return len(data)
 
     def GetRanges(self):
         return sorted([x.data for x in self.tree])
