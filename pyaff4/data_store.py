@@ -191,9 +191,11 @@ class AFF4ObjectCache(object):
 
 class MemoryDataStore(object):
     def __init__(self):
-        self.suppressed_rdftypes = set()
-        self.suppressed_rdftypes.add(lexicon.AFF4_ZIP_SEGMENT_TYPE)
-        self.suppressed_rdftypes.add(lexicon.AFF4_ZIP_TYPE)
+        self.suppressed_rdftypes = dict()
+        self.suppressed_rdftypes[lexicon.AFF4_ZIP_SEGMENT_TYPE] = set((
+            lexicon.AFF4_STORED, lexicon.AFF4_TYPE))
+        self.suppressed_rdftypes[lexicon.AFF4_ZIP_TYPE] = set((
+            lexicon.AFF4_STORED, lexicon.AFF4_TYPE))
 
         self.store = {}
         self.ObjectCache = AFF4ObjectCache(10)
@@ -250,13 +252,17 @@ class MemoryDataStore(object):
             if type is None:
                 continue
 
-            if not verbose and type in self.suppressed_rdftypes:
-                continue
-
             for attr, value in items.iteritems():
-                if (not verbose and
-                        attr.startswith(lexicon.AFF4_VOLATILE_NAMESPACE)):
-                    continue
+                # We suppress certain facts which can be deduced from the file
+                # format itself. This ensures that we do not have conflicting
+                # data in the data store. The data in the data store is a
+                # combination of explicit facts and implied facts.
+                if not verbose:
+                    if attr.startswith(lexicon.AFF4_VOLATILE_NAMESPACE):
+                        continue
+
+                    if attr in self.suppressed_rdftypes.get(type, ()):
+                        continue
 
                 attr = rdflib.URIRef(attr)
                 g.add((urn, attr, value.GetRaptorTerm()))
@@ -337,3 +343,7 @@ class MemoryDataStore(object):
         for subject in self.store:
             if subject.startswith(prefix):
                 yield subject
+
+    def QueryPredicatesBySubject(self, subject):
+        for pred, value in self.store.get(subject, {}).iteritems():
+            yield pred, value

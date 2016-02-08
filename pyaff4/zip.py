@@ -375,6 +375,8 @@ class ZipFile(aff4.AFF4Volume):
 
             LOGGER.info("Found ECD at %#x", ecd_real_offset)
 
+            urn_string = None
+
             # Fetch the volume comment.
             if end_cd.comment_len > 0:
                 backing_store.Seek(ecd_real_offset + end_cd.sizeof())
@@ -389,7 +391,7 @@ class ZipFile(aff4.AFF4Volume):
             # URN and then create a new ZipFile volume. After parsing the
             # central directory we discover our URN and therefore we can delete
             # the old, randomly selected URN.
-            if self.urn != urn_string:
+            if urn_string and self.urn != urn_string:
                 self.resolver.DeleteSubject(self.urn)
                 self.urn.Set(urn_string)
 
@@ -512,7 +514,8 @@ class ZipFile(aff4.AFF4Volume):
                             lexicon.AFF4_ZIP_SEGMENT_TYPE))
 
                     self.resolver.Set(member_urn, lexicon.AFF4_STORED, self.urn)
-
+                    self.resolver.Set(member_urn, lexicon.AFF4_STREAM_SIZE,
+                                      rdfvalue.XSDInteger(zip_info.file_size))
                     self.members[zip_info.filename] = zip_info
 
                 # Go to the next entry.
@@ -629,7 +632,7 @@ class ZipFile(aff4.AFF4Volume):
             zip_info = ZipInfo(
                 local_header_offset=backing_store.Tell() - self.global_offset,
                 filename=aff4_utils.member_name_for_urn(member_urn, self.urn),
-                file_size=0, crc32=0)
+                file_size=0, crc32=0, compression_method=compression_method)
 
             # For now we do not support streamed writing so we need to seek back
             # to this position later with an updated crc32.

@@ -265,6 +265,10 @@ class ProgressContext(object):
 
     def __init__(self, length=0):
         self.length = length
+        self.last_time = self.now()
+
+    def now(self):
+        return time.time() * 1e6
 
     def Report(self, readptr):
         """This will be called periodically to report the progress.
@@ -273,7 +277,7 @@ class ProgressContext(object):
         operation (WriteStream and CopyToStream)
         """
         readptr = readptr + self.start
-        now = time.time() * 1e6
+        now = self.now()
         if now > self.last_time + 1000000/4:
             # Rate in MB/s.
             rate = ((readptr - self.last_offset) /
