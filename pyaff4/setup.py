@@ -13,12 +13,9 @@
 # the License.
 
 """This module installs the pyaff4 library."""
-import sys
-import subprocess
 import versioneer
 
 from setuptools import setup
-from setuptools.command.install import install as _install
 from setuptools.command.test import test as TestCommand
 
 try:
@@ -40,21 +37,8 @@ class NoseTestCommand(TestCommand):
         nose.run_exit(argv=['nosetests'])
 
 
-class install(_install):
-    def run(self):
-        try:
-            import snappy
-        except ImportError:
-            # Install out own version of snappy.
-            subprocess.call(
-                [sys.executable, "setup.py", "install"],
-                cwd="third_party/python-snappy")
-        _install.run(self)
-
-
 commands = versioneer.get_cmdclass()
 commands["test"] = NoseTestCommand
-commands["install"] = install
 
 setup(
     name='PyAFF4',
@@ -68,6 +52,7 @@ setup(
     packages=['pyaff4'],
     package_dir={"pyaff4": "."},
     install_requires=[
+        "aff4-python == 0.5",
         "rdflib >= 4.2.1",
         "intervaltree >= 2.1.0",
     ],
