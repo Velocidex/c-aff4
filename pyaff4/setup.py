@@ -52,7 +52,7 @@ setup(
     packages=['pyaff4'],
     package_dir={"pyaff4": "."},
     install_requires=[
-        "aff4-python == 0.5",
+        "aff4-snappy == 0.5",
         "rdflib >= 4.2.1",
         "intervaltree >= 2.1.0",
     ],
