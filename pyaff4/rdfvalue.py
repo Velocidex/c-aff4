@@ -119,6 +119,11 @@ class URN(RDFValue):
         return cls("file:" + urllib.pathname2url(filename))
 
     def ToFilename(self):
+        # For file: urls we exactly reverse the conversion applied in
+        # FromFileName.
+        if self.value.startswith("file:"):
+            return urllib.url2pathname(self.value[5:])
+
         components = self.Parse()
         if components.scheme == "file":
             return components.path
