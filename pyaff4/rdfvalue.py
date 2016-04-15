@@ -13,6 +13,7 @@
 # the License.
 
 """RDF Values are responsible for serialization."""
+import functools
 import urlparse
 import rdflib
 import urllib
@@ -22,6 +23,24 @@ import posixpath
 from pyaff4 import registry
 
 # pylint: disable=protected-access
+
+
+class Memoize(object):
+    def __call__(self, f):
+        f.memo_pad = {}
+
+        @functools.wraps(f)
+        def Wrapped(self, *args):
+            key = tuple(args)
+            if len(f.memo_pad) > 100:
+                f.memo_pad.clear()
+
+            if key not in f.memo_pad:
+                f.memo_pad[key] = f(self, *args)
+
+            return f.memo_pad[key]
+
+        return Wrapped
 
 
 class RDFValue(object):
@@ -145,7 +164,12 @@ class URN(RDFValue):
             self.value = str(data)
 
     def Parse(self):
-        components = urlparse.urlparse(self.value)
+        return self._Parse(self.value)
+
+    # URL parsing seems to be slow in Python so we cache it as much as possible.
+    @Memoize()
+    def _Parse(self, value):
+        components = urlparse.urlparse(value)
         normalized_path = posixpath.normpath(components.path)
         if normalized_path == ".":
             normalized_path = ""

@@ -331,7 +331,7 @@ mapping).
  * @return
  */
 AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
-                             size_t length, URN target) {
+                             aff4_off_t length, URN target) {
   string key = target.SerializeToString();
   auto it = target_idx_map.find(key);
   Range subrange;

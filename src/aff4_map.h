@@ -80,7 +80,7 @@ class AFF4Map: public AFF4Stream {
   AFF4Status Flush();
 
   AFF4Status AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
-                      size_t length, URN target);
+                      aff4_off_t length, URN target);
 
   void Dump();
 
