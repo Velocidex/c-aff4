@@ -158,9 +158,15 @@ bool DefaultProgress::Report(aff4_off_t readptr) {
     off_t rate = (readptr - last_offset) /
         (now - last_time) * 1000000 / 1024/1024;
 
-    std::cout << " Reading 0x" << std::hex << readptr << "  " <<
-        std::dec << (readptr - start)/1024/1024 << "MiB / " <<
-        length/1024/1024 << "MiB " << rate << "MiB/s\r\n";
+    if (length > 0) {
+      std::cout << " Reading 0x" << std::hex << readptr << "  " <<
+          std::dec << (readptr - start)/1024/1024 << "MiB / " <<
+          length/1024/1024 << "MiB " << rate << "MiB/s\r\n";
+    } else {
+      std::cout << " Reading 0x" << std::hex << readptr << "  " <<
+          std::dec << (readptr - start)/1024/1024 << "MiB " <<
+          rate << "MiB/s\r\n";
+    }
     std::cout.flush();
 
     last_time = now;

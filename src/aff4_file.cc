@@ -195,6 +195,7 @@ string FileBackedObject::Read(size_t length) {
   return string(result.get(), buffer_size);
 }
 
+
 int FileBackedObject::Write(const char *data, int length) {
   // Dont even try to write on files we are not allowed to write on.
   if (!properties.writable)
@@ -207,8 +208,10 @@ int FileBackedObject::Write(const char *data, int length) {
   }
 
   DWORD tmp = length;
-  if (!WriteFile(fd, data, tmp, &tmp, NULL)) {
-    return IO_ERROR;
+  while (!WriteFile(fd, data, tmp, &tmp, NULL)) {
+    std::cout << "Unable to write to disk. Is it full? "
+        "Please try to free space to continue.\r";
+    Sleep(1000);
   }
 
   readptr += tmp;

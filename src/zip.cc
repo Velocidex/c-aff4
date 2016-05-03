@@ -652,7 +652,6 @@ int ZipFileSegment::Write(const char *data, int length) {
 }
 
 
-
 AFF4Status ZipFileSegment::LoadFromURN() {
   if (resolver->Get(urn, AFF4_STORED, owner_urn) != STATUS_OK) {
     return NOT_FOUND;
@@ -924,7 +923,9 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream &stream,
 
   // For now we do not support streamed writing so we need to seek back
   // to this position later with an updated crc32.
-  zip_info->WriteFileHeader(*backing_store);
+  if (zip_info->WriteFileHeader(*backing_store) < 0) {
+    return IO_ERROR;
+  }
 
   if (compression_method == AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE) {
     zip_info->compression_method = ZIP_DEFLATE;
@@ -971,7 +972,9 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream &stream,
         return ABORTED;
       }
 
-      backing_store->Write(c_buffer.get(), output_bytes);
+      if (backing_store->Write(c_buffer.get(), output_bytes) < 0) {
+        return IO_ERROR;
+      }
 
       // Give the compressor more room.
       strm.next_out = reinterpret_cast<Bytef *>(c_buffer.get());
@@ -990,7 +993,10 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream &stream,
 
     zip_info->file_size = strm.total_in;
     zip_info->compress_size = strm.total_out;
-    backing_store->Write(c_buffer.get(), AFF4_BUFF_SIZE - strm.avail_out);
+    if (backing_store->Write(
+            c_buffer.get(), AFF4_BUFF_SIZE - strm.avail_out) < 0) {
+      return IO_ERROR;
+    }
 
     deflateEnd(&strm);
 
@@ -1016,12 +1022,16 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream &stream,
         return ABORTED;
       }
 
-      backing_store->Write(buffer.data(), buffer.size());
+      if (backing_store->Write(buffer.data(), buffer.size()) < 0) {
+        return IO_ERROR;
+      }
     }
   }
 
   // Update the local file header now that CRC32 is calculated.
-  zip_info->WriteFileHeader(*backing_store);
+  if (zip_info->WriteFileHeader(*backing_store) < 0)
+    return IO_ERROR;
+
   members[zip_info->filename] = std::move(zip_info);
 
   // Keep track of all the segments we issue.
