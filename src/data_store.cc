@@ -91,11 +91,14 @@ AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream &stream) {
 DataStore::DataStore() {
   // By default suppress ZipFileSegment objects since all their metadata comes
   // directly from the ZIP container. This keeps the turtle files a bit cleaner.
-  suppressed_rdftypes.insert(AFF4_ZIP_SEGMENT_TYPE);
+  suppressed_rdftypes[AFF4_ZIP_SEGMENT_TYPE].insert(AFF4_TYPE);
+  suppressed_rdftypes[AFF4_ZIP_SEGMENT_TYPE].insert(AFF4_STORED);
 
   // The following are obvious due to the type of the container.
-  suppressed_rdftypes.insert(AFF4_ZIP_TYPE);
-  suppressed_rdftypes.insert(AFF4_DIRECTORY_TYPE);
+  suppressed_rdftypes[AFF4_ZIP_TYPE].insert(AFF4_TYPE);
+  suppressed_rdftypes[AFF4_ZIP_TYPE].insert(AFF4_STORED);
+  suppressed_rdftypes[AFF4_DIRECTORY_TYPE].insert(AFF4_TYPE);
+  suppressed_rdftypes[AFF4_DIRECTORY_TYPE].insert(AFF4_STORED);
 
   // Add these default namespace.
   namespaces.push_back(std::pair<string, string>("aff4", AFF4_NAMESPACE));
@@ -317,21 +320,27 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream &output_stream, URN base,
     URN subject(it.first);
     URN type;
 
-    // Skip this URN if it is in the suppressed_rdftypes set.
-    if (Get(subject, AFF4_TYPE, type) == STATUS_OK) {
-      if (!verbose &&
-          suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
-        continue;
-      }
+    if (Get(subject, AFF4_TYPE, type) != STATUS_OK) {
+      continue;
     }
 
     for (const auto &attr_it : it.second) {
       URN predicate(attr_it.first);
 
       // Volatile predicates are suppressed.
-      if (!verbose && 0 == predicate.value.compare(
-             0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
+      if (!verbose) {
+	if (0 == predicate.value.compare(
+	    0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
         continue;
+	}
+
+	// Skip this URN if it is in the suppressed_rdftypes set.
+	auto suppressed_predicate_it = suppressed_rdftypes.find(type.value);
+	if (suppressed_predicate_it != suppressed_rdftypes.end()) {
+	  if (suppressed_predicate_it->second.find(predicate.value) !=
+	      suppressed_predicate_it->second.end())
+	    continue;
+	}	
       }
 
       serializer->AddStatement(

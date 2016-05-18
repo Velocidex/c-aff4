@@ -326,7 +326,7 @@ class DataStore {
   AFF4ObjectCache ObjectCache;
 
   /// These types will not be dumped * to turtle files.
-  unordered_set<string> suppressed_rdftypes;
+  unordered_map<string, unordered_set<string>> suppressed_rdftypes;
 
  public:
   DataStore();
