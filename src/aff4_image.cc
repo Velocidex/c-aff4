@@ -552,15 +552,13 @@ string AFF4Image::Read(size_t length) {
   length = std::min((aff4_off_t)length, Size() - readptr);
 
   int initial_chunk_offset = readptr % chunk_size;
-  // We read this many full chunks at once.
-  int chunks_to_read = length / chunk_size;
-  unsigned int chunk_id = readptr / chunk_size;
-  string result;
+  unsigned int initial_chunk_id = readptr / chunk_size;
+  unsigned int final_chunk_id = (readptr + length - 1) / chunk_size;
 
-  // We need a bit of data from the last chunk, read an extra chunk.
-  if (length % chunk_size) {
-    chunks_to_read++;
-  }
+  // We read this many full chunks at once.
+  int chunks_to_read = final_chunk_id - initial_chunk_id + 1;
+  unsigned int chunk_id = initial_chunk_id;
+  string result;
 
   // Make sure we have enough room for output.
   result.reserve(chunks_to_read * chunk_size);
