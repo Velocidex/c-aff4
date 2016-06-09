@@ -12,8 +12,8 @@ def get_versions():
 def raw_versions():
     return json.loads("""
 {
-    "post": "0", 
-    "version": 0.23, 
+    "post": "1", 
+    "version": "0.24", 
     "rc": "0"
 }
 """)
@@ -24,7 +24,7 @@ import subprocess
 
 try:
     # We are looking for the git repo which contains this file.
-    MY_DIR = os.path.dirname(__file__)
+    MY_DIR = os.path.dirname(os.path.abspath(__file__))
 except:
     MY_DIR = None
 

@@ -50,7 +50,7 @@ setup(
     author_email='scudette@gmail.com',
     url='https://www.aff4.org/',
     packages=['pyaff4'],
-    package_dir={"pyaff4": "."},
+    package_dir={"pyaff4": "pyaff4"},
     install_requires=[
         "aff4-snappy == 0.5",
         "rdflib >= 4.2.1",
