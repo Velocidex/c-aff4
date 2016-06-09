@@ -1,7 +1,6 @@
-
-recursive-include third_party/python-snappy *
 include README.txt
 
-recursive-exclude third_party/python-snappy/build *include versioneer.py
-include _version.py
-include versioneer.py
+recursive-include pyaff4 *
+
+recursive-exclude * *.pyc
+exclude .gitignore

@@ -13,6 +13,8 @@
 # the License.
 
 """The AFF4 lexicon."""
+# This is the version of the AFF4 specification we support - not the library
+# version itself.
 AFF4_VERSION = "0.2"
 
 AFF4_MAX_READ_LEN = 1024*1024*100
@@ -28,6 +30,14 @@ AFF4_DISK_NAMESPACE = "http://aff4.org/Schema#disk/"
 # storage. They are simply used as a way for storing metadata about an AFF4
 # object internally.
 AFF4_VOLATILE_NAMESPACE = "http://aff4.org/VolatileSchema#"
+
+# The configuration space of the library itself. All these should be volatile
+# and therefore not persistant or interoperable with other AFF4 implementations.
+AFF4_CONFIG_NAMESPACE = AFF4_NAMESPACE + "config"
+
+# Location of the cache (contains AFF4_FILE_NAME)
+AFF4_CONFIG_CACHE_DIR = AFF4_CONFIG_NAMESPACE + "/cache"
+
 
 # Commonly used RDF types.
 URNType = "URN"

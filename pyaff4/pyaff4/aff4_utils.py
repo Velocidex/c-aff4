@@ -13,13 +13,18 @@ PRINTABLES_NO_SLASH = PRINTABLES.copy()
 PRINTABLES_NO_SLASH.discard('/')
 
 
-def member_name_for_urn(member_urn, base_urn, slash_ok=True):
+def member_name_for_urn(member_urn, base_urn=None, slash_ok=True):
     if slash_ok:
         acceptable_set = PRINTABLES
     else:
         acceptable_set = PRINTABLES_NO_SLASH
 
     filename = base_urn.RelativePath(member_urn)
+    # The member is not related to the base URN, just concatenate them together.
+    if filename is None:
+        filename = os.path.join(
+            base_urn.Parse().path, member_urn.SerializeToString())
+
     if filename.startswith("/"):
         filename = filename[1:]
 
@@ -55,5 +60,12 @@ def MkDir(path):
 def RemoveDirectory(path):
     try:
         shutil.rmtree(path)
+    except OSError:
+        pass
+
+def EnsureDirectoryExists(path):
+    dirname = os.path.dirname(path)
+    try:
+        os.makedirs(dirname)
     except OSError:
         pass

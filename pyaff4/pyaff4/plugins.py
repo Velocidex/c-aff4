@@ -11,9 +11,13 @@
 # WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  See the
 # License for the specific language governing permissions and limitations under
 # the License.
-
 from pyaff4 import aff4
 from pyaff4 import aff4_directory
+try:
+    from pyaff4 import aff4_cloud
+except ImportError:
+    pass
+
 from pyaff4 import aff4_file
 from pyaff4 import aff4_image
 from pyaff4 import aff4_map

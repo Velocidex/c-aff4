@@ -33,6 +33,7 @@ class AFF4Directory(aff4.AFF4Volume):
     def NewAFF4Directory(cls, resolver, root_urn):
         result = AFF4Directory(resolver)
         result.root_path = root_urn.ToFilename()
+
         mode = resolver.Get(root_urn, lexicon.AFF4_STREAM_WRITE_MODE)
         if mode == "truncate":
             aff4_utils.RemoveDirectory(result.root_path)
@@ -41,9 +42,8 @@ class AFF4Directory(aff4.AFF4Volume):
                 os.path.isfile(result.root_path)):
             if mode == "truncate" or mode == "append":
                 aff4_utils.MkDir(result.root_path)
-
             else:
-                raise
+                raise RuntimeError("Unknown mode")
 
         resolver.Set(result.urn, lexicon.AFF4_TYPE,
                      rdfvalue.URN(lexicon.AFF4_DIRECTORY_TYPE))
@@ -109,7 +109,8 @@ class AFF4Directory(aff4.AFF4Volume):
                 if desc:
                     urn_string = desc.Read(1000)
 
-                    if self.urn.SerializeToString() != urn_string:
+                    if (urn_string and
+                            self.urn.SerializeToString() != urn_string):
                         self.resolver.DeleteSubject(self.urn)
                         self.urn.Set(urn_string)
 
@@ -152,7 +153,7 @@ class AFF4Directory(aff4.AFF4Volume):
         if self.IsDirty():
             # Flush all children before us. This ensures that metadata is fully
             # generated for each child.
-            for child_urn in self.children:
+            for child_urn in list(self.children):
                 obj = self.resolver.CacheGet(child_urn)
                 if obj:
                     obj.Flush()

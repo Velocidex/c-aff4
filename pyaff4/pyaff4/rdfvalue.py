@@ -15,10 +15,10 @@
 """RDF Values are responsible for serialization."""
 import functools
 import urlparse
-import rdflib
 import urllib
 
 import posixpath
+import rdflib
 
 from pyaff4 import registry
 
@@ -129,13 +129,17 @@ class XSDInteger(RDFValue):
 
 class URN(RDFValue):
 
+    original_filename = None
+
     @classmethod
     def FromFileName(cls, filename):
-        return cls("file:" + urllib.pathname2url(filename))
+        result = cls("file:" + urllib.pathname2url(filename))
+        result.original_filename = filename
+        return result
 
     @classmethod
     def NewURNFromFilename(cls, filename):
-        return cls("file:" + urllib.pathname2url(filename))
+        return cls.FromFileName(filename)
 
     def ToFilename(self):
         # For file: urls we exactly reverse the conversion applied in
@@ -170,13 +174,13 @@ class URN(RDFValue):
     @Memoize()
     def _Parse(self, value):
         components = urlparse.urlparse(value)
-        normalized_path = posixpath.normpath(components.path)
-        if normalized_path == ".":
-            normalized_path = ""
-
-        components = components._replace(path=normalized_path)
         if not components.scheme:
-            components = components._replace(scheme="file")
+            # For file:// URNs, we need to parse them from a filename.
+            components = components._replace(
+                netloc="",
+                path=urllib.pathname2url(value),
+                scheme="file")
+            self.original_filename = value
 
         return components
 
@@ -189,6 +193,8 @@ class URN(RDFValue):
         if quote:
             component = urllib.quote(component)
 
+        # Work around usual posixpath.join bug.
+        component = component.lstrip("/")
         new_path = posixpath.normpath(posixpath.join(
             components.path, component))
 

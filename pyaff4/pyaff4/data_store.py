@@ -199,6 +199,7 @@ class MemoryDataStore(object):
 
         self.store = {}
         self.ObjectCache = AFF4ObjectCache(10)
+        self.flush_callbacks = {}
 
     def __enter__(self):
         return self
@@ -209,6 +210,8 @@ class MemoryDataStore(object):
     def Flush(self):
         # Flush and expunge the cache.
         self.ObjectCache.Flush()
+        for cb in self.flush_callbacks.values():
+            cb()
 
     def DeleteSubject(self, subject):
         self.store.pop(rdfvalue.URN(subject), None)

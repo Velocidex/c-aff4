@@ -14,13 +14,13 @@
 
 """This module implements the standard AFF4 Image."""
 import logging
+import struct
+import zlib
+
 try:
     import snappy
 except ImportError:
     snappy = None
-
-import struct
-import zlib
 
 from pyaff4 import aff4
 from pyaff4 import lexicon

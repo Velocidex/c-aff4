@@ -100,7 +100,9 @@ class FileBackedObject(aff4.AFF4Stream):
             self.properties.seekable = False
 
     def Read(self, length):
-        self.fd.seek(self.readptr)
+        if self.fd.tell() != self.readptr:
+            self.fd.seek(self.readptr)
+
         result = self.fd.read(length)
         self.readptr += len(result)
         return result
@@ -118,9 +120,11 @@ class FileBackedObject(aff4.AFF4Stream):
     def Write(self, data):
         self.MarkDirty()
 
-        self.fd.seek(self.readptr)
+        if self.fd.tell() != self.readptr:
+            self.fd.seek(self.readptr)
+
         self.fd.write(data)
-        self.fd.flush()
+        # self.fd.flush()
         self.readptr += len(data)
 
     def Flush(self):

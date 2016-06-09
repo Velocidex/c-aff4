@@ -13,7 +13,7 @@
 # the License.
 
 """This module installs the pyaff4 library."""
-import versioneer
+import _version
 
 from setuptools import setup
 from setuptools.command.test import test as TestCommand
@@ -37,13 +37,13 @@ class NoseTestCommand(TestCommand):
         nose.run_exit(argv=['nosetests'])
 
 
-commands = versioneer.get_cmdclass()
+commands = {}
 commands["test"] = NoseTestCommand
 
 setup(
-    name='PyAFF4',
+    name='pyaff4',
     long_description=long_description,
-    version=versioneer.get_version(),
+    version=_version.get_versions()["pep440"],
     cmdclass=commands,
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
@@ -56,4 +56,7 @@ setup(
         "rdflib >= 4.2.1",
         "intervaltree >= 2.1.0",
     ],
+    extras_require=dict(
+        cloud="google-api-python-client"
+    )
 )
