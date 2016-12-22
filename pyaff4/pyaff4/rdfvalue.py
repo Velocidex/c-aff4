@@ -174,6 +174,11 @@ class URN(RDFValue):
     @Memoize()
     def _Parse(self, value):
         components = urlparse.urlparse(value)
+        normalized_path = posixpath.normpath(components.path)
+        if normalized_path == ".":
+            normalized_path = ""
+
+        components = components._replace(path=normalized_path)
         if not components.scheme:
             # For file:// URNs, we need to parse them from a filename.
             components = components._replace(
