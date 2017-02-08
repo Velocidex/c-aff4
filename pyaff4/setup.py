@@ -13,7 +13,6 @@
 # the License.
 
 """This module installs the pyaff4 library."""
-import _version
 
 from setuptools import setup
 from setuptools.command.test import test as TestCommand
@@ -23,6 +22,10 @@ try:
         long_description = file.read()
 except IOError:
     long_description = ""
+
+ENV = {"__file__": __file__}
+exec open("pyaff4/_version.py").read() in ENV
+VERSION = ENV["get_versions"]()
 
 
 class NoseTestCommand(TestCommand):
@@ -43,7 +46,7 @@ commands["test"] = NoseTestCommand
 setup(
     name='pyaff4',
     long_description=long_description,
-    version=_version.get_versions()["pep440"],
+    version=VERSION["pep440"],
     cmdclass=commands,
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
