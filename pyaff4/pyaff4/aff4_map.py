@@ -28,7 +28,7 @@ LOGGER = logging.getLogger("pyaff4")
 
 
 class Range(collections.namedtuple(
-        "Range", "map_offset target_offset length target_id")):
+        "Range", "map_offset length target_offset target_id")):
     """A class to manipulate a mapping range."""
 
     __slots__ = ()
@@ -187,6 +187,9 @@ class AFF4Map(aff4.AFF4Stream):
 
             return resolver.AFF4FactoryOpen(image_urn)
 
+    def deserializeMapPoint(self, data):
+        return Range.FromSerialized(data)
+
     def LoadFromURN(self):
         map_urn = self.urn.Append("map")
         map_idx_urn = self.urn.Append("idx")
@@ -196,6 +199,8 @@ class AFF4Map(aff4.AFF4Stream):
         try:
             with self.resolver.AFF4FactoryOpen(map_idx_urn) as map_idx:
                 self.targets = map_idx.Read(map_idx.Size()).splitlines()
+                print "*** Map targets ***"
+                print self.targets
 
             with self.resolver.AFF4FactoryOpen(map_urn) as map_stream:
                 read_length = struct.calcsize(Range.format_str)
@@ -203,7 +208,7 @@ class AFF4Map(aff4.AFF4Stream):
                     data = map_stream.Read(read_length)
                     if not data:
                         break
-                    range = Range.FromSerialized(data)
+                    range = self.deserializeMapPoint(data)
                     if range.length > 0:
                         self.tree.addi(range.map_offset, range.map_end, range)
 
@@ -233,8 +238,11 @@ class AFF4Map(aff4.AFF4Stream):
                     target_stream.Seek(
                         range.target_offset_at_map_offset(self.readptr))
 
-                    result += target_stream.Read(length_to_read_in_target)
+                    buffer = target_stream.Read(length_to_read_in_target)
+                    assert len(buffer) == length_to_read_in_target
+                    result += buffer
             except IOError:
+                print "*** Stream not found. Substituting zeros. ***"
                 result += "\x00" * length_to_read_in_target
             finally:
                 length -= length_to_read_in_target
@@ -409,4 +417,6 @@ class AFF4Map(aff4.AFF4Stream):
         self.tree.clear()
 
 
+
 registry.AFF4_TYPE_MAP[lexicon.AFF4_MAP_TYPE] = AFF4Map
+registry.AFF4_TYPE_MAP[lexicon.AFF4_LEGACY_MAP_TYPE] = AFF4Map

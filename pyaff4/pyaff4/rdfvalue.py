@@ -126,6 +126,59 @@ class XSDInteger(RDFValue):
     def __int__(self):
         return self.value
 
+    def __cmp__(self, o):
+        return self.value - o
+
+    def __add__(self, o):
+        return self.value + o
+
+class RDFHash(RDFValue):
+
+    def SerializeToString(self):
+        return str(self.value)
+
+    def UnSerializeFromString(self, string):
+        self.Set(int(string))
+
+    def Set(self, data):
+        self.value = data
+
+    def __eq__(self, other):
+        if isinstance(other, RDFHash):
+            if self.datatype == other.datatype:
+                return self.value == other.value
+        return self.value == other
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __int__(self):
+        return self.value
+
+    def digest(self):
+        return self.value.decode('hex')
+
+class SHA512Hash(RDFHash):
+    datatype = rdflib.URIRef("http://aff4.org/Schema#SHA512")
+
+
+class SHA256Hash(RDFHash):
+    datatype = rdflib.URIRef("http://aff4.org/Schema#SHA256")
+
+
+class SHA1Hash(RDFHash):
+    datatype = rdflib.URIRef("http://aff4.org/Schema#SHA1")
+
+class Blake2bHash(RDFHash):
+    datatype = rdflib.URIRef("http://aff4.org/Schema#Blake2b")
+
+class MD5Hash(RDFHash):
+    datatype = rdflib.URIRef("http://aff4.org/Schema#MD5")
+
+class SHA512BlockMapHash(RDFHash):
+    datatype = rdflib.URIRef("http://aff4.org/Schema#blockMapHashSHA512")
+
+
 
 class URN(RDFValue):
 
@@ -174,11 +227,14 @@ class URN(RDFValue):
     @Memoize()
     def _Parse(self, value):
         components = urlparse.urlparse(value)
-        normalized_path = posixpath.normpath(components.path)
-        if normalized_path == ".":
-            normalized_path = ""
 
-        components = components._replace(path=normalized_path)
+        # dont normalise path for http URI's
+        if components.scheme and not components.scheme == "http":
+            normalized_path = posixpath.normpath(components.path)
+            if normalized_path == ".":
+                normalized_path = ""
+
+            components = components._replace(path=normalized_path)
         if not components.scheme:
             # For file:// URNs, we need to parse them from a filename.
             components = components._replace(
@@ -223,4 +279,16 @@ registry.RDF_TYPE_MAP.update({
     rdflib.XSD.integer: XSDInteger,
     rdflib.XSD.int: XSDInteger,
     rdflib.XSD.long: XSDInteger,
+    rdflib.URIRef("http://aff4.org/Schema#SHA512"): SHA512Hash,
+    rdflib.URIRef("http://aff4.org/Schema#SHA256"): SHA256Hash,
+    rdflib.URIRef("http://aff4.org/Schema#SHA1"): SHA1Hash,
+    rdflib.URIRef("http://aff4.org/Schema#MD5"): MD5Hash,
+    rdflib.URIRef("http://aff4.org/Schema#Blake2b"): Blake2bHash,
+    rdflib.URIRef("http://aff4.org/Schema#blockMapHashSHA512"): SHA512BlockMapHash,
+     rdflib.URIRef("http://afflib.org/2009/aff4#SHA512"): SHA512Hash,
+     rdflib.URIRef("http://afflib.org/2009/aff4#SHA256"): SHA256Hash,
+     rdflib.URIRef("http://afflib.org/2009/aff4#SHA1"): SHA1Hash,
+     rdflib.URIRef("http://afflib.org/2009/aff4#MD5"): MD5Hash,
+    rdflib.URIRef("http://afflib.org/2009/aff4#blockMapHashSHA512"): SHA512BlockMapHash
+
     })

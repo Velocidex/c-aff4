@@ -19,6 +19,9 @@ from pyaff4 import aff4
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
+from pyaff4.stream_factory import *
+
+
 
 LOGGER = logging.getLogger("pyaff4")
 
@@ -62,6 +65,7 @@ class AFF4ObjectCache(object):
         self.in_use = {}
         self.lru_map = {}
         self.lru_list = AFF4ObjectCacheEntry(None, None)
+        self.volume_file_map = {}
 
     def _Trim(self, size=None):
         max_items = size or self.max_items
@@ -190,7 +194,8 @@ class AFF4ObjectCache(object):
 
 
 class MemoryDataStore(object):
-    def __init__(self):
+    def __init__(self, aff4ns=lexicon.AFF4_NAMESPACE):
+        self.aff4NS = aff4ns
         self.suppressed_rdftypes = dict()
         self.suppressed_rdftypes[lexicon.AFF4_ZIP_SEGMENT_TYPE] = set((
             lexicon.AFF4_STORED, lexicon.AFF4_TYPE))
@@ -200,6 +205,12 @@ class MemoryDataStore(object):
         self.store = {}
         self.ObjectCache = AFF4ObjectCache(10)
         self.flush_callbacks = {}
+
+        if self.aff4NS == lexicon.AFF4_LEGACY_NAMESPACE:
+            self.streamFactory = PreStdStreamFactory(self, self.aff4NS)
+        else:
+            self.streamFactory = StdStreamFactory(self, self.aff4NS)
+
 
     def __enter__(self):
         return self
@@ -215,6 +226,21 @@ class MemoryDataStore(object):
 
     def DeleteSubject(self, subject):
         self.store.pop(rdfvalue.URN(subject), None)
+
+    def Add(self, subject, attribute, value):
+        subject = rdfvalue.URN(subject)
+        attribute = rdfvalue.URN(attribute)
+        CHECK(isinstance(value, rdfvalue.RDFValue), "Value must be an RDFValue")
+
+        if not self.store.setdefault(str(subject), {}).has_key(str(attribute)):
+            self.store.get(str(subject))[str(attribute)] = value
+        else:
+            oldvalue = self.store.get(str(subject))[str(attribute)]
+            t = type(oldvalue)
+            if  t != type([]):
+                self.store.get(str(subject))[str(attribute)] = [oldvalue, value]
+            else:
+                self.store.get(str(subject))[str(attribute)].append(value)
 
     def Set(self, subject, attribute, value):
         subject = rdfvalue.URN(subject)
@@ -277,16 +303,18 @@ class MemoryDataStore(object):
 
     def LoadFromTurtle(self, stream):
         data = stream.read(1000000)
-
+        print data
         g = rdflib.Graph()
         g.parse(data=data, format="turtle")
 
         for urn, attr, value in g:
             urn = rdfvalue.URN(str(urn))
             attr = rdfvalue.URN(str(attr))
+
             if isinstance(value, rdflib.URIRef):
                 value = rdfvalue.URN(str(value))
             elif value.datatype in registry.RDF_TYPE_MAP:
+                dt = value.datatype
                 value = registry.RDF_TYPE_MAP[value.datatype](
                     str(value))
 
@@ -294,7 +322,9 @@ class MemoryDataStore(object):
                 # Default to a string literal.
                 value = rdfvalue.XSDString(value)
 
-            self.Set(urn, attr, value)
+            self.Add(urn, attr, value)
+
+
 
     def AFF4FactoryOpen(self, urn):
         urn = rdfvalue.URN(urn)
@@ -306,18 +336,32 @@ class MemoryDataStore(object):
             LOGGER.debug("AFF4FactoryOpen (Cached): %s" % urn)
             return cached_obj
 
-        type_urn = self.Get(urn, lexicon.AFF4_TYPE)
-        handler = registry.AFF4_TYPE_MAP.get(type_urn)
-        if handler is None:
-            # Try to instantiate the handler based on the URN scheme alone.
-            components = urn.Parse()
-            handler = registry.AFF4_TYPE_MAP.get(components.scheme)
+        if self.streamFactory.isSymbolicStream(urn):
+            obj = self.streamFactory.createSymbolic(urn)
+        else:
+            uri_types = self.Get(urn, lexicon.AFF4_TYPE)
 
-        if handler is None:
-            raise IOError("Unable to create object %s" % urn)
+            handler = None
 
-        obj = handler(resolver=self, urn=urn)
-        obj.LoadFromURN()
+            # TODO: this could be cleaner. RDF properties have multiple values
+            if type(uri_types) == type([]):
+                for typ in uri_types:
+                    if typ in registry.AFF4_TYPE_MAP:
+                        handler = registry.AFF4_TYPE_MAP.get(typ)
+                        break
+            else:
+                handler = registry.AFF4_TYPE_MAP.get(uri_types)
+
+            if handler is None:
+                # Try to instantiate the handler based on the URN scheme alone.
+                components = urn.Parse()
+                handler = registry.AFF4_TYPE_MAP.get(components.scheme)
+
+            if handler is None:
+                raise IOError("Unable to create object %s" % urn)
+
+            obj = handler(resolver=self, urn=urn)
+            obj.LoadFromURN()
 
         # Cache the object for next time.
         self.ObjectCache.Put(obj, True)
@@ -330,16 +374,55 @@ class MemoryDataStore(object):
         print self.DumpToTurtle(verbose=verbose)
         self.ObjectCache.Dump()
 
+    def isImageStream(self, subject):
+        try:
+            po = self.store[subject]
+            if po == None:
+                return False
+            else:
+                o = po[lexicon.AFF4_TYPE]
+                if o == None:
+                    return False
+                else:
+                    if type(o) == type([]):
+                        for ent in o:
+                            if ent.value == lexicon.AFF4_LEGACY_IMAGE_TYPE or ent.value == lexicon.AFF4_IMAGE_TYPE :
+                                return True
+                        return False
+                    else:
+                        if o.value == lexicon.AFF4_LEGACY_IMAGE_TYPE or o.value == lexicon.AFF4_IMAGE_TYPE :
+                            return True
+                        else:
+                            return False
+        except:
+            return False
+
     def QuerySubject(self, subject_regex=None):
         for subject in self.store:
             if subject_regex is not None and subject_regex.match(subject):
                 yield subject
 
-    def QueryPredicate(self, predicate):
+
+    def QueryPredicateObject(self, predicate, object):
         for subject, data in self.store.iteritems():
             for pred, value in data.iteritems():
                 if pred == predicate:
-                    yield subject, predicate, value
+                    if type(value) == type([]):
+                        if object in value:
+                            yield subject
+                        elif object == value:
+                            yield subject
+
+    def QuerySubjectPredicate(self, subject, predicate):
+        for s, data in self.store.iteritems():
+            if s == subject:
+                for pred, value in data.iteritems():
+                    if pred == predicate:
+                        if type(value) == type([]):
+                            for o in value:
+                                yield o
+                        else:
+                            yield value
 
     def SelectSubjectsByPrefix(self, prefix):
         prefix = str(prefix)
@@ -350,3 +433,5 @@ class MemoryDataStore(object):
     def QueryPredicatesBySubject(self, subject):
         for pred, value in self.store.get(subject, {}).iteritems():
             yield pred, value
+
+

@@ -26,6 +26,7 @@ from pyaff4 import aff4
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
+from pyaff4 import hashes
 
 
 LOGGER = logging.getLogger("pyaff4")
@@ -91,21 +92,23 @@ class AFF4Image(aff4.AFF4Stream):
             return resolver.AFF4FactoryOpen(image_urn)
 
     def LoadFromURN(self):
-        volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
-        if not volume_urn:
-            raise IOError("Unable to find storage for urn %s" % self.urn)
+        #volume_urn = self.resolver.Get(self.urn, lexicon.AFF4_STORED)
+        #if not volume_urn:
+        #    raise IOError("Unable to find storage for urn %s" % self.urn)
 
         self.chunk_size = int(self.resolver.Get(
-            self.urn, lexicon.AFF4_IMAGE_CHUNK_SIZE) or 32*1024)
+            self.urn, lexicon.AFF4_IMAGE_CHUNK_SIZE) or self.resolver.Get(
+            self.urn, lexicon.AFF4_LEGACY_IMAGE_CHUNK_SIZE) or 32*1024)
 
         self.chunks_per_segment = int(self.resolver.Get(
-            self.urn, lexicon.AFF4_IMAGE_CHUNKS_PER_SEGMENT) or 1024)
+            self.urn, lexicon.AFF4_IMAGE_CHUNKS_PER_SEGMENT) or self.resolver.Get(
+            self.urn, lexicon.AFF4_LEGACY_IMAGE_CHUNKS_PER_SEGMENT) or 1024)
 
-        self.size = int(
-            self.resolver.Get(self.urn, lexicon.AFF4_STREAM_SIZE) or 0)
+        self.size = int(self.resolver.Get(self.urn, lexicon.AFF4_STREAM_SIZE) or self.resolver.Get(self.urn, lexicon.AFF4_LEGACY_STREAM_SIZE) or 0)
 
         self.compression = str(self.resolver.Get(
-            self.urn, lexicon.AFF4_IMAGE_COMPRESSION) or
+            self.urn, lexicon.AFF4_IMAGE_COMPRESSION) or self.resolver.Get(
+            self.urn, lexicon.AFF4_LEGACY_IMAGE_COMPRESSION) or
                                lexicon.AFF4_IMAGE_COMPRESSION_ZLIB)
 
         # A buffer for overlapped writes which do not fit into a chunk.
@@ -261,6 +264,7 @@ class AFF4Image(aff4.AFF4Stream):
         return super(AFF4Image, self).Flush()
 
     def Read(self, length):
+        length = int(length)
         if length == 0:
             return ""
 
@@ -293,6 +297,13 @@ class AFF4Image(aff4.AFF4Stream):
 
         return result
 
+    # deserialise a v0a index (Michael's implementation)
+    # the entries are the start offsets of bevvies and the length of
+    # the final bevvy is inferred
+    def deserializeIndexV0b(self, size, bytes):
+        return struct.unpack(
+            "<" + "I" * size, bytes)
+
     def _ReadPartial(self, chunk_id, chunks_to_read):
         chunks_read = 0
         result = ""
@@ -300,14 +311,13 @@ class AFF4Image(aff4.AFF4Stream):
         while chunks_to_read > 0:
             bevy_id = chunk_id / self.chunks_per_segment
             bevy_urn = self.urn.Append("%08d" % bevy_id)
-            bevy_index_urn = bevy_urn.Append("index")
+            bevy_index_urn = self.urn.Append("%08d/index" % bevy_id)
 
             with self.resolver.AFF4FactoryOpen(bevy_index_urn) as bevy_index:
                 index_size = bevy_index.Size() / 4
                 bevy_index_data = bevy_index.Read(bevy_index.Size())
 
-                bevy_index_array = struct.unpack(
-                    "<" + "I" * index_size, bevy_index_data)
+                bevy_index_array = self.deserializeIndexV0b(index_size, bevy_index_data)
 
             with self.resolver.AFF4FactoryOpen(bevy_urn) as bevy:
                 while chunks_to_read > 0:
@@ -363,4 +373,196 @@ class AFF4Image(aff4.AFF4Stream):
             "Unable to process compression %s" % self.compression)
 
 
-registry.AFF4_TYPE_MAP[lexicon.AFF4_IMAGE_TYPE] = AFF4Image
+# This class implements Evimetry's AFF4 pre standardisation effort
+class AFF4PreSImage(AFF4Image):
+    # deserialise a v4preS index
+    # the entries are the end offsets of bevvies
+    def deserializeIndexPreV4S(self, size, bytes):
+        res = [0]
+        while size > 0:
+            size = size - 1
+            rec = bytes[0:4]
+            bytes = bytes[4:]
+            (off,) = struct.unpack("<I", rec)
+            res.append(off)
+
+        return res
+
+    def _ReadPartial(self, chunk_id, chunks_to_read):
+        chunks_read = 0
+        result = ""
+
+        while chunks_to_read > 0:
+            bevy_id = chunk_id / self.chunks_per_segment
+            bevy_urn = self.urn.Append("%08d" % bevy_id)
+            bevy_index_urn = self.urn.Append("%08d/index" % bevy_id)
+
+            with self.resolver.AFF4FactoryOpen(bevy_index_urn) as bevy_index:
+                index_size = bevy_index.Size() / 4
+                bevy_index_data = bevy_index.Read(bevy_index.Size())
+
+                bevy_index_array = self.deserializeIndexPreV4S(index_size, bevy_index_data)
+
+            with self.resolver.AFF4FactoryOpen(bevy_urn) as bevy:
+                while chunks_to_read > 0:
+                    # Read a full chunk from the bevy.
+                    data = self._ReadChunkFromBevy(
+                        chunk_id, bevy, bevy_index_array, index_size)
+
+                    assert len(data) == self.chunk_size
+                    result += data
+
+                    chunks_to_read -= 1
+                    chunk_id += 1
+                    chunks_read += 1
+
+                    # This bevy is exhausted, get the next one.
+                    if bevy_id < chunk_id / self.chunks_per_segment:
+                        break
+
+        return chunks_read, result
+
+    def _ReadChunkFromBevy(self, chunk_id, bevy, bevy_index, index_size):
+        chunk_id_in_bevy = chunk_id % self.chunks_per_segment
+
+        if index_size == 0:
+            LOGGER.error("Index empty in %s: %s", self.urn, chunk_id)
+            raise IOError("Index empty in %s: %s" % (self.urn, chunk_id))
+        # The segment is not completely full.
+        if chunk_id_in_bevy >= index_size:
+            LOGGER.error("Bevy index too short in %s: %s",
+                         self.urn, chunk_id)
+            raise IOError("Bevy index too short in %s: %s" % (
+                self.urn, chunk_id))
+
+
+        bevvy_offset = bevy_index[chunk_id_in_bevy]
+        compressed_chunk_size = bevy_index[chunk_id_in_bevy + 1] - bevvy_offset
+
+        bevy.Seek(bevvy_offset, 0)
+        cbuffer = bevy.Read(compressed_chunk_size)
+
+        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED or compressed_chunk_size == self.chunk_size:
+            return cbuffer
+
+        elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
+            return zlib.decompress(cbuffer)
+
+        elif snappy and self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
+            return snappy.decompress(cbuffer)
+
+        else:
+            raise RuntimeError(
+                "Unable to process compression %s" % self.compression)
+
+    def readBlockHash(self, chunk_id, hash_datatype):
+        bevy_id = chunk_id / self.chunks_per_segment
+        bevy_blockHash_urn = self.urn.Append("%08d/blockHash.%s" % (bevy_id, hashes.toShortAlgoName(hash_datatype)))
+        blockLength = hashes.length(hash_datatype)
+
+        with self.resolver.AFF4FactoryOpen(bevy_blockHash_urn) as bevy_blockHashes:
+            idx = chunk_id * blockLength
+
+            bevy_blockHashes.Seek(idx)
+            hash_value = bevy_blockHashes.Read(blockLength)
+
+            return hashes.newImmutableHash(hash_value.encode('hex'), hash_datatype)
+
+class AFF4SImage(AFF4Image):
+
+    # deserialise a v4s index
+    # the entries are the start offsets of bevvies and the length of
+    # the final bevvy is inferred
+    def deserializeIndexV4S(self, size, bytes):
+        res = []
+        while size > 0:
+            size = size - 1
+            rec = bytes[0:12]
+            bytes = bytes[12:]
+            (off, len) = struct.unpack("<QI", rec)
+            res.append((off,len))
+
+        return res
+
+    def readBlockHash(self, chunk_id, hash_datatype):
+        bevy_id = chunk_id / self.chunks_per_segment
+        bevy_blockHash_urn = self.urn.Append("%08d.blockHash.%s" % (bevy_id, hashes.toShortAlgoName(hash_datatype)))
+        blockLength = hashes.length(hash_datatype)
+
+        with self.resolver.AFF4FactoryOpen(bevy_blockHash_urn) as bevy_blockHashes:
+            idx = chunk_id * blockLength
+
+            bevy_blockHashes.Seek(idx)
+            hash_value = bevy_blockHashes.Read(blockLength)
+
+            return hashes.newImmutableHash(hash_value.encode('hex'), hash_datatype)
+
+    def _ReadPartial(self, chunk_id, chunks_to_read):
+        chunks_read = 0
+        result = ""
+
+        while chunks_to_read > 0:
+            bevy_id = chunk_id / self.chunks_per_segment
+            bevy_urn = self.urn.Append("%08d" % bevy_id)
+            bevy_index_urn = self.urn.Append("%08d.index" % bevy_id)
+
+            with self.resolver.AFF4FactoryOpen(bevy_index_urn) as bevy_index:
+                index_size = bevy_index.Size() / 12
+                bevy_index_data = bevy_index.Read(bevy_index.Size())
+
+                bevy_index_array = self.deserializeIndexV4S(index_size, bevy_index_data)
+
+            with self.resolver.AFF4FactoryOpen(bevy_urn) as bevy:
+                while chunks_to_read > 0:
+                    # Read a full chunk from the bevy.
+                    data = self._ReadChunkFromBevy(
+                        chunk_id, bevy, bevy_index_array, index_size)
+
+                    result += data
+
+                    chunks_to_read -= 1
+                    chunk_id += 1
+                    chunks_read += 1
+
+                    # This bevy is exhausted, get the next one.
+                    if bevy_id < chunk_id / self.chunks_per_segment:
+                        break
+
+        return chunks_read, result
+
+    def _ReadChunkFromBevy(self, chunk_id, bevy, bevy_index, index_size):
+        chunk_id_in_bevy = chunk_id % self.chunks_per_segment
+
+        if index_size == 0:
+            LOGGER.error("Index empty in %s: %s", self.urn, chunk_id)
+            raise IOError("Index empty in %s: %s" % (self.urn, chunk_id))
+        # The segment is not completely full.
+        if chunk_id_in_bevy >= index_size:
+            LOGGER.error("Bevy index too short in %s: %s",
+                         self.urn, chunk_id)
+            raise IOError("Bevy index too short in %s: %s" % (
+                self.urn, chunk_id))
+
+
+        (bevvy_offset, compressed_chunk_size) = bevy_index[chunk_id_in_bevy]
+
+        bevy.Seek(bevvy_offset, 0)
+        cbuffer = bevy.Read(compressed_chunk_size)
+
+        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED or compressed_chunk_size == self.chunk_size:
+            return cbuffer
+
+        elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
+            return zlib.decompress(cbuffer)
+
+        elif self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
+            return snappy.decompress(cbuffer)
+
+        else:
+            raise RuntimeError(
+                "Unable to process compression %s" % self.compression)
+
+
+
+registry.AFF4_TYPE_MAP[lexicon.AFF4_LEGACY_IMAGE_TYPE] = AFF4PreSImage
+registry.AFF4_TYPE_MAP[lexicon.AFF4_IMAGE_TYPE] = AFF4SImage
