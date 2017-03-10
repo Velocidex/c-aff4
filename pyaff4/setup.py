@@ -13,11 +13,8 @@
 # the License.
 
 """This module installs the pyaff4 library."""
-import sys
-import subprocess
 
 from setuptools import setup
-from setuptools.command.install import install as _install
 from setuptools.command.test import test as TestCommand
 
 try:
@@ -25,6 +22,10 @@ try:
         long_description = file.read()
 except IOError:
     long_description = ""
+
+ENV = {"__file__": __file__}
+exec open("pyaff4/_version.py").read() in ENV
+VERSION = ENV["get_versions"]()
 
 
 class NoseTestCommand(TestCommand):
@@ -39,34 +40,26 @@ class NoseTestCommand(TestCommand):
         nose.run_exit(argv=['nosetests'])
 
 
-class install(_install):
-    def run(self):
-        try:
-            import snappy
-        except ImportError:
-            # Install out own version of snappy.
-            subprocess.call(
-                [sys.executable, "setup.py", "install"],
-                cwd="third_party/python-snappy")
-        _install.run(self)
-
+commands = {}
+commands["test"] = NoseTestCommand
 
 setup(
-    name='PyAFF4',
+    name='pyaff4',
     long_description=long_description,
-    version='0.17',
+    version=VERSION["pep440"],
+    cmdclass=commands,
     description='Python Advanced Forensic Format Version 4 library.',
     author='Michael Cohen',
     author_email='scudette@gmail.com',
     url='https://www.aff4.org/',
     packages=['pyaff4'],
-    package_dir={"pyaff4": "."},
-    cmdclass={
-        'test': NoseTestCommand,
-        "install": install
-    },
+    package_dir={"pyaff4": "pyaff4"},
     install_requires=[
-        "rdflib >= 4.1",
-        "intervaltree >= 2.0.4",
+        "aff4-snappy == 0.5",
+        "rdflib == 4.2.1",
+        "intervaltree == 2.1.0",
     ],
+    extras_require=dict(
+        cloud="google-api-python-client"
+    )
 )

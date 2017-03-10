@@ -23,35 +23,12 @@ specific language governing permissions and limitations under the License.
 
 BasicImager imager;
 
-#ifdef _WIN32
-BOOL sigint_handler(DWORD dwCtrlType) {
-  imager.Abort();
-
-  return TRUE;
-}
-#else
-#include <signal.h>
-void sigint_handler(int s) {
-  imager.Abort();
-}
-#endif
-
-
 int main(int argc, char* argv[]) {
   // Initialize Google's logging library.
   google::InitGoogleLogging(argv[0]);
 
   google::LogToStderr();
   google::SetStderrLogging(google::GLOG_ERROR);
-
-#ifdef _WIN32
-  if (!SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler, true)) {
-    LOG(ERROR) << "Unable to set interrupt handler: " <<
-        GetLastErrorMessage();
-  };
-#else
-  signal(SIGINT, sigint_handler);
-#endif
 
   AFF4Status res = imager.Run(argc, argv);
   if (res == STATUS_OK || res == CONTINUE)

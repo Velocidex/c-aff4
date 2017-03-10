@@ -137,7 +137,7 @@ am__DEPENDENCIES_2 = $(am__DEPENDENCIES_1)
 @WIN32_NATIVE_HOST_TRUE@	$(am__DEPENDENCIES_1)
 am_libaff4_la_OBJECTS = aff4_image.lo aff4_init.lo data_store.lo \
 	libaff4.lo rdf.lo zip.lo aff4_imager_utils.lo aff4_map.lo \
-	lexicon.lo
+	lexicon.lo aff4_directory.lo aff4_file.lo
 libaff4_la_OBJECTS = $(am_libaff4_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -382,12 +382,13 @@ libaff4_include_HEADERS = \
         aff4_simple.h  config.h      lexicon.h  rdf.h\
 	aff4_errors.h  aff4_init.h   aff4_registry.h \
 	aff4_utils.h   data_store.h  libaff4.h  zip.h \
-	aff4_map.h tclap_parsers.h \
-        aff4_imager_utils.h
+	aff4_map.h tclap_parsers.h aff4_directory.h \
+        aff4_imager_utils.h aff4_file.h
 
 libaff4_la_SOURCES = \
 	aff4_image.cc aff4_init.cc data_store.cc libaff4.cc \
-	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc lexicon.cc
+	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc lexicon.cc \
+	aff4_directory.cc aff4_file.cc
 
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
 @WIN32_NATIVE_HOST_FALSE@libaff4_la_LIBADD = $(LIBS) $(LIBS_LIBYAML_CPP)
@@ -545,6 +546,8 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_directory.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_image.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_imager_utils.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_init.Plo@am__quote@

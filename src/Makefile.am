@@ -53,12 +53,13 @@ libaff4_include_HEADERS = \
         aff4_simple.h  config.h      lexicon.h  rdf.h\
 	aff4_errors.h  aff4_init.h   aff4_registry.h \
 	aff4_utils.h   data_store.h  libaff4.h  zip.h \
-	aff4_map.h tclap_parsers.h \
-        aff4_imager_utils.h
+	aff4_map.h tclap_parsers.h aff4_directory.h \
+        aff4_imager_utils.h aff4_file.h
 
 libaff4_la_SOURCES = \
 	aff4_image.cc aff4_init.cc data_store.cc libaff4.cc \
-	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc lexicon.cc
+	rdf.cc zip.cc aff4_imager_utils.cc aff4_map.cc lexicon.cc \
+	aff4_directory.cc aff4_file.cc
 
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
 

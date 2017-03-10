@@ -14,19 +14,51 @@ specific language governing permissions and limitations under the License.
 */
 
 
-#ifndef     AFF4_LIBAFF4_H_
-#define     AFF4_LIBAFF4_H_
+#ifndef     SRC_LIBAFF4_H_
+#define     SRC_LIBAFF4_H_
 
 #include "rdf.h"
 #include "aff4_io.h"
 #include "aff4_image.h"
+#include "aff4_directory.h"
 #include "aff4_map.h"
 #include "data_store.h"
 #include "zip.h"
 #include "lexicon.h"
 
+
+/* Utility functions. */
+
+/**
+ * Convert from a child URN to the zip member name.
+ *
+ * The AFF4 ZipFile stores AFF4 objects (with fully qualified URNs) in zip
+ * archives. The zip members name is based on the object's URN with the
+ * following rules:
+
+ 1. If the object's URN is an extension of the volume's URN, the member's name
+ will be the relative name. So for example:
+
+ Object: aff4://9db79393-53fa-4147-b823-5c3e1d37544d/Foobar.txt
+ Volume: aff4://9db79393-53fa-4147-b823-5c3e1d37544d
+
+ Member name: Foobar.txt
+
+ 2. All charaters outside the range [a-zA-Z0-9_] shall be escaped according to
+ their hex encoding.
+
+ * @param name
+ *
+ * @return The member name in the zip archive.
+ */
+string member_name_for_urn(const URN member, const URN base_urn,
+                           bool slash_ok = false);
+
+URN urn_from_member_name(const string member, const URN base_urn);
+
+
 extern "C" {
   char *AFF4_version();
 }
 
-#endif    //AFF4_LIBAFF4_H_
+#endif    // SRC_LIBAFF4_H_

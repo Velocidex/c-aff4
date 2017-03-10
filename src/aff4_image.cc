@@ -33,6 +33,10 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
   resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
   resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
 
+  // We need to use the resolver here instead of just making a new object, in
+  // case the object already exists. If it is already known we will get the
+  // existing object from the cache through the factory. If the object does not
+  // already exist, then the factory will make a new one.
   return resolver->AFF4FactoryOpen<AFF4Image>(image_urn);
 }
 
@@ -88,7 +92,7 @@ AFF4Status AFF4Image::_FlushBevy() {
     return STATUS_OK;
   }
 
-  URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number++)));
+  URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number)));
   URN bevy_index_urn(bevy_urn.Append("index"));
 
   // Open the volume.
@@ -130,6 +134,7 @@ AFF4Status AFF4Image::_FlushBevy() {
   bevy.Truncate();
 
   chunk_count_in_bevy = 0;
+  bevy_number++;
 
   return STATUS_OK;
 }
@@ -184,8 +189,7 @@ AFF4Status AFF4Image::FlushChunk(const char *data, size_t length) {
   return result;
 }
 
-AFF4Status AFF4Image::CompressZlib_(const char *data, size_t length,
-                                      string *output) {
+AFF4Status CompressZlib_(const char *data, size_t length, string *output) {
   uLongf c_length = compressBound(length) + 1;
   output->resize(c_length);
 
@@ -193,7 +197,6 @@ AFF4Status AFF4Image::CompressZlib_(const char *data, size_t length,
                 &c_length,
                 reinterpret_cast<Bytef *>(const_cast<char *>(data)),
                 length, 1) != Z_OK) {
-    LOG(ERROR) << "Unable to compress chunk " << urn.SerializeToString();
     return MEMORY_ERROR;
   }
 
@@ -202,8 +205,7 @@ AFF4Status AFF4Image::CompressZlib_(const char *data, size_t length,
   return STATUS_OK;
 }
 
-AFF4Status AFF4Image::DeCompressZlib_(const char *data, size_t length,
-                                      string *buffer) {
+AFF4Status DeCompressZlib_(const char *data, size_t length, string *buffer) {
   uLongf buffer_size = buffer->size();
 
   if (uncompress(reinterpret_cast<Bytef *>(const_cast<char *>(buffer->data())),
@@ -217,16 +219,14 @@ AFF4Status AFF4Image::DeCompressZlib_(const char *data, size_t length,
 }
 
 
-AFF4Status AFF4Image::CompressSnappy_(const char *data, size_t length,
-                                        string *output) {
+AFF4Status CompressSnappy_(const char *data, size_t length, string *output) {
   snappy::Compress(data, length, output);
 
   return STATUS_OK;
 }
 
 
-AFF4Status AFF4Image::DeCompressSnappy_(const char *data, size_t length,
-                                        string *output) {
+AFF4Status DeCompressSnappy_(const char *data, size_t length, string *output) {
   if (!snappy::Uncompress(data, length, output)) {
     return GENERIC_ERROR;
   }
@@ -262,6 +262,156 @@ int AFF4Image::Write(const char *data, int length) {
 
   return length;
 }
+
+
+// A private class which manages image stream.
+class _CompressorStream: public AFF4Stream {
+ private:
+  AFF4Stream *stream;
+  AFF4Image *owner;
+
+ public:
+  StringIO bevy_index;
+  uint32_t chunk_count_in_bevy = 0;
+  uint32_t bevy_length = 0;
+
+  _CompressorStream(DataStore *resolver, AFF4Image *owner, AFF4Stream *stream):
+      AFF4Stream(resolver), stream(stream), owner(owner) {}
+
+  string Read(size_t unused_length) {
+    // Stop copying when the bevy is full.
+    if (chunk_count_in_bevy >= owner->chunks_per_segment)
+      return "";
+
+    const string data(stream->Read(owner->chunk_size));
+    if (data.size() == 0)
+      return "";
+
+    // Our readptr reflects the source stream's readptr in order to report how
+    // much we read from it accurately.
+    readptr = stream->Tell();
+
+    size_t length = data.size();
+    string output;
+
+    size += length;
+    AFF4Status result;
+
+    switch (owner->compression) {
+      case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
+        result = CompressZlib_(data.data(), length, &output);
+      } break;
+
+      case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
+        result = CompressSnappy_(data.data(), length, &output);
+      } break;
+
+      case AFF4_IMAGE_COMPRESSION_ENUM_STORED: {
+        output.assign(data.data(), length);
+        result = STATUS_OK;
+      } break;
+
+        // Should never happen because the object should never accept this
+        // compression URN.
+      default:
+        LOG(FATAL) << "Unexpected compression type set";
+        result = NOT_IMPLEMENTED;
+    }
+
+    if (result == STATUS_OK) {
+      if (bevy_index.Write(
+              reinterpret_cast<char *>(&bevy_length), sizeof(bevy_length)) < 0)
+        return "";
+
+      bevy_length += output.size();
+      chunk_count_in_bevy++;
+    }
+
+    return output;
+  }
+
+
+  virtual ~_CompressorStream() {}
+};
+
+
+AFF4Status AFF4Image::WriteStream(AFF4Stream *source,
+                                  ProgressContext *progress) {
+  URN volume_urn;
+  DefaultProgress default_progress;
+  if (!progress)
+    progress = &default_progress;
+
+  if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
+    LOG(ERROR) << "Unable to find storage for urn " <<
+        urn.SerializeToString().c_str();
+    return NOT_FOUND;
+  }
+
+  // Open the volume.
+  AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
+      volume_urn);
+
+  if (!volume) {
+    return NOT_FOUND;
+  }
+
+  // Write a bevy at a time.
+  while (1) {
+    _CompressorStream stream(resolver, this, source);
+
+    // TODO(scudette): This scheme is problematic on filesystems that
+    // distinguish between files and directories.
+    URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number)));
+    URN bevy_index_urn(bevy_urn.Append("index"));
+
+    // First write the bevy.
+    {
+      AFF4ScopedPtr<AFF4Stream> bevy = volume->CreateMember(bevy_urn);
+      if (!bevy) {
+        LOG(ERROR) << "Unable to create bevy " <<
+            bevy_urn.SerializeToString().c_str();
+        return IO_ERROR;
+      }
+
+      AFF4Status res = bevy->WriteStream(&stream, progress);
+      if (res != STATUS_OK) {
+        return res;
+      }
+
+      // Report the data read from the source.
+      if (!progress->Report(source->Tell())) {
+        return ABORTED;
+      }
+    }
+
+    // Now write the index.
+    {
+      AFF4ScopedPtr<AFF4Stream> bevy_index = volume->CreateMember(
+          bevy_index_urn);
+
+      if (!bevy_index) {
+        LOG(ERROR) << "Unable to create bevy_index " <<
+            bevy_index_urn.SerializeToString().c_str();
+        return IO_ERROR;
+      }
+
+      if (bevy_index->Write(stream.bevy_index.buffer) < 0) {
+        return IO_ERROR;
+      }
+    }
+
+    bevy_number++;
+    size += stream.Size();
+
+    if (stream.chunk_count_in_bevy != chunks_per_segment)
+      break;
+  }
+  _write_metadata();
+
+  return STATUS_OK;
+}
+
 
 
 /**
@@ -332,6 +482,7 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
       // compression URN.
     default:
       LOG(FATAL) << "Unexpected compression type set";
+      res = NOT_IMPLEMENTED;
   }
 
   if (res != STATUS_OK) {
@@ -401,15 +552,13 @@ string AFF4Image::Read(size_t length) {
   length = std::min((aff4_off_t)length, Size() - readptr);
 
   int initial_chunk_offset = readptr % chunk_size;
-  // We read this many full chunks at once.
-  int chunks_to_read = length / chunk_size;
-  unsigned int chunk_id = readptr / chunk_size;
-  string result;
+  unsigned int initial_chunk_id = readptr / chunk_size;
+  unsigned int final_chunk_id = (readptr + length - 1) / chunk_size;
 
-  // We need a bit of data from the last chunk, read an extra chunk.
-  if (length % chunk_size) {
-    chunks_to_read++;
-  }
+  // We read this many full chunks at once.
+  int chunks_to_read = final_chunk_id - initial_chunk_id + 1;
+  unsigned int chunk_id = initial_chunk_id;
+  string result;
 
   // Make sure we have enough room for output.
   result.reserve(chunks_to_read * chunk_size);
@@ -436,6 +585,24 @@ string AFF4Image::Read(size_t length) {
   return result;
 }
 
+AFF4Status AFF4Image::_write_metadata() {
+  resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
+
+  resolver->Set(urn, AFF4_STORED, new URN(volume_urn));
+
+  resolver->Set(urn, AFF4_IMAGE_CHUNK_SIZE, new XSDInteger(chunk_size));
+
+  resolver->Set(urn, AFF4_IMAGE_CHUNKS_PER_SEGMENT,
+                new XSDInteger(chunks_per_segment));
+
+  resolver->Set(urn, AFF4_STREAM_SIZE, new XSDInteger(size));
+
+  resolver->Set(urn, AFF4_IMAGE_COMPRESSION, new URN(
+      CompressionMethodToURN(compression)));
+
+  return STATUS_OK;
+}
+
 
 AFF4Status AFF4Image::Flush() {
   if (IsDirty()) {
@@ -449,20 +616,7 @@ AFF4Status AFF4Image::Flush() {
     if (res != STATUS_OK)
       return res;
 
-    resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
-
-    resolver->Set(urn, AFF4_STORED, new URN(volume_urn));
-
-    resolver->Set(urn, AFF4_IMAGE_CHUNK_SIZE,
-                  new XSDInteger(chunk_size));
-
-    resolver->Set(urn, AFF4_IMAGE_CHUNKS_PER_SEGMENT,
-                  new XSDInteger(chunks_per_segment));
-
-    resolver->Set(urn, AFF4_STREAM_SIZE, new XSDInteger(size));
-
-    resolver->Set(urn, AFF4_IMAGE_COMPRESSION, new URN(
-        CompressionMethodToURN(compression)));
+    _write_metadata();
   }
 
   // Always call the baseclass to ensure the object is marked non dirty.
@@ -470,3 +624,5 @@ AFF4Status AFF4Image::Flush() {
 }
 
 static AFF4Registrar<AFF4Image> r1(AFF4_IMAGE_TYPE);
+
+void aff4_image_init() {}

@@ -13,8 +13,8 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef     AFF4_LEXICON_H_
-#define     AFF4_LEXICON_H_
+#ifndef     SRC_LEXICON_H_
+#define     SRC_LEXICON_H_
 
 /**
  * @file
@@ -29,7 +29,7 @@ specific language governing permissions and limitations under the License.
 
 #include "rdf.h"
 
-#define AFF4_VERSION "0.1"
+#define AFF4_VERSION "0.2"
 
 #define AFF4_MAX_READ_LEN 1024*1024*100
 
@@ -60,6 +60,11 @@ specific language governing permissions and limitations under the License.
 #define AFF4_STORED (AFF4_NAMESPACE "stored")
 #define AFF4_CONTAINS (AFF4_NAMESPACE "contains")
 
+// Each container should have this file which contains the URN of the container.
+#define AFF4_CONTAINER_DESCRIPTION "container.description"
+#define AFF4_CONTAINER_INFO_TURTLE "information.turtle"
+#define AFF4_CONTAINER_INFO_YAML "information.yaml"
+
 /// AFF4 ZipFile containers.
 #define AFF4_ZIP_TYPE (AFF4_NAMESPACE "zip_volume")
 
@@ -68,6 +73,16 @@ specific language governing permissions and limitations under the License.
 
 // Can be "read", "truncate", "append"
 #define AFF4_STREAM_WRITE_MODE (AFF4_VOLATILE_NAMESPACE "writable")
+
+// FileBackedObjects are either marked explicitly or using the file:// scheme.
+#define AFF4_FILE_TYPE (AFF4_NAMESPACE "file")
+
+// file:// based URNs do not always have a direct mapping to filesystem
+// paths. This volatile attribute is used to control the filename mapping.
+#define AFF4_FILE_NAME (AFF4_VOLATILE_NAMESPACE "filename")
+
+// The original filename the stream had.
+#define AFF4_STREAM_ORIGINAL_FILENAME (AFF4_NAMESPACE "original_filename")
 
 /// ZipFileSegment
 #define AFF4_ZIP_SEGMENT_TYPE (AFF4_NAMESPACE "zip_segment")
@@ -81,7 +96,7 @@ specific language governing permissions and limitations under the License.
 #define AFF4_IMAGE_COMPRESSION_SNAPPY "https://github.com/google/snappy"
 #define AFF4_IMAGE_COMPRESSION_STORED (AFF4_NAMESPACE "compression/stored")
 
-//AFF4Map - stores a mapping from one stream to another.
+// AFF4Map - stores a mapping from one stream to another.
 #define AFF4_MAP_TYPE (AFF4_NAMESPACE "map")
 
 // Categories describe the general type of an image.
@@ -95,15 +110,29 @@ specific language governing permissions and limitations under the License.
 #define AFF4_DISK_RAW (AFF4_DISK_NAMESPACE "raw")
 #define AFF4_DISK_PARTITION (AFF4_DISK_NAMESPACE "partition")
 
+#define AFF4_DIRECTORY_TYPE (AFF4_NAMESPACE "directory")
 
+// The constant stream is a psuedo stream which just returns a constant.
+#define AFF4_CONSTANT_TYPE (AFF4_NAMESPACE "constant")
+
+// The constant to repeat (default 0).
+#define AFF4_CONSTANT_CHAR (AFF4_NAMESPACE "constant_char")
+
+
+// An AFF4 Directory stores all members as files on the filesystem. Some
+// filesystems can not represent the URNs properly, hence we need a mapping
+// between the URN and the filename. This attribute stores the _relative_ path
+// of the filename for the member URN relative to the container's path.
+#define AFF4_DIRECTORY_CHILD_FILENAME (AFF4_NAMESPACE "directory/filename")
 
 // If is more efficient to use an enum for setting the compression type rather
 // than compare URNs all the time.
 typedef enum AFF4_IMAGE_COMPRESSION_ENUM_t {
-  AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN,
-  AFF4_IMAGE_COMPRESSION_ENUM_STORED,
-  AFF4_IMAGE_COMPRESSION_ENUM_ZLIB,
-  AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY
+  AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN = -1,
+  AFF4_IMAGE_COMPRESSION_ENUM_STORED = 0,   // Not compressed.
+  AFF4_IMAGE_COMPRESSION_ENUM_ZLIB = 1,     // Uses zlib.compress()
+  AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY = 2,   // snappy.compress()
+  AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE = 8   // zlib.deflate()
 } AFF4_IMAGE_COMPRESSION_ENUM;
 
 AFF4_IMAGE_COMPRESSION_ENUM CompressionMethodFromURN(URN method);
@@ -131,14 +160,14 @@ class Attribute {
   std::unordered_map<string, string> allowed_values;
 
  public:
-  Attribute(){};
+  Attribute() {}
 
   Attribute(string name, string type, string description):
       name(name), type(type), description(description) {}
 
   void AllowedValue(string alias, string value) {
     allowed_values[alias] = value;
-  };
+  }
 };
 
 
@@ -158,19 +187,19 @@ class Schema {
   static std::unordered_map<string, Schema> cache;
 
  public:
-  Schema() {};
+  Schema() {}
 
-  Schema(string object_type): object_type(object_type) {};
+  Schema(string object_type): object_type(object_type) {}
   void AddAttribute(string alias, Attribute attribute) {
     attributes[alias] = attribute;
-  };
+  }
 
   void AddParent(Schema parent) {
     parents.push_back(parent);
-  };
+  }
 
   static Schema GetSchema(string object_type);
 };
 
 
-#endif
+#endif  // SRC_LEXICON_H_

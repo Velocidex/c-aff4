@@ -13,11 +13,12 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef AFF4_UTILS_H
-#define AFF4_UTILS_H
+#ifndef SRC_AFF4_UTILS_H_
+#define SRC_AFF4_UTILS_H_
 #include <sys/time.h>
 #include <vector>
 #include <string>
+#include <sstream>
 
 std::string aff4_sprintf(std::string fmt, ...);
 
@@ -25,8 +26,10 @@ inline uint64_t time_from_epoch() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
   return tv.tv_sec * 1000000 + tv.tv_usec;
-};
+}
 
 std::string GetLastErrorMessage();
 
-#endif
+std::vector<std::string> split(const std::string &s, char delim);
+
+#endif  // SRC_AFF4_UTILS_H_

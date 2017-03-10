@@ -115,7 +115,8 @@ am_aff4_test_OBJECTS = aff4_test-aff4tests.$(OBJEXT) \
 	aff4_test-stream_test.$(OBJEXT) aff4_test-zip_test.$(OBJEXT) \
 	aff4_test-aff4_image_test.$(OBJEXT) \
 	aff4_test-rdf_tests.$(OBJEXT) \
-	aff4_test-aff4_map_tests.$(OBJEXT)
+	aff4_test-aff4_map_tests.$(OBJEXT) \
+	aff4_test-directory_test.$(OBJEXT)
 aff4_test_OBJECTS = $(am_aff4_test_OBJECTS)
 aff4_test_DEPENDENCIES = libgtest.la ../src/libaff4.la
 aff4_test_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
@@ -542,7 +543,7 @@ libgtest_la_CXXFLAGS = -g -Wall -O0 -pthread
 libgtest_la_LIBADD = -lpthread
 aff4_test_SOURCES = \
 	aff4tests.cc  data_store_test.cc stream_test.cc zip_test.cc	\
-	aff4_image_test.cc rdf_tests.cc aff4_map_tests.cc
+	aff4_image_test.cc rdf_tests.cc aff4_map_tests.cc directory_test.cc
 
 aff4_test_LDADD = libgtest.la ../src/libaff4.la
 aff4_test_CXXFLAGS = -std=c++11 -g -Wall -O0
@@ -659,6 +660,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_test-aff4_map_tests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_test-aff4tests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_test-data_store_test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_test-directory_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_test-rdf_tests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_test-stream_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/aff4_test-zip_test.Po@am__quote@
@@ -789,6 +791,20 @@ aff4_test-aff4_map_tests.obj: aff4_map_tests.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='aff4_map_tests.cc' object='aff4_test-aff4_map_tests.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4_test_CXXFLAGS) $(CXXFLAGS) -c -o aff4_test-aff4_map_tests.obj `if test -f 'aff4_map_tests.cc'; then $(CYGPATH_W) 'aff4_map_tests.cc'; else $(CYGPATH_W) '$(srcdir)/aff4_map_tests.cc'; fi`
+
+aff4_test-directory_test.o: directory_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4_test_CXXFLAGS) $(CXXFLAGS) -MT aff4_test-directory_test.o -MD -MP -MF $(DEPDIR)/aff4_test-directory_test.Tpo -c -o aff4_test-directory_test.o `test -f 'directory_test.cc' || echo '$(srcdir)/'`directory_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/aff4_test-directory_test.Tpo $(DEPDIR)/aff4_test-directory_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='directory_test.cc' object='aff4_test-directory_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4_test_CXXFLAGS) $(CXXFLAGS) -c -o aff4_test-directory_test.o `test -f 'directory_test.cc' || echo '$(srcdir)/'`directory_test.cc
+
+aff4_test-directory_test.obj: directory_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4_test_CXXFLAGS) $(CXXFLAGS) -MT aff4_test-directory_test.obj -MD -MP -MF $(DEPDIR)/aff4_test-directory_test.Tpo -c -o aff4_test-directory_test.obj `if test -f 'directory_test.cc'; then $(CYGPATH_W) 'directory_test.cc'; else $(CYGPATH_W) '$(srcdir)/directory_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/aff4_test-directory_test.Tpo $(DEPDIR)/aff4_test-directory_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='directory_test.cc' object='aff4_test-directory_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(aff4_test_CXXFLAGS) $(CXXFLAGS) -c -o aff4_test-directory_test.obj `if test -f 'directory_test.cc'; then $(CYGPATH_W) 'directory_test.cc'; else $(CYGPATH_W) '$(srcdir)/directory_test.cc'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

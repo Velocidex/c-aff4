@@ -13,8 +13,8 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef     AFF4_ZIP_H_
-#define     AFF4_ZIP_H_
+#ifndef     SRC_ZIP_H_
+#define     SRC_ZIP_H_
 
 #include "aff4_errors.h"
 #include "aff4_io.h"
@@ -53,7 +53,7 @@ struct CDFileHeader {
   uint16_t compression_method;
   uint16_t dostime;
   uint16_t dosdate;
-  uint32_t crc32;
+  uint32_t crc32_cs;
   int32_t compress_size = -1;
   int32_t file_size = -1;
   uint16_t file_name_length;
@@ -73,7 +73,7 @@ struct ZipFileHeader {
   uint16_t compression_method;
   uint16_t lastmodtime;
   uint16_t lastmoddate;
-  uint32_t crc32;
+  uint32_t crc32_cs;
   uint32_t compress_size;
   uint32_t file_size;
   uint16_t file_name_length;
@@ -132,6 +132,14 @@ class ZipFileSegment: public StringIO {
  protected:
   URN owner_urn;                        /**< The zip file who owns us. */
 
+  // If this is set, we are backing a backing store for reading. Otherwise we
+  // use our own StringIO buffers.
+  URN _backing_store_urn;
+
+  // The start offset for the backing store.
+  aff4_off_t _backing_store_start_offset = -1;
+  size_t _backing_store_length = 0;
+
  public:
   /**
    * A convenience function to add a new segment to an existing ZipFile volume.
@@ -146,15 +154,22 @@ class ZipFileSegment: public StringIO {
   static AFF4ScopedPtr<ZipFileSegment> NewZipFileSegment(
       DataStore *resolver, const URN &segment_urn, const URN &volume_urn);
 
-  ZipFileSegment(DataStore *resolver);
+  explicit ZipFileSegment(DataStore *resolver);
   ZipFileSegment(string filename, ZipFile &zipfile);
-
-  int compression_method = ZIP_STORED;  /**< Compression method. */
 
   virtual AFF4Status LoadFromURN();
   virtual AFF4Status LoadFromZipFile(ZipFile &owner);
 
   virtual AFF4Status Flush();
+  virtual AFF4Status Truncate();
+
+  virtual string Read(size_t length);
+  virtual int Write(const char *data, int length);
+
+  virtual aff4_off_t Size();
+
+  virtual AFF4Status WriteStream(
+      AFF4Stream *source, ProgressContext *progress = nullptr);
 
   using AFF4Stream::Write;
 };
@@ -175,9 +190,15 @@ class ZipInfo {
   uint64_t file_size = 0;
   string filename;
   off_t local_header_offset = 0;
-  int crc32;
-  int lastmoddate;
-  int lastmodtime;
+  int crc32_cs = 0;
+  int lastmoddate = 0;
+  int lastmodtime = 0;
+
+  // Where the zip file header is located.
+  off_t file_header_offset = -1;
+
+  AFF4Status WriteFileHeader(AFF4Stream &output);
+  AFF4Status WriteCDFileHeader(AFF4Stream &output);
 };
 
 /**
@@ -225,8 +246,6 @@ class ZipFile: public AFF4Volume {
 
  private:
   AFF4Status write_zip64_CD(AFF4Stream &backing_store);
-  AFF4Status WriteCDFileHeader(ZipInfo &zip_info, AFF4Stream &output);
-  AFF4Status WriteZipFileHeader(ZipInfo &zip_info, AFF4Stream &output);
 
  protected:
   int directory_number_of_entries = -1;
@@ -256,43 +275,19 @@ class ZipFile: public AFF4Volume {
   AFF4Status LoadTurtleMetadata();
 
  public:
-  /**
-   * Convert from a child URN to the zip member name.
-   *
-   * The AFF4 ZipFile stores AFF4 objects (with fully qualified URNs) in zip
-   * archives. The zip members name is based on the object's URN with the
-   * following rules:
-
-   1. If the object's URN is an extension of the volume's URN, the member's name
-   will be the relative name. So for example:
-
-   Object: aff4://9db79393-53fa-4147-b823-5c3e1d37544d/Foobar.txt
-   Volume: aff4://9db79393-53fa-4147-b823-5c3e1d37544d
-
-   Member name: Foobar.txt
-
-   2. All charaters outside the range [a-zA-Z0-9_] shall be escaped according to
-   their hex encoding.
-
-   * @param name
-   *
-   * @return The member name in the zip archive.
-   */
-  string _member_name_for_urn(const URN object) const;
-  URN _urn_from_member_name(const string member) const;
-
-  ZipFile(DataStore *resolver);
+  explicit ZipFile(DataStore *resolver);
 
   /**
    * Creates a new ZipFile object.
    *
-   * @param stream: An AFF4Stream to write the zip file onto. Note that we first
-   *                read and preserve the objects in the existing volume and
-   *                just append new objects to it.
+   * @param backing_store_urn: An URN of an object to write the zip file
+   *                onto. Note that we first read and preserve the objects in
+   *                the existing volume and just append new objects to it.
    *
    * @return A new ZipFile reference.
    */
-  static AFF4ScopedPtr<ZipFile> NewZipFile(DataStore *resolver, URN backing_store_urn);
+  static AFF4ScopedPtr<ZipFile> NewZipFile(
+      DataStore *resolver, URN backing_store_urn);
 
   // Generic volume interface.
   virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child);
@@ -309,6 +304,18 @@ class ZipFile: public AFF4Volume {
   AFF4ScopedPtr<ZipFileSegment> CreateZipSegment(string filename);
   AFF4ScopedPtr<ZipFileSegment> OpenZipSegment(string filename);
 
+  // Supports a stream interface.
+  // An efficient interface to add a new archive member.
+  //
+  // Args:
+  //   member_urn: The new member URN to be added.
+  //   stream: A file-like object (with read() method) that generates data to
+  //     be written as the member.
+  //   compression_method: How to compress the member.
+  virtual AFF4Status StreamAddMember(URN child, AFF4Stream &stream,
+                                     int compression_method,
+                                     ProgressContext *progress = nullptr);
+
   // Load the ZipFile from its URN and the information in the oracle.
   virtual AFF4Status LoadFromURN();
 
@@ -321,4 +328,4 @@ class ZipFile: public AFF4Volume {
   unordered_map<string, unique_ptr<ZipInfo>> members;
 };
 
-#endif   // AFF4_ZIP_H_
+#endif   // SRC_ZIP_H_

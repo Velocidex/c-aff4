@@ -17,8 +17,8 @@ specific language governing permissions and limitations under the License.
   Utilities for AFF4 imaging. These are mostly high level utilities used by the
   command line imager.
 */
-#ifndef _AFF4_IMAGER_UTILS_H
-#define _AFF4_IMAGER_UTILS_H
+#ifndef SRC_AFF4_IMAGER_UTILS_H
+#define SRC_AFF4_IMAGER_UTILS_H
 
 #include "aff4_errors.h"
 #include "data_store.h"
@@ -92,11 +92,11 @@ class BasicImager {
 
   virtual string GetName() {
     return "AFF4 Imager";
-  };
+  }
 
   virtual string GetVersion() {
     return AFF4_VERSION;
-  };
+  }
 
   AFF4Status GetOutputVolumeURN(URN &volume_urn);
 
@@ -141,22 +141,22 @@ class BasicImager {
 
   void AddArg(TCLAP::Arg *arg) {
     args.push_back(std::unique_ptr<TCLAP::Arg>(arg));
-  };
+  }
 
   TCLAP::Arg *Get(string name) {
     for (auto it = args.begin(); it != args.end(); it++) {
       if ((*it)->getName() == name) {
         return it->get();
-      };
-    };
+      }
+    }
 
     LOG(FATAL) << "Parameter " << name << " not known";
-  };
+  }
 
   template<typename T>
   T *GetArg(string name) {
     return dynamic_cast<T *>(Get(name));
-  };
+  }
 
   /**
    * Expands the glob into a list of filenames that would match. This
@@ -173,12 +173,12 @@ class BasicImager {
   /**
    * This should be overloaded for imagers that need to do something before they
    * start. The method is called during the imager's initialization routine.
-
+   *
+   * By default we initialize signal handler.
+   *
    * @return If this returns anything other that STATUS_OK we abort.
    */
-  virtual AFF4Status Initialize() {
-    return STATUS_OK;
-  };
+  virtual AFF4Status Initialize();
 
   virtual AFF4Status RegisterArgs() {
     AddArg(new TCLAP::SwitchArg("V", "view", "View AFF4 metadata", false));
@@ -230,14 +230,12 @@ class BasicImager {
         false, "/path/to/aff4/volume"));
 
     return STATUS_OK;
-  };
+  }
 
   virtual AFF4Status Run(int argc, char** argv);
 
-  virtual bool progress_renderer(
-      aff4_off_t readptr, ProgressContext &context);
-
-  void Abort();
+  virtual void Abort();
+  virtual ~BasicImager() {}
 };
 
-#endif  // _AFF4_IMAGER_UTILS_H
+#endif  // SRC_AFF4_IMAGER_UTILS_H_

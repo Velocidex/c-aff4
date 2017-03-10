@@ -13,8 +13,8 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
-#ifndef  _AFF4_DATA_STORE_H_
-#define  _AFF4_DATA_STORE_H_
+#ifndef  SRC_DATA_STORE_H_
+#define  SRC_DATA_STORE_H_
 #include "aff4_config.h"
 
 #include "aff4_base.h"
@@ -53,18 +53,18 @@ struct AFF4ObjectCacheEntry {
 
   AFF4ObjectCacheEntry() {
     next = prev = this;
-  };
+  }
 
   AFF4ObjectCacheEntry(string key, AFF4Object *object):
       key(key), object(object) {
     next = prev = this;
-  };
+  }
 
   void unlink() {
     next->prev = prev;
     prev->next = next;
     next = prev = this;
-  };
+  }
 
   void append(AFF4ObjectCacheEntry *entry) {
     // The entry must not exist on the list already.
@@ -76,7 +76,7 @@ struct AFF4ObjectCacheEntry {
 
     entry->prev = this;
     next = entry;
-  };
+  }
 
   ~AFF4ObjectCacheEntry() {
     unlink();
@@ -88,8 +88,8 @@ struct AFF4ObjectCacheEntry {
     // their Flush methods.
     if (object) {
       delete object;
-    };
-  };
+    }
+  }
 };
 
 /**
@@ -120,6 +120,8 @@ class AFF4ObjectCache {
   AFF4Status Trim_();
 
  public:
+  bool trimming_disabled = false;
+
   AFF4ObjectCache() {}
 
   explicit AFF4ObjectCache(int max_items):
@@ -197,23 +199,23 @@ class AFF4ScopedPtr {
   DataStore *resolver_;
 
  public:
-  explicit AFF4ScopedPtr(): ptr_(0) {}
+  AFF4ScopedPtr(): ptr_(0) {}
   explicit AFF4ScopedPtr(AFF4ObjectType *p, DataStore *resolver):
       ptr_(p), resolver_(resolver) {
     CHECK(resolver != NULL);
-  };
+  }
 
   ~AFF4ScopedPtr() {
     // When we destruct we return the underlying pointer to the DataStore.
     if (ptr_) {
       ptr_->Return();
-    };
+    }
   }
 
   template<class AFF4ObjectOtherType>
   AFF4ScopedPtr<AFF4ObjectOtherType> cast() {
     return AFF4ScopedPtr<AFF4ObjectOtherType>(release(), resolver_);
-  };
+  }
 
   AFF4ObjectType *operator->() const {
     CHECK(ptr_ != NULL);
@@ -314,7 +316,7 @@ class DataStore {
   void Return(AFF4Object *object) {
     LOG(INFO) << "Returning: " << object->urn.SerializeToString();
     ObjectCache.Return(object);
-  };
+  }
 
   /**
    * An object cache for objects created via the AFF4FactoryOpen()
@@ -324,7 +326,7 @@ class DataStore {
   AFF4ObjectCache ObjectCache;
 
   /// These types will not be dumped * to turtle files.
-  unordered_set<string> suppressed_rdftypes;
+  unordered_map<string, unordered_set<string>> suppressed_rdftypes;
 
  public:
   DataStore();
@@ -337,13 +339,13 @@ class DataStore {
   AFF4ScopedPtr<T> CachePut(AFF4Object *object) {
     ObjectCache.Put(object, true);
     return AFF4ScopedPtr<T>(dynamic_cast<T *>(object), this);
-  };
+  }
 
   template<typename T>
   AFF4ScopedPtr<T> CacheGet(const URN urn) {
     AFF4Object *object = ObjectCache.Get(urn);
     return AFF4ScopedPtr<T>(dynamic_cast<T *>(object), this);
-  };
+  }
 
   virtual void Set(const URN &urn, const URN &attribute,
                    RDFValue *value) = 0;
@@ -356,16 +358,18 @@ class DataStore {
 
   virtual AFF4Status DeleteSubject(const URN &urn) = 0;
 
+  virtual vector<URN> SelectSubjectsByPrefix(const URN &prefix) = 0;
+
 #ifdef AFF4_HAS_LIBYAML_CPP
   // Dump ourselves to a yaml file.
   virtual AFF4Status DumpToYaml(AFF4Stream &output,
-                                bool verbose=false) = 0;
+                                bool verbose = false) = 0;
 
   virtual AFF4Status LoadFromYaml(AFF4Stream &output) = 0;
 #endif
 
   virtual AFF4Status DumpToTurtle(AFF4Stream &output, URN base,
-                                  bool verbose=false) = 0;
+                                  bool verbose = false) = 0;
 
   virtual AFF4Status LoadFromTurtle(AFF4Stream &output) = 0;
 
@@ -447,20 +451,23 @@ class DataStore {
 
       cached_obj->Prepare();
       return AFF4ScopedPtr<T>(dynamic_cast<T *>(cached_obj), this);
-    };
+    }
 
     URN type_urn;
     unique_ptr<AFF4Object> obj;
 
     const uri_components components = urn.Parse();
 
-    // Try to instantiate the handler based on the URN scheme alone.
-    obj = GetAFF4ClassFactory()->CreateInstance(components.scheme, this);
-
     // Check if there is a resolver triple for it.
-    if (!obj && Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
-      obj = GetAFF4ClassFactory()->CreateInstance(type_urn.value, this);
-    };
+    if (Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
+      obj = GetAFF4ClassFactory()->CreateInstance(type_urn.value, this, &urn);
+    }
+
+    // Try to instantiate the handler based on the URN scheme alone.
+    if (!obj) {
+      obj = GetAFF4ClassFactory()->CreateInstance(
+          components.scheme, this, &urn);
+    }
 
     // Failed to find the object.
     if (!obj)
@@ -468,12 +475,12 @@ class DataStore {
 
     // Have the object load and initialize itself.
     obj->urn = urn;
-    if(obj->LoadFromURN() != STATUS_OK) {
+    if (obj->LoadFromURN() != STATUS_OK) {
       LOG(WARNING) << "Failed to load " << urn.value << " as " <<
           type_urn.value;
 
       return AFF4ScopedPtr<T>();
-    };
+    }
 
     // Cache the object for next time.
     T *result = dynamic_cast<T *>(obj.get());
@@ -486,7 +493,7 @@ class DataStore {
 
     result->Prepare();
     return AFF4ScopedPtr<T>(result, this);
-  };
+  }
 
   // Closing an object means to flush it and remove it from the cache so it no
   // longer exists in memory.
@@ -497,7 +504,7 @@ class DataStore {
     LOG(INFO) << "Closing object " << tmp_urn.value << " " << res << "\n";
 
     return res;
-  };
+  }
 };
 
 
@@ -530,14 +537,16 @@ class MemoryDataStore: public DataStore {
 
   virtual AFF4Status DeleteSubject(const URN &urn);
 
+  virtual vector<URN> SelectSubjectsByPrefix(const URN &prefix);
+
 #ifdef AFF4_HAS_LIBYAML_CPP
   virtual AFF4Status DumpToYaml(AFF4Stream &output,
-                                bool verbose=false);
+                                bool verbose = false);
   virtual AFF4Status LoadFromYaml(AFF4Stream &output);
 #endif
 
   virtual AFF4Status DumpToTurtle(AFF4Stream &output, URN base,
-                                  bool verbose=false);
+                                  bool verbose = false);
 
   virtual AFF4Status LoadFromTurtle(AFF4Stream &output);
 
@@ -545,4 +554,4 @@ class MemoryDataStore: public DataStore {
   virtual AFF4Status Flush();
 };
 
-#endif //  _AFF4_DATA_STORE_H_
+#endif  //  SRC_DATA_STORE_H_

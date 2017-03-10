@@ -6,6 +6,7 @@
 class AFF4MapTest: public ::testing::Test {
  protected:
   string filename = "/tmp/aff4_test.zip";
+  string source_filename = "/tmp/source.txt";
   string image_name = "image.dd";
 
   URN volume_urn;
@@ -13,8 +14,9 @@ class AFF4MapTest: public ::testing::Test {
 
   // Remove the file on teardown.
   virtual void TearDown() {
-    //unlink(filename.c_str());
-  };
+    unlink(filename.c_str());
+    unlink(source_filename.c_str());
+  }
 
   // Create a sparse AFF4Map stream with some data in it.
   virtual void SetUp() {
@@ -30,25 +32,50 @@ class AFF4MapTest: public ::testing::Test {
     AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
         &resolver, filename_urn);
 
-    // Now an image is created inside the volume.
-    AFF4ScopedPtr<AFF4Map> image = AFF4Map::NewAFF4Map(
-        &resolver, zip->urn.Append(image_name), zip->urn);
-
-    // Maps are written in random order.
-    image->Seek(50, SEEK_SET);
-    image->Write("XX - This is the position.");
-
-    image->Seek(0, SEEK_SET);
-    image->Write("00 - This is the position.");
-
-    // We can "overwrite" data by writing the same range again.
-    image->Seek(50, SEEK_SET);
-    image->Write("50");
-
     // Store the URN for the test to use.
-    image_urn = image->urn;
     volume_urn = zip->urn;
-  };
+    image_urn = volume_urn.Append(image_name);
+
+    // Write Map image sequentially (Seek/Write method).
+    {
+      AFF4ScopedPtr<AFF4Map> image = AFF4Map::NewAFF4Map(
+          &resolver, image_urn, zip->urn);
+
+      // Maps are written in random order.
+      image->Seek(50, SEEK_SET);
+      image->Write("XX - This is the position.");
+
+      image->Seek(0, SEEK_SET);
+      image->Write("00 - This is the position.");
+
+      // We can "overwrite" data by writing the same range again.
+      image->Seek(50, SEEK_SET);
+      image->Write("50");
+    }
+
+    // Test the Stream method.
+    {
+      // First create a stream and add it to the Cache.
+      AFF4ScopedPtr<AFF4Stream> source = resolver.CachePut<AFF4Stream>(
+          new StringIO(&resolver));
+
+      // Fill it with data.
+      source->Write("AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH");
+
+      // Make a temporary map that defines our plan.
+      AFF4Map helper_map(&resolver);
+
+      helper_map.AddRange(4, 0, 4, source->urn);    // 0000AAAA
+      helper_map.AddRange(0, 12, 4, source->urn);   // DDDDAAAA
+      helper_map.AddRange(12, 16, 4, source->urn);  // DDDDAAAA0000EEEE
+
+      AFF4ScopedPtr<AFF4Map> image = AFF4Map::NewAFF4Map(
+          &resolver, image_urn.Append("streamed"), zip->urn);
+
+      // Now we create the real map by copying the temporary map stream.
+      image->WriteStream(&helper_map);
+    }
+  }
 };
 
 
@@ -147,7 +174,7 @@ TEST_F(AFF4MapTest, TestAddRange) {
   ranges = map->GetRanges();
   EXPECT_EQ(ranges.size(), 1);
   EXPECT_EQ(ranges[0].length, 40);
-};
+}
 
 
 TEST_F(AFF4MapTest, CreateMapStream) {
@@ -160,37 +187,59 @@ TEST_F(AFF4MapTest, CreateMapStream) {
 
   ASSERT_TRUE(zip.get());
 
-  AFF4ScopedPtr<AFF4Map> map = resolver.AFF4FactoryOpen<AFF4Map>(image_urn);
+  {
+    AFF4ScopedPtr<AFF4Map> map = resolver.AFF4FactoryOpen<AFF4Map>(image_urn);
 
-  ASSERT_TRUE(map.get());
+    ASSERT_TRUE(map.get());
 
-  map->Seek(50, SEEK_SET);
-  EXPECT_STREQ(map->Read(2).c_str(), "50");
+    map->Seek(50, SEEK_SET);
+    EXPECT_STREQ(map->Read(2).c_str(), "50");
 
-  map->Seek(0, SEEK_SET);
-  EXPECT_STREQ(map->Read(2).c_str(), "00");
+    map->Seek(0, SEEK_SET);
+    EXPECT_STREQ(map->Read(2).c_str(), "00");
 
-  vector<Range> ranges = map->GetRanges();
-  EXPECT_EQ(ranges.size(), 3);
-  EXPECT_EQ(ranges[0].length, 26);
-  EXPECT_EQ(ranges[0].map_offset, 0);
-  EXPECT_EQ(ranges[0].target_offset, 26);
+    vector<Range> ranges = map->GetRanges();
+    EXPECT_EQ(ranges.size(), 3);
+    EXPECT_EQ(ranges[0].length, 26);
+    EXPECT_EQ(ranges[0].map_offset, 0);
+    EXPECT_EQ(ranges[0].target_offset, 26);
 
-  // This is the extra "overwritten" 2 bytes which were appended to the end of
-  // the target stream and occupy the map range from 50-52.
-  EXPECT_EQ(ranges[1].length, 2);
-  EXPECT_EQ(ranges[1].map_offset, 50);
-  EXPECT_EQ(ranges[1].target_offset, 52);
+    // This is the extra "overwritten" 2 bytes which were appended to the end of
+    // the target stream and occupy the map range from 50-52.
+    EXPECT_EQ(ranges[1].length, 2);
+    EXPECT_EQ(ranges[1].map_offset, 50);
+    EXPECT_EQ(ranges[1].target_offset, 52);
 
-  EXPECT_EQ(ranges[2].length, 24);
-  EXPECT_EQ(ranges[2].map_offset, 52);
-  EXPECT_EQ(ranges[2].target_offset, 2);
+    EXPECT_EQ(ranges[2].length, 24);
+    EXPECT_EQ(ranges[2].map_offset, 52);
+    EXPECT_EQ(ranges[2].target_offset, 2);
 
-  // Test that reads outside the ranges null pad correctly.
-  map->Seek(48, SEEK_SET);
-  string read_string = map->Read(4);
-  EXPECT_EQ(read_string[0], 0);
-  EXPECT_EQ(read_string[1], 0);
-  EXPECT_EQ(read_string[2], '5');
-  EXPECT_EQ(read_string[3], '0');
-};
+    // Test that reads outside the ranges null pad correctly.
+    map->Seek(48, SEEK_SET);
+    string read_string = map->Read(4);
+    EXPECT_EQ(read_string[0], 0);
+    EXPECT_EQ(read_string[1], 0);
+    EXPECT_EQ(read_string[2], '5');
+    EXPECT_EQ(read_string[3], '0');
+  }
+
+  // Test the streaming interface.
+  {
+    AFF4ScopedPtr<AFF4Map> map = resolver.AFF4FactoryOpen<AFF4Map>(
+        image_urn.Append("streamed"));
+
+    EXPECT_EQ(map->Size(), 16);
+
+    string read_string = map->Read(1000);
+    EXPECT_EQ(read_string, string("DDDDAAAA\0\0\0\0EEEE", 16));
+  }
+
+  // Check the untransformed data stream - it is written in the same order as
+  // the ranges are given.
+  {
+    AFF4ScopedPtr<AFF4Stream> map_data = resolver.AFF4FactoryOpen<AFF4Stream>(
+        image_urn.Append("streamed").Append("data"));
+    string read_string = map_data->Read(1000);
+    EXPECT_STREQ(read_string.c_str(), "DDDDAAAAEEEE");
+  }
+}
