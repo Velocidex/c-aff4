@@ -28,6 +28,10 @@ def member_name_for_urn(member_urn, base_urn=None, slash_ok=True):
     if filename.startswith("/"):
         filename = filename[1:]
 
+    # original implementations of AFF4 (and Evimetry) escape the leading aff4://
+    if filename.startswith("aff4://"):
+        return filename.replace("aff4://", "aff4%3A%2F%2F")
+
     # Escape chars which are non printable.
     escaped_filename = []
     for c in filename:

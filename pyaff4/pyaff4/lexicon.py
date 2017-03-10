@@ -15,11 +15,15 @@
 """The AFF4 lexicon."""
 # This is the version of the AFF4 specification we support - not the library
 # version itself.
+
+import rdflib
+
 AFF4_VERSION = "0.2"
 
 AFF4_MAX_READ_LEN = 1024*1024*100
 
 AFF4_NAMESPACE = "http://aff4.org/Schema#"
+AFF4_LEGACY_NAMESPACE = "http://afflib.org/2009/aff4#"
 XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema#"
 RDF_NAMESPACE = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 AFF4_MEMORY_NAMESPACE = "http://aff4.org/Schema#memory/"
@@ -64,6 +68,7 @@ AFF4_ZIP_TYPE = (AFF4_NAMESPACE + "zip_volume")
 
 # AFF4Stream
 AFF4_STREAM_SIZE = (AFF4_NAMESPACE + "size")
+AFF4_LEGACY_STREAM_SIZE = (AFF4_LEGACY_NAMESPACE + "size")
 
 # The original filename the stream had.
 AFF4_STREAM_ORIGINAL_FILENAME = (AFF4_NAMESPACE + "original_filename")
@@ -84,17 +89,22 @@ AFF4_STREAM_ORIGINAL_FILENAME = (AFF4_NAMESPACE + "original_filename")
 # ZipFileSegment
 AFF4_ZIP_SEGMENT_TYPE = (AFF4_NAMESPACE + "zip_segment")
 
-# AFF4Image - stores a stream using Bevies.
-AFF4_IMAGE_TYPE = (AFF4_NAMESPACE + "image")
-AFF4_IMAGE_CHUNK_SIZE = (AFF4_NAMESPACE + "chunk_size")
-AFF4_IMAGE_CHUNKS_PER_SEGMENT = (AFF4_NAMESPACE + "chunks_per_segment")
-AFF4_IMAGE_COMPRESSION = (AFF4_NAMESPACE + "compression")
+# AFF4 Image Stream - stores a stream using Bevies.
+AFF4_IMAGE_TYPE = (AFF4_NAMESPACE + "ImageStream")
+AFF4_LEGACY_IMAGE_TYPE = (AFF4_LEGACY_NAMESPACE + "stream")
+AFF4_IMAGE_CHUNK_SIZE = (AFF4_NAMESPACE + "chunkSize")
+AFF4_LEGACY_IMAGE_CHUNK_SIZE = (AFF4_LEGACY_NAMESPACE + "chunkSize")
+AFF4_IMAGE_CHUNKS_PER_SEGMENT = (AFF4_NAMESPACE + "chunksInSegment")
+AFF4_LEGACY_IMAGE_CHUNKS_PER_SEGMENT = (AFF4_LEGACY_NAMESPACE + "chunksInSegment")
+AFF4_IMAGE_COMPRESSION = (AFF4_NAMESPACE + "compressionMethod")
+AFF4_LEGACY_IMAGE_COMPRESSION = (AFF4_LEGACY_NAMESPACE + "CompressionMethod")
 AFF4_IMAGE_COMPRESSION_ZLIB = "https://www.ietf.org/rfc/rfc1950.txt"
-AFF4_IMAGE_COMPRESSION_SNAPPY = "https://github.com/google/snappy"
+AFF4_IMAGE_COMPRESSION_SNAPPY = "http://code.google.com/p/snappy/"
 AFF4_IMAGE_COMPRESSION_STORED = (AFF4_NAMESPACE + "compression/stored")
 
 # AFF4Map - stores a mapping from one stream to another.
-AFF4_MAP_TYPE = (AFF4_NAMESPACE + "map")
+AFF4_MAP_TYPE = (AFF4_NAMESPACE + "Map")
+AFF4_LEGACY_MAP_TYPE = (AFF4_LEGACY_NAMESPACE + "map")
 
 # Categories describe the general type of an image.
 AFF4_CATEGORY = (AFF4_NAMESPACE + "category")
@@ -122,3 +132,11 @@ AFF4_CONSTANT_CHAR = (AFF4_NAMESPACE + "constant_char")
 # between the URN and the filename. This attribute stores the _relative_ path
 # of the filename for the member URN relative to the container's path.
 AFF4_DIRECTORY_CHILD_FILENAME = (AFF4_NAMESPACE + "directory/filename")
+
+HASH_SHA512 = rdflib.URIRef("http://aff4.org/Schema#SHA512")
+HASH_SHA256 = rdflib.URIRef("http://aff4.org/Schema#SHA256")
+HASH_SHA1 = rdflib.URIRef("http://aff4.org/Schema#SHA1")
+HASH_MD5 = rdflib.URIRef("http://aff4.org/Schema#MD5")
+HASH_BLAKE2B = rdflib.URIRef("http://aff4.org/Schema#Blake2b")
+
+HASH_BLOCKMAPHASH_SHA512 = rdflib.URIRef("http://aff4.org/Schema#blockMapHashSHA512")

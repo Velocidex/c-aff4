@@ -14,23 +14,21 @@ purpose AFF4 library.
 
 ## What is currently supported.
 
-Not all features described in the paper are currently supported:
-
-1. Writing and Reading ZipFile style volumes.
-2. Writing and Reading AFF4 Image streams using the deflate or snappy compressor.
-3. Writing and reading RDF metadata using both YAML and Turtle.
+1. Reading ZipFile style volumes.
+2. Reading striped ZipFile volumes.
+2. Reading AFF4 Image streams using the deflate or snappy compressor.
+3. Reading RDF metadata using both YAML and Turtle.
 
 What is not yet supported:
 
-1. Encrypted AFF4 volumes.
-2. Persistent data store.
-3. HTTP backed streams.
-4. Splitting an AFF4 Image across multiple volumes.
-5. Map streams.
-6. Support for signed statements or Bill of Materials.
-7. Logical file acquisition.
+1. Writing
+2. Encrypted AFF4 volumes.
+3. Persistent data store.
+4. HTTP backed streams.
+5. Support for signed statements or Bill of Materials.
+6. Logical file acquisition.
 
 # Notice
 
 This is not an official Google product (experimental or otherwise), it is just
-code that happens to be owned by Google.
+code that happens to be owned by Google and Schatz Forensic.
