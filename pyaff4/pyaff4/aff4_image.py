@@ -16,6 +16,7 @@
 import logging
 import struct
 import zlib
+from expiringdict import ExpiringDict
 
 try:
     import snappy
@@ -96,19 +97,19 @@ class AFF4Image(aff4.AFF4Stream):
         #if not volume_urn:
         #    raise IOError("Unable to find storage for urn %s" % self.urn)
 
+        self.lexicon = self.resolver.lexicon
+
         self.chunk_size = int(self.resolver.Get(
-            self.urn, lexicon.AFF4_IMAGE_CHUNK_SIZE) or self.resolver.Get(
-            self.urn, lexicon.AFF4_LEGACY_IMAGE_CHUNK_SIZE) or 32*1024)
+            self.urn, self.lexicon.chunkSize)  or 32*1024)
 
         self.chunks_per_segment = int(self.resolver.Get(
-            self.urn, lexicon.AFF4_IMAGE_CHUNKS_PER_SEGMENT) or self.resolver.Get(
-            self.urn, lexicon.AFF4_LEGACY_IMAGE_CHUNKS_PER_SEGMENT) or 1024)
+            self.urn, self.lexicon.chunksPerSegment) or 1024)
 
-        self.size = int(self.resolver.Get(self.urn, lexicon.AFF4_STREAM_SIZE) or self.resolver.Get(self.urn, lexicon.AFF4_LEGACY_STREAM_SIZE) or 0)
+        sz = self.resolver.Get(self.urn, self.lexicon.streamSize) or 0
+        self.size = int(sz)
 
         self.compression = str(self.resolver.Get(
-            self.urn, lexicon.AFF4_IMAGE_COMPRESSION) or self.resolver.Get(
-            self.urn, lexicon.AFF4_LEGACY_IMAGE_COMPRESSION) or
+            self.urn, self.lexicon.compressionMethod)  or
                                lexicon.AFF4_IMAGE_COMPRESSION_ZLIB)
 
         # A buffer for overlapped writes which do not fit into a chunk.
@@ -124,6 +125,9 @@ class AFF4Image(aff4.AFF4Stream):
         self.bevy_index = []
         self.chunk_count_in_bevy = 0
         self.bevy_number = 0
+
+        self.cache = ExpiringDict(max_len=1000, max_age_seconds=10)
+
 
     def WriteStream(self, source_stream, progress=None):
         """Copy data from a source stream into this stream."""
@@ -309,6 +313,15 @@ class AFF4Image(aff4.AFF4Stream):
         result = ""
 
         while chunks_to_read > 0:
+            r = self.cache.get(chunk_id)
+            if r != None:
+                result += r
+                chunks_to_read -= 1
+                chunk_id += 1
+                chunks_read += 1
+                continue
+
+
             bevy_id = chunk_id / self.chunks_per_segment
             bevy_urn = self.urn.Append("%08d" % bevy_id)
             bevy_index_urn = self.urn.Append("%08d/index" % bevy_id)
@@ -321,9 +334,18 @@ class AFF4Image(aff4.AFF4Stream):
 
             with self.resolver.AFF4FactoryOpen(bevy_urn) as bevy:
                 while chunks_to_read > 0:
+                    r = self.cache.get(chunk_id)
+                    if r != None:
+                        result += r
+                        chunks_to_read -= 1
+                        chunk_id += 1
+                        chunks_read += 1
+                        continue
+
                     # Read a full chunk from the bevy.
                     data = self._ReadChunkFromBevy(
                         chunk_id, bevy, bevy_index_array, index_size)
+                    self.cache[chunk_id] = data
 
                     result += data
 
@@ -360,10 +382,10 @@ class AFF4Image(aff4.AFF4Stream):
 
         bevy.Seek(bevy_index[chunk_id_in_bevy], 0)
         cbuffer = bevy.Read(compressed_chunk_size)
-        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB:
+        if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_ZLIB :
             return zlib.decompress(cbuffer)
 
-        if snappy and self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY:
+        if snappy and self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY or self.compression == lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY_SCUDETTE:
             return snappy.decompress(cbuffer)
 
         if self.compression == lexicon.AFF4_IMAGE_COMPRESSION_STORED:
@@ -393,6 +415,14 @@ class AFF4PreSImage(AFF4Image):
         result = ""
 
         while chunks_to_read > 0:
+            r = self.cache.get(chunk_id)
+            if r != None:
+                result += r
+                chunks_to_read -= 1
+                chunk_id += 1
+                chunks_read += 1
+                continue
+
             bevy_id = chunk_id / self.chunks_per_segment
             bevy_urn = self.urn.Append("%08d" % bevy_id)
             bevy_index_urn = self.urn.Append("%08d/index" % bevy_id)
@@ -405,9 +435,18 @@ class AFF4PreSImage(AFF4Image):
 
             with self.resolver.AFF4FactoryOpen(bevy_urn) as bevy:
                 while chunks_to_read > 0:
+                    r = self.cache.get(chunk_id)
+                    if r != None:
+                        result += r
+                        chunks_to_read -= 1
+                        chunk_id += 1
+                        chunks_read += 1
+                        continue
+
                     # Read a full chunk from the bevy.
                     data = self._ReadChunkFromBevy(
                         chunk_id, bevy, bevy_index_array, index_size)
+                    self.cache[chunk_id] = data
 
                     assert len(data) == self.chunk_size
                     result += data
@@ -423,6 +462,7 @@ class AFF4PreSImage(AFF4Image):
         return chunks_read, result
 
     def _ReadChunkFromBevy(self, chunk_id, bevy, bevy_index, index_size):
+
         chunk_id_in_bevy = chunk_id % self.chunks_per_segment
 
         if index_size == 0:
@@ -502,6 +542,15 @@ class AFF4SImage(AFF4Image):
         result = ""
 
         while chunks_to_read > 0:
+
+            r = self.cache.get(chunk_id)
+            if r != None:
+                result += r
+                chunks_to_read -= 1
+                chunk_id += 1
+                chunks_read += 1
+                continue
+
             bevy_id = chunk_id / self.chunks_per_segment
             bevy_urn = self.urn.Append("%08d" % bevy_id)
             bevy_index_urn = self.urn.Append("%08d.index" % bevy_id)
@@ -514,10 +563,18 @@ class AFF4SImage(AFF4Image):
 
             with self.resolver.AFF4FactoryOpen(bevy_urn) as bevy:
                 while chunks_to_read > 0:
+
+                    r = self.cache.get(chunk_id)
+                    if r != None:
+                        result += r
+                        chunks_to_read -= 1
+                        chunk_id += 1
+                        chunks_read += 1
+                        continue
                     # Read a full chunk from the bevy.
                     data = self._ReadChunkFromBevy(
                         chunk_id, bevy, bevy_index_array, index_size)
-
+                    self.cache[chunk_id] = data
                     result += data
 
                     chunks_to_read -= 1
@@ -563,6 +620,6 @@ class AFF4SImage(AFF4Image):
                 "Unable to process compression %s" % self.compression)
 
 
-
+registry.AFF4_TYPE_MAP[lexicon.AFF4_SCUDETTE_IMAGE_TYPE] = AFF4Image
 registry.AFF4_TYPE_MAP[lexicon.AFF4_LEGACY_IMAGE_TYPE] = AFF4PreSImage
 registry.AFF4_TYPE_MAP[lexicon.AFF4_IMAGE_TYPE] = AFF4SImage

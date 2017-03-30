@@ -24,7 +24,7 @@ class RepeatedStream(AFF4Stream):
 
     def Read(self, length):
         res = bytearray([self.symbol] * length)
-        return res
+        return str(res)
 
     def Write(self, data):
         raise NotImplementedError()
@@ -62,7 +62,7 @@ class ZeroStream(RepeatedStream):
 
     def Read(self, length):
         res = bytearray(length)
-        return res
+        return str(res)
 
 
 class RepeatedStringStream(AFF4Stream):

@@ -126,6 +126,9 @@ class XSDInteger(RDFValue):
     def __int__(self):
         return self.value
 
+    def __long__(self):
+        return long(self.value)
+
     def __cmp__(self, o):
         return self.value - o
 
