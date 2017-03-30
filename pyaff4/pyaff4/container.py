@@ -35,16 +35,16 @@ class Container:
                 # it's a new zipfile
                 raise IOError("Not an AFF4 Volume")
             try:
-                # AFF4 Std v1.0 introducted the version file
+                # AFF4 Std v1.0 introduced the version file
                 version = zip_file.OpenZipSegment("version.txt")
                 resolver.Close(version)
                 return lexicon.standard
             except:
                 if str(resolver.aff4NS) == lexicon.AFF4_NAMESPACE:
-                    # Rekall defined the new AFF4 namespace
+                    # Rekall defined the new AFF4 namespace post the Wirespeed paper
                     return lexicon.scudette
                 else:
-                    # Evimetry 1.x and 2.x stayed with the original namespace
+                    # Wirespeed (Evimetry) 1.x and Evimetry 2.x stayed with the original namespace
                     return lexicon.legacy
 
     def isMap(self, stream):
