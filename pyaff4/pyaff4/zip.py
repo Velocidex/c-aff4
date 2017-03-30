@@ -17,6 +17,7 @@
 import logging
 import StringIO
 import zlib
+import struct
 
 from pyaff4 import aff4
 from pyaff4 import aff4_file
@@ -46,7 +47,7 @@ class EndCentralDirectory(struct_parser.CreateStruct(
         uint16_t total_entries_in_cd_on_disk;
         uint16_t total_entries_in_cd;
         int32_t size_of_cd = -1;
-        int32_t offset_of_cd = -1;
+        uint32_t offset_of_cd = -1;
         uint16_t comment_len = 0;
         """)):
 
@@ -95,7 +96,7 @@ class CDFileHeader(struct_parser.CreateStruct(
         uint16_t disk_number_start = 0;
         uint16_t internal_file_attr = 0;
         uint32_t external_file_attr = 0644 << 16L;
-        int32_t relative_offset_local_header = -1;
+        uint32_t relative_offset_local_header = -1;
         """)):
     def IsValid(self):
         return self.magic == 0x2014b50
@@ -120,18 +121,50 @@ class ZipFileHeader(struct_parser.CreateStruct(
     def IsValid(self):
         return self.magic == 0x4034b50
 
+# see APPNOTE.txt 4.5.3 -Zip64 Extended Information Extra Field (0x0001):
+class Zip64FileHeaderExtensibleField:
 
-class Zip64FileHeaderExtensibleField(struct_parser.CreateStruct(
-        "Zip64FileHeaderExtensibleField_t",
-        """
-        uint16_t header_id = 1;
-        uint16_t data_size = 28;
-        uint64_t file_size;
-        uint64_t compress_size;
-        uint64_t relative_offset_local_header;
-        uint32_t disk_number_start = 0;
-        """)):
-    pass
+    header_id = -1                      # uint16_t
+    data_size = -1                      # uint16_t
+    file_size = -1                      # uint64_t
+    compress_size = -1                  # uint64_t
+    relative_offset_local_header = -1   # uint64_t
+    disk_number_start = -1;             # uint32_t
+
+    @classmethod
+    def FromBuffer(cls, fileRecord, buffer):
+        o = cls()
+        o.header_id = struct.unpack("H", buffer[0:2])[0]
+        if  o.header_id != 1:
+            raise IOError("Invalid Zip64 Extended Information Extra Field")
+
+        o.data_size = struct.unpack("H", buffer[2:4])[0]
+
+        # the original zip writer implementation mistakenly dumps all fields to this struct, despite
+        # whether the corresponding fields are flagged
+        # we provide a work around through the following flag to support Pre AFF4 v1 Standard Images
+        legacy_compatible = False
+        if o.data_size == 28:
+            legacy_compatible = True
+
+        offset = 4
+        if fileRecord.file_size == 0xFFFFFFFF or fileRecord.compress_size == 0xFFFFFFFF or legacy_compatible:
+            o.file_size = struct.unpack("Q", buffer[offset:offset + 8])[0]
+            offset += 8
+            o.compress_size = struct.unpack("Q", buffer[offset:offset + 8])[0]
+            offset += 8
+
+        if fileRecord.relative_offset_local_header == 0xFFFFFFFF or legacy_compatible:
+            o.relative_offset_local_header = struct.unpack("Q", buffer[offset:offset + 8])[0]
+            offset += 8
+
+        if fileRecord.disk_number_start == 0xFFFF or legacy_compatible:
+            o.disk_number_start = struct.unpack("I", buffer[offset:offset + 4])[0]
+            offset += 4
+
+        return (o, offset)
+
+
 
 class Zip64EndCD(struct_parser.CreateStruct(
         "Zip64EndCD_t",
@@ -143,14 +176,35 @@ class Zip64EndCD(struct_parser.CreateStruct(
         uint32_t number_of_disk = 0;
         uint32_t number_of_disk_with_cd = 0;
         uint64_t number_of_entries_in_volume;
-        uint64_t number_of_entries_in_total;
+        uint64_t total_entries_in_cd;
         uint64_t size_of_cd;
         uint64_t offset_of_cd;
         """)):
 
+    magic_string = 'PK\x06\x06'
+
     def IsValid(self):
         return self.magic == 0x06064b50
 
+    @classmethod
+    def FromBuffer(cls, buffer):
+        """Instantiate an EndCentralDirectory from this buffer."""
+        # Not enough data to contain an EndCentralDirectory
+        if len(buffer) > cls.sizeof():
+            # Scan the buffer backwards for an End of Central Directory magic
+            end = len(buffer) - cls.sizeof() + 4
+            while True:
+                index = buffer.rfind(cls.magic_string, 0, end)
+                if index < 0:
+                    break
+
+                end_cd = cls(buffer[index:])
+                if end_cd.IsValid():
+                    return end_cd, index
+
+                end = index
+
+        raise IOError("Unable to find EndCentralDirectory")
 
 class Zip64CDLocator(struct_parser.CreateStruct(
         "Zip64CDLocator_t",
@@ -371,11 +425,10 @@ class ZipFile(aff4.AFF4Volume):
             buffer = backing_store.Read(BUFF_SIZE)
 
             end_cd, buffer_offset = EndCentralDirectory.FromBuffer(buffer)
-            ecd_real_offset += buffer_offset
-
-            LOGGER.info("Found ECD at %#x", ecd_real_offset)
 
             urn_string = None
+
+            ecd_real_offset += buffer_offset
 
             # Fetch the volume comment.
             if end_cd.comment_len > 0:
@@ -384,6 +437,15 @@ class ZipFile(aff4.AFF4Volume):
 
                 LOGGER.info("Loaded AFF4 volume URN %s from zip file.",
                             urn_string)
+
+            #if end_cd.size_of_cd == -1:
+            #    end_cd, buffer_offset = Zip64EndCD.FromBuffer(buffer)
+
+
+
+            #LOGGER.info("Found ECD at %#x", ecd_real_offset)
+
+
 
             # There is a catch 22 here - before we parse the ZipFile we dont
             # know the Volume's URN, but we need to know the URN so the
@@ -407,7 +469,7 @@ class ZipFile(aff4.AFF4Volume):
             directory_number_of_entries = end_cd.total_entries_in_cd
 
             # Traditional zip file - non 64 bit.
-            if directory_offset > 0:
+            if directory_offset > 0 and directory_offset != 0xffffffff:
                 # The global difference between the zip file offsets and real
                 # file offsets. This is non zero when the zip file was appended
                 # to another file.
@@ -483,22 +545,24 @@ class ZipFile(aff4.AFF4Volume):
                     lastmoddate=entry.dosdate,
                     lastmodtime=entry.dostime)
 
-                # Zip64 local header - parse the extra field.
-                if zip_info.local_header_offset < 0:
-                    # Parse all the extra field records.
-                    real_end_of_extra = (
-                        backing_store.Tell() + entry.extra_field_len)
+                # Zip64 local header - parse the Zip64 extended information extra field.
+                # This field isnt a struct, its a serialization
+                #if zip_info.local_header_offset < 0 or zip_info.local_header_offset == 0xffffffff:
+                if entry.extra_field_len > 0:
+                    extrabuf = backing_store.Read(entry.extra_field_len)
 
-                    while backing_store.Tell() < real_end_of_extra:
-                        extra = Zip64FileHeaderExtensibleField(
-                            backing_store.Read(entry.extra_field_len))
+                    extra, readbytes = Zip64FileHeaderExtensibleField.FromBuffer(entry, extrabuf)
+                    extrabuf = extrabuf[readbytes:]
 
-                        if extra.header_id == 1:
+                    if extra.header_id == 1:
+                        if extra.relative_offset_local_header != -1:
                             zip_info.local_header_offset = (
                                 extra.relative_offset_local_header)
+                        if extra.file_size != -1:
                             zip_info.file_size = extra.file_size
+                        if extra.compress_size != -1:
                             zip_info.compress_size = extra.compress_size
-                            break
+                        #break
 
                 if zip_info.local_header_offset >= 0:
                     LOGGER.info("Found file %s @ %#x", zip_info.filename,

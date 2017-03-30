@@ -18,39 +18,48 @@ from pyaff4 import data_store
 from pyaff4 import hashes
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
+from pyaff4.container import Container
 import rdflib
 import zip
 import hashlib
 
 
 class LinearHasher:
-    def __init__(self, resolver, aff4NSprefix, listener=None):
-        self.resolver = resolver
+    def __init__(self, listener=None):
         if listener == None:
             self.listener = ValidationListener()
         else:
             self.listener = listener
         self.delegate = None
-        self.affNS = aff4NSprefix
 
     def hash(self, filename, mapURI, hashDataType):
-        with zip.ZipFile.NewZipFile(self.resolver, filename) as zip_file:
-            try:
-                version = zip_file.OpenZipSegment("version.txt")
-                self.delegate = InterimStdLinearHasher(self.resolver, self.affNS, self.listener)
-            except:
-                self.delegate = PreStdLinearHasher(self.resolver, self.affNS, self.listener)
+        lex = Container.identify(filename)
+        resolver = data_store.MemoryDataStore(lex)
+
+        with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
+            if lex == lexicon.standard:
+                self.delegate = InterimStdLinearHasher(resolver, lex, self.listener)
+            elif lex == lexicon.legacy:
+                self.delegate = PreStdLinearHasher(resolver, lex, self.listener)
+            elif lex == lexicon.scudette:
+                self.delegate = ScudetteLinearHasher(resolver, lex, self.listener)
+            else:
+                raise ValueError
 
             return self.delegate.doHash(mapURI, hashDataType)
 
     def hashMulti(self, filenamea, filenameb, mapURI, hashDataType):
-        with zip.ZipFile.NewZipFile(self.resolver, filenamea) as zip_filea:
-            with zip.ZipFile.NewZipFile(self.resolver, filenameb) as zip_fileb:
-                try:
-                    version = zip_filea.OpenZipSegment("version.txt")
-                    self.delegate = InterimStdLinearHasher(self.resolver, self.affNS, self.listener)
-                except:
-                    self.delegate = PreStdLinearHasher(self.resolver, self.affNS, self.listener)
+        lex = Container.identify(filenamea)
+        resolver = data_store.MemoryDataStore(lex)
+
+        with zip.ZipFile.NewZipFile(resolver, filenamea) as zip_filea:
+            with zip.ZipFile.NewZipFile(resolver, filenameb) as zip_fileb:
+                if lex == lexicon.standard:
+                    self.delegate = InterimStdLinearHasher(resolver, lex, self.listener)
+                elif lex == lexicon.legacy:
+                    self.delegate = PreStdLinearHasher(resolver, lex, self.listener)
+                else:
+                    raise ValueError
 
                 return self.delegate.doHash(mapURI, hashDataType)
 
@@ -74,24 +83,29 @@ class LinearHasher:
                 return hashes.newImmutableHash(b, hashDataType)
         raise Exception("IllegalState")
 
-class PreStdLinearHasher(LinearHasher):
-    def __init__(self, resolver, aff4NSprefix, listener=None):
-        LinearHasher.__init__(self, resolver, aff4NSprefix, listener)
-
     def isMap(self, stream):
         types = self.resolver.QuerySubjectPredicate(stream, lexicon.AFF4_TYPE)
-        if self.affNS + "map" in types:
+        tt = list(types)
+        if self.lexicon.map in tt:
             return True
 
         return False
+
+class PreStdLinearHasher(LinearHasher):
+    def __init__(self, resolver, lex, listener=None):
+        LinearHasher.__init__(self, listener)
+        self.lexicon = lex
+        self.resolver = resolver
+
 
 class InterimStdLinearHasher(LinearHasher):
-    def __init__(self, resolver, aff4NSprefix, listener=None):
-        LinearHasher.__init__(self, resolver, aff4NSprefix, listener)
+    def __init__(self, resolver, lex, listener=None):
+        LinearHasher.__init__(self, listener)
+        self.lexicon = lex
+        self.resolver = resolver
 
-    def isMap(self, stream):
-        types = self.resolver.QuerySubjectPredicate(stream, lexicon.AFF4_TYPE)
-        if self.affNS + "Map" in types:
-            return True
-
-        return False
+class ScudetteLinearHasher(LinearHasher):
+    def __init__(self, resolver, lex, listener=None):
+        LinearHasher.__init__(self, listener)
+        self.lexicon = lex
+        self.resolver = resolver

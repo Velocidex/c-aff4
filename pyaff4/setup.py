@@ -58,6 +58,8 @@ setup(
         "aff4-snappy == 0.5",
         "rdflib == 4.2.1",
         "intervaltree == 2.1.0",
+        "pyblake2 == 0.0.3",
+        "expiringdict == 1.1.3"
     ],
     extras_require=dict(
         cloud="google-api-python-client"

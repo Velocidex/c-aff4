@@ -3,5 +3,5 @@ dependent_versions:
 - pyaff4/_version.py
 version_data:
   post: '3'
-  rc: '0'
-  version: '0.24'
+  rc: '1'
+  version: '0.25'

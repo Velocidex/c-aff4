@@ -18,11 +18,14 @@ import intervaltree
 import logging
 import struct
 
+
 from pyaff4 import aff4
 from pyaff4 import aff4_image
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
+
+
 
 LOGGER = logging.getLogger("pyaff4")
 
@@ -39,6 +42,10 @@ class Range(collections.namedtuple(
     def FromSerialized(cls, string):
         return cls(*struct.unpack(cls.format_str, string))
 
+    @classmethod
+    def FromList(cls, list):
+        return cls(*list)
+
     def Serialize(self):
         return struct.pack(self.format_str, *self)
 
@@ -50,9 +57,9 @@ class Range(collections.namedtuple(
         return self.target_offset + offset - self.map_offset
 
     def __repr__(self):
-        return "<[%s:%s)->[%s:%s)@%s>" % (
-            self.map_offset, self.map_end,
-            self.target_offset, self.target_offset_at_map_offset(self.map_end),
+        return "<[%x:%x)->[%x:%x)@%s>" % (
+            self.map_offset, self.length,
+            self.target_offset, self.length,
             self.target_id)
 
     def Merge(self, other):
@@ -199,8 +206,6 @@ class AFF4Map(aff4.AFF4Stream):
         try:
             with self.resolver.AFF4FactoryOpen(map_idx_urn) as map_idx:
                 self.targets = map_idx.Read(map_idx.Size()).splitlines()
-                print "*** Map targets ***"
-                print self.targets
 
             with self.resolver.AFF4FactoryOpen(map_urn) as map_stream:
                 read_length = struct.calcsize(Range.format_str)
@@ -209,8 +214,10 @@ class AFF4Map(aff4.AFF4Stream):
                     if not data:
                         break
                     range = self.deserializeMapPoint(data)
+                    print str(range)
                     if range.length > 0:
                         self.tree.addi(range.map_offset, range.map_end, range)
+
 
         except IOError:
             pass
@@ -247,6 +254,9 @@ class AFF4Map(aff4.AFF4Stream):
             finally:
                 length -= length_to_read_in_target
                 self.readptr += length_to_read_in_target
+
+
+
 
         if result:
             return result
@@ -416,7 +426,71 @@ class AFF4Map(aff4.AFF4Stream):
         self.target_idx_map.clear()
         self.tree.clear()
 
+# Rekall/libAFF4 accidentally swapped the struct in Evimetry's update map
+class ScudetteAFF4Map(AFF4Map):
+
+    def deserializeMapPoint(self, data):
+        # swap them back
+        range = Range.FromSerialized(data)
+        return Range.FromList([range[0], range[2], range[1], range[3]])
 
 
-registry.AFF4_TYPE_MAP[lexicon.AFF4_MAP_TYPE] = AFF4Map
+class AFF4Map2(AFF4Map):
+    def LoadFromURN(self):
+        map_urn = self.urn.Append("map")
+        map_idx_urn = self.urn.Append("idx")
+
+        # Parse the map out of the map stream. If the stream does not exist yet
+        # we just start with an empty map.
+        try:
+            with self.resolver.AFF4FactoryOpen(map_idx_urn) as map_idx:
+                self.targets = map_idx.Read(map_idx.Size()).splitlines()
+
+            with self.resolver.AFF4FactoryOpen(map_urn) as map_stream:
+                format_str = "<QQQI"
+                bufsize = map_stream.Size()
+                buf = map_stream.Read(bufsize)
+
+                read_length = struct.calcsize(Range.format_str)
+
+                lastUpperOffset = -1
+                lastLowerOffset =  -1
+                lastLength = -1
+                lastTarget = -1
+
+                offset = 0
+                while offset < bufsize:
+                    (upperOffset, length, lowerOffset, target) = struct.unpack_from(format_str, buf, offset)
+                    offset += read_length
+
+                    if lastUpperOffset == -1:
+                        lastUpperOffset = upperOffset
+                        lastLowerOffset = lowerOffset
+                        lastLength = length
+                        lastTarget = target
+                        continue
+
+                    if lastUpperOffset + lastLength == upperOffset and lastLowerOffset + lastLength == lowerOffset and lastTarget == target:
+                        # these are adjoining
+                        lastLength = lastLength + length
+                        continue
+                    else:
+                        range = Range.FromList([lastUpperOffset, lastLength, lastLowerOffset, lastTarget])
+                        if range.length > 0:
+                            self.tree.addi(range.map_offset, range.map_end, range)
+                        lastUpperOffset = upperOffset
+                        lastLowerOffset = lowerOffset
+                        lastLength = length
+                        lastTarget = target
+
+                range = Range.FromList([lastUpperOffset, lastLength, lastLowerOffset, lastTarget])
+                if range.length > 0:
+                    self.tree.addi(range.map_offset, range.map_end, range)
+
+        except IOError:
+            pass
+
+registry.AFF4_TYPE_MAP[lexicon.AFF4_MAP_TYPE] = AFF4Map2
 registry.AFF4_TYPE_MAP[lexicon.AFF4_LEGACY_MAP_TYPE] = AFF4Map
+registry.AFF4_TYPE_MAP[lexicon.AFF4_SCUDETTE_MAP_TYPE] = ScudetteAFF4Map
+

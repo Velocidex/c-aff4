@@ -36,92 +36,77 @@ class ValidatorTest(unittest.TestCase):
     stripedLinearB = referenceImagesPath + "/AFF4Std/Striped/Base-Linear_2.aff4"
 
     def testBlockHashPreStdLinearImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_LEGACY_NAMESPACE)
-        validator = Validator(resolver, lexicon.AFF4_LEGACY_NAMESPACE)
+        validator = Validator()
         validator.validateContainer(self.preStdLinear)
 
     def testLinearHashPreStdLinearImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_LEGACY_NAMESPACE)
-        validator = LinearHasher(resolver, lexicon.AFF4_LEGACY_NAMESPACE)
+        validator = LinearHasher()
         hash = validator.hash(self.preStdLinear, "aff4://085066db-6315-4369-a87e-bdc7bc777d45", lexicon.HASH_SHA1)
         print dir(hash)
         print hash.value
         self.assertEqual(hash.value, "5d5f183ae7355b8dc8938b67aab77c0215c29ab4")
 
     def testLinearHashPreStdPartialAllocatedImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_LEGACY_NAMESPACE)
-        validator = LinearHasher(resolver, lexicon.AFF4_LEGACY_NAMESPACE)
+        validator = LinearHasher()
         hash = validator.hash(self.preStdAllocated, "aff4://48a85e17-1041-4bcc-8b2b-7fb2cd4f815b", lexicon.HASH_SHA1)
         print dir(hash)
         print hash.value
         self.assertEqual(hash.value, "a9f21b04a0a77613a5a34ecdd3af269464984035")
 
     def testBlockHashPreStdPartialAllocatedImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_LEGACY_NAMESPACE)
-        validator = Validator(resolver, lexicon.AFF4_LEGACY_NAMESPACE)
+        validator = Validator()
         validator.validateContainer(self.preStdAllocated)
 
     def testBlockHashStdLinearImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = Validator(resolver, lexicon.AFF4_NAMESPACE)
+        validator = Validator()
         validator.validateContainer(self.stdLinear)
 
     def testBlockHashStdLinearReadError(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = Validator(resolver, lexicon.AFF4_NAMESPACE)
+        validator = Validator()
         validator.validateContainer(self.stdLinearReadError)
 
     def testHashStdLinearImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = LinearHasher(resolver, lexicon.AFF4_NAMESPACE)
+        validator = LinearHasher()
         hash = validator.hash(self.stdLinear, "aff4://fcbfdce7-4488-4677-abf6-08bc931e195b", lexicon.HASH_SHA1)
         print dir(hash)
         print hash.value
         self.assertEqual(hash.value, "7d3d27f667f95f7ec5b9d32121622c0f4b60b48d")
 
     def testHashStdLinearReadError(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = LinearHasher(resolver, lexicon.AFF4_NAMESPACE)
+        validator = LinearHasher()
         hash = validator.hash(self.stdLinearReadError, "aff4://b282d5f4-333a-4f6a-b96f-0e5138bb18c8", lexicon.HASH_SHA1)
         print dir(hash)
         print hash.value
         self.assertEqual(hash.value, "67e245a640e2784ead30c1ff1a3f8d237b58310f")
 
     def testHashStdPartialAllocatedImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = LinearHasher(resolver, lexicon.AFF4_NAMESPACE)
+        validator = LinearHasher()
         hash = validator.hash(self.stdAllocated, "aff4://e9cd53d3-b682-4f12-8045-86ba50a0239c", lexicon.HASH_SHA1)
         self.assertEqual(hash.value, "e8650e89b262cf0b4b73c025312488d5a6317a26")
 
     def testBlockHashStdLinearStriped(self):
-        resolver = data_store.MemoryDataStore()
-        validator = Validator(resolver, lexicon.AFF4_NAMESPACE)
+        validator = Validator()
         validator.validateContainerMultiPart(self.stripedLinearB, self.stripedLinearA)
 
     def testHashStdLinearStriped(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = LinearHasher(resolver, lexicon.AFF4_NAMESPACE)
+        validator = LinearHasher()
         hash = validator.hashMulti(self.stripedLinearB, self.stripedLinearA, "aff4://2dd04819-73c8-40e3-a32b-fdddb0317eac", lexicon.HASH_SHA1)
         self.assertEqual(hash.value, "7d3d27f667f95f7ec5b9d32121622c0f4b60b48d")
 
     def testBlockHashStdContainerPartialAllocated(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = Validator(resolver, lexicon.AFF4_NAMESPACE)
+        validator = Validator()
         validator.validateContainer(self.stdAllocated)
 
     def testBlockHashPreStdLinearImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_LEGACY_NAMESPACE)
-        validator = Validator(resolver, lexicon.AFF4_LEGACY_NAMESPACE)
+        validator = Validator()
         validator.validateContainer(self.preStdLinear)
 
     def testBlockHashStdLinearAllHashesImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = Validator(resolver, lexicon.AFF4_NAMESPACE)
+        validator = Validator()
         validator.validateContainer(self.stdLinearAllHashes)
 
     def testHashStdLinearAllHashesImage(self):
-        resolver = data_store.MemoryDataStore(lexicon.AFF4_NAMESPACE)
-        validator = LinearHasher(resolver, lexicon.AFF4_NAMESPACE)
+        validator = LinearHasher()
         hash = validator.hash(self.stdLinearAllHashes, "aff4://2a497fe5-0221-4156-8b4d-176bebf7163f", lexicon.HASH_SHA1)
         print dir(hash)
         print hash.value

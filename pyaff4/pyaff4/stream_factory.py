@@ -17,22 +17,22 @@ from pyaff4 import rdfvalue
 import re
 
 class StreamFactory:
-    def __init__(self, resolver, aff4NS):
-        self.aff4NS = aff4NS
+    def __init__(self, resolver, lex):
+        self.lexicon = lex
         self.resolver = resolver
         self.symbolmatcher = re.compile("[0-9A-F]{2}")
-        self.fixedSymbolics = [ self.aff4NS + "Zero",
-                                self.aff4NS + "UnknownData",
-                                self.aff4NS + "UnreadableData",
-                                self.aff4NS + "NoData"]
+        self.fixedSymbolics = [ self.lexicon.base + "Zero",
+                                self.lexicon.base + "UnknownData",
+                                self.lexicon.base + "UnreadableData",
+                                self.lexicon.base + "NoData"]
 
 # TODO: Refactor the below classes to split the subname from the NS
 # then do matching only on the subnname
 
 class PreStdStreamFactory(StreamFactory):
-    def __init__(self, resolver, aff4NS):
-        StreamFactory.__init__(self, resolver, aff4NS)
-        self.fixedSymbolics.append(self.aff4NS + "FF")
+    def __init__(self, resolver, lex):
+        StreamFactory.__init__(self, resolver, lex)
+        self.fixedSymbolics.append(self.lexicon.base + "FF")
 
     def isSymbolicStream(self, urn):
         if type(urn) == rdfvalue.URN:
@@ -45,14 +45,14 @@ class PreStdStreamFactory(StreamFactory):
 
             # Pre-Std Evimetry Symbolic Streams are of the form
             # http://afflib.org/2009#FF
-            if urn.startswith(self.aff4NS) and len(urn) == len(self.aff4NS) + 2:
+            if urn.startswith(self.lexicon.base) and len(urn) == len(self.lexicon.base) + 2:
                 # now verify symbolic part
-                shortName = urn[len(self.aff4NS):].upper()
+                shortName = urn[len(self.lexicon.base):].upper()
 
                 if self.symbolmatcher.match(shortName) != None:
                     return True
 
-            if urn.startswith(self.aff4NS + "SymbolicStream"):
+            if urn.startswith(self.lexicon.base + "SymbolicStream"):
                 return True
 
             if urn.startswith("http://afflib.org/2012/SymbolicStream#"):
@@ -64,23 +64,23 @@ class PreStdStreamFactory(StreamFactory):
         if type(urn) == rdfvalue.URN:
             urn = str(urn)
 
-        if urn == self.aff4NS + "Zero":
+        if urn == self.lexicon.base + "Zero":
             stream =  ZeroStream(resolver=self.resolver, urn=urn)
             stream.symbol = 0
             return stream
 
-        if urn == self.aff4NS + "FF":
+        if urn == self.lexicon.base + "FF":
             stream =  RepeatedStream(resolver=self.resolver, urn=urn)
             stream.symbol = 255
             return stream
 
-        if urn == self.aff4NS + "UnknownData":
+        if urn == self.lexicon.base + "UnknownData":
             stream =  RepeatedStringStream(resolver=self.resolver, urn=urn)
             stream.repeatedString = "UNKNOWN"
             return stream
 
-        if urn.startswith(self.aff4NS + "SymbolicStream") and len(urn) == len(self.aff4NS + "SymbolicStream") + 2:
-            shortName = urn[len(self.aff4NS + "SymbolicStream"):].upper()
+        if urn.startswith(self.lexicon.base + "SymbolicStream") and len(urn) == len(self.lexicon.base + "SymbolicStream") + 2:
+            shortName = urn[len(self.lexicon.base + "SymbolicStream"):].upper()
             value = shortName.decode('hex')
             stream = RepeatedStream(resolver=self.resolver, urn=urn)
             stream.symbol = value
@@ -93,8 +93,8 @@ class PreStdStreamFactory(StreamFactory):
             stream.symbol = value
             return stream
 
-        if urn.startswith(self.aff4NS) and len(urn) == len(self.aff4NS) + 2:
-            shortName = urn[len(self.aff4NS):].upper()
+        if urn.startswith(self.lexicon.base) and len(urn) == len(self.lexicon.base) + 2:
+            shortName = urn[len(self.lexicon.base):].upper()
             value = shortName.decode('hex')
             stream = RepeatedStream(resolver=self.resolver, urn=urn)
             stream.symbol = value
@@ -114,7 +114,7 @@ class StdStreamFactory(StreamFactory):
             if urn in self.fixedSymbolics:
                 return True
 
-            if urn.startswith(self.aff4NS + "SymbolicStream"):
+            if urn.startswith(self.lexicon.base + "SymbolicStream"):
                 return True
 
             return False
@@ -123,23 +123,23 @@ class StdStreamFactory(StreamFactory):
         if type(urn) == rdfvalue.URN:
             urn = str(urn)
 
-        if urn == self.aff4NS + "Zero":
+        if urn == self.lexicon.base + "Zero":
             stream =  ZeroStream(resolver=self.resolver, urn=urn)
             stream.symbol = 0
             return stream
 
-        if urn == self.aff4NS + "UnknownData":
+        if urn == self.lexicon.base + "UnknownData":
             stream =  RepeatedStringStream(resolver=self.resolver, urn=urn)
             stream.repeatedString = "UNKNOWN"
             return stream
 
-        if urn == self.aff4NS + "UnreadableData":
+        if urn == self.lexicon.base + "UnreadableData":
             stream =  RepeatedStringStream(resolver=self.resolver, urn=urn)
             stream.repeatedString = "UNREADABLEDATA"
             return stream
 
-        if urn.startswith(self.aff4NS + "SymbolicStream") and len(urn) == len(self.aff4NS + "SymbolicStream") + 2:
-            shortName = urn[len(self.aff4NS + "SymbolicStream"):].upper()
+        if urn.startswith(self.lexicon.base + "SymbolicStream") and len(urn) == len(self.lexicon.base + "SymbolicStream") + 2:
+            shortName = urn[len(self.lexicon.base + "SymbolicStream"):].upper()
             value = shortName.decode('hex')
             stream = RepeatedStream(resolver=self.resolver, urn=urn)
             stream.symbol = value

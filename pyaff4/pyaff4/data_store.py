@@ -71,7 +71,7 @@ class AFF4ObjectCache(object):
         max_items = size or self.max_items
         while len(self.lru_map) > max_items:
             older_item = self.lru_list.prev
-            LOGGER.debug("Trimming %s from cache" % older_item.key)
+            #LOGGER.debug("Trimming %s from cache" % older_item.key)
 
             self.lru_map.pop(older_item.key)
             older_item.unlink()
@@ -194,8 +194,8 @@ class AFF4ObjectCache(object):
 
 
 class MemoryDataStore(object):
-    def __init__(self, aff4ns=lexicon.AFF4_NAMESPACE):
-        self.aff4NS = aff4ns
+    def __init__(self, lex=lexicon.standard):
+        self.lexicon = lex
         self.suppressed_rdftypes = dict()
         self.suppressed_rdftypes[lexicon.AFF4_ZIP_SEGMENT_TYPE] = set((
             lexicon.AFF4_STORED, lexicon.AFF4_TYPE))
@@ -206,10 +206,10 @@ class MemoryDataStore(object):
         self.ObjectCache = AFF4ObjectCache(10)
         self.flush_callbacks = {}
 
-        if self.aff4NS == lexicon.AFF4_LEGACY_NAMESPACE:
-            self.streamFactory = PreStdStreamFactory(self, self.aff4NS)
+        if self.lexicon == lexicon.legacy:
+            self.streamFactory = PreStdStreamFactory(self, self.lexicon)
         else:
-            self.streamFactory = StdStreamFactory(self, self.aff4NS)
+            self.streamFactory = StdStreamFactory(self, self.lexicon)
 
 
     def __enter__(self):
@@ -266,7 +266,7 @@ class MemoryDataStore(object):
         return obj
 
     def Return(self, obj):
-        LOGGER.debug("Returning %s" % obj.urn)
+        #LOGGER.debug("Returning %s" % obj.urn)
         self.ObjectCache.Return(obj)
 
     def Close(self, obj):
@@ -303,7 +303,7 @@ class MemoryDataStore(object):
 
     def LoadFromTurtle(self, stream):
         data = stream.read(1000000)
-        print data
+
         g = rdflib.Graph()
         g.parse(data=data, format="turtle")
 
@@ -324,6 +324,11 @@ class MemoryDataStore(object):
 
             self.Add(urn, attr, value)
 
+        # look for the AFF4 namespace defined in the turtle
+        for (a,b) in g.namespace_manager.namespaces():
+            if str(b) == lexicon.AFF4_NAMESPACE or str(b) == lexicon.AFF4_LEGACY_NAMESPACE:
+                self.aff4NS = b
+
 
 
     def AFF4FactoryOpen(self, urn):
@@ -333,7 +338,7 @@ class MemoryDataStore(object):
         cached_obj = self.ObjectCache.Get(urn)
         if cached_obj:
             cached_obj.Prepare()
-            LOGGER.debug("AFF4FactoryOpen (Cached): %s" % urn)
+            #LOGGER.debug("AFF4FactoryOpen (Cached): %s" % urn)
             return cached_obj
 
         if self.streamFactory.isSymbolicStream(urn):
@@ -366,7 +371,7 @@ class MemoryDataStore(object):
         # Cache the object for next time.
         self.ObjectCache.Put(obj, True)
 
-        LOGGER.debug("AFF4FactoryOpen (new instance): %s" % urn)
+        #LOGGER.debug("AFF4FactoryOpen (new instance): %s" % urn)
         obj.Prepare()
         return obj
 
@@ -410,8 +415,10 @@ class MemoryDataStore(object):
                     if type(value) == type([]):
                         if object in value:
                             yield subject
-                        elif object == value:
-                            yield subject
+                    elif object == value:
+                        yield subject
+                    elif object == str(value):
+                        yield subject
 
     def QuerySubjectPredicate(self, subject, predicate):
         for s, data in self.store.iteritems():

@@ -92,6 +92,7 @@ AFF4_ZIP_SEGMENT_TYPE = (AFF4_NAMESPACE + "zip_segment")
 # AFF4 Image Stream - stores a stream using Bevies.
 AFF4_IMAGE_TYPE = (AFF4_NAMESPACE + "ImageStream")
 AFF4_LEGACY_IMAGE_TYPE = (AFF4_LEGACY_NAMESPACE + "stream")
+AFF4_SCUDETTE_IMAGE_TYPE = (AFF4_NAMESPACE + "image")
 AFF4_IMAGE_CHUNK_SIZE = (AFF4_NAMESPACE + "chunkSize")
 AFF4_LEGACY_IMAGE_CHUNK_SIZE = (AFF4_LEGACY_NAMESPACE + "chunkSize")
 AFF4_IMAGE_CHUNKS_PER_SEGMENT = (AFF4_NAMESPACE + "chunksInSegment")
@@ -100,11 +101,14 @@ AFF4_IMAGE_COMPRESSION = (AFF4_NAMESPACE + "compressionMethod")
 AFF4_LEGACY_IMAGE_COMPRESSION = (AFF4_LEGACY_NAMESPACE + "CompressionMethod")
 AFF4_IMAGE_COMPRESSION_ZLIB = "https://www.ietf.org/rfc/rfc1950.txt"
 AFF4_IMAGE_COMPRESSION_SNAPPY = "http://code.google.com/p/snappy/"
+AFF4_IMAGE_COMPRESSION_SNAPPY_SCUDETTE = "https://github.com/google/snappy"
 AFF4_IMAGE_COMPRESSION_STORED = (AFF4_NAMESPACE + "compression/stored")
 
 # AFF4Map - stores a mapping from one stream to another.
 AFF4_MAP_TYPE = (AFF4_NAMESPACE + "Map")
 AFF4_LEGACY_MAP_TYPE = (AFF4_LEGACY_NAMESPACE + "map")
+AFF4_SCUDETTE_MAP_TYPE = (AFF4_NAMESPACE + "map")
+
 
 # Categories describe the general type of an image.
 AFF4_CATEGORY = (AFF4_NAMESPACE + "category")
@@ -140,3 +144,73 @@ HASH_MD5 = rdflib.URIRef("http://aff4.org/Schema#MD5")
 HASH_BLAKE2B = rdflib.URIRef("http://aff4.org/Schema#Blake2b")
 
 HASH_BLOCKMAPHASH_SHA512 = rdflib.URIRef("http://aff4.org/Schema#blockMapHashSHA512")
+
+class Lexicon:
+    def __init__(self):
+        pass
+
+class StdLexicon(Lexicon):
+    base = AFF4_NAMESPACE
+    map = base + "Map"
+    Image = base + "Image"
+    stored = base + "stored"
+    target = base + "target"
+    contains = base + "contains"
+    dataStream = base + "dataStream"
+    blockMapHash = base + "blockMapHash"
+    dependentStream = base + "dependentStream"
+    mapPointHash = base + "mapPointHash"
+    mapIdxHash = base + "mapIdxHash"
+    mapPathHash = base + "mapPathHash"
+    blockHashesHash = base + "blockHashesHash"
+    mapHash = base + "mapHash"
+    hash = base + "hash"
+    chunksPerSegment = base + "chunksInSegment"
+    chunkSize = base + "chunkSize"
+    streamSize = base + "size"
+    compressionMethod = base + "compressionMethod"
+    memoryPageTableEntryOffset = base + "memoryPageTableEntryOffset"
+    ntKernelBase = base + "NTKernelBase"
+    OSXKernelPhysicalOffset = base + "OSXKernelPhysicalOffset"
+    OSXKALSRSlide = base + "OSXKALSRSlide"
+    OSXDTBPhysicalOffset = base + "OSXDTBPhysicalOffset"
+
+
+
+class LegacyLexicon(Lexicon):
+    base = AFF4_LEGACY_NAMESPACE
+    map = base + "map"
+    stored = base + "stored"
+    Image = base + "Image"
+    blockHashesHash = base + "blockHashesHash"
+    mapPointHash = base + "mapPointHash"
+    mapIdxHash = base + "mapIdxHash"
+    mapPathHash = base + "mapPathHash"
+    mapHash = base + "mapHash"
+    hash = base + "hash"
+    chunksPerSegment = base + "chunksInSegment"
+    chunkSize = base + "chunkSize"
+    streamSize = base + "size"
+    compressionMethod = base + "CompressionMethod"
+
+class ScudetteLexicon(Lexicon):
+    base = AFF4_NAMESPACE
+    map = base + "map"
+    stored = base + "stored"
+    Image = base + "Image"
+    blockHashesHash = base + "blockHashesHash"
+    mapPointHash = base + "mapPointHash"
+    mapIdxHash = base + "mapIdxHash"
+    mapPathHash = base + "mapPathHash"
+    mapHash = base + "mapHash"
+    hash = base + "hash"
+    chunksPerSegment = base + "chunks_per_segment"
+    chunkSize = base + "chunk_size"
+    streamSize = base + "size"
+    compressionMethod = base + "compression"
+    category  = base + "category"
+    memoryPhysical = "http://aff4.org/Schema#memory/physical"
+
+legacy = LegacyLexicon()
+standard = StdLexicon()
+scudette = ScudetteLexicon()
