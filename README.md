@@ -8,19 +8,25 @@ Simson Garfinkel and Bradley Schatz, digital investigation 6 (2009) S57–S68.
 The format is an open source format used for the storage of digital evidence and
 data.
 
-The original paper was released with an earlier implementation written in
-python. This project is a complete open source re-implementation for a general
-purpose AFF4 library.
+This project is a work in progress implementation supporting the AFF4 Standard v1.0, 
+which is available at https://github.com/aff4/Standard
+
+It provides two library implementations, C/C++ and Python.
 
 ## What is currently supported.
 
-Not all features described in the paper are currently supported:
+The focus of this implementation at present is reading images conforming with the 
+AFF4 Standard v1.0. Canonical images are provided in the AFF4 Reference Images github 
+project at https://github.com/aff4/ReferenceImages
 
-1. Writing and Reading ZipFile style volumes.
-2. Writing and Reading AFF4 Image streams using the deflate or snappy compressor.
-3. Writing and reading RDF metadata using both YAML and Turtle.
+1. Reading ZipFile style volumes.
+2. Reading AFF4 Image streams using the deflate or snappy compressor.
+3. Reading RDF metadata using Turtle (and in some instances YAML for backwards compatibility).
 
-What is not yet supported:
+## What is not yet supported.
+
+The write support in the libraries is currently broken and being worked on. Other aspects of 
+the AFF4 that have not yet been implemented in this codebase include:
 
 1. Encrypted AFF4 volumes.
 2. Persistent data store.
