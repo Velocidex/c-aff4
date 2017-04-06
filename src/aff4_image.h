@@ -16,6 +16,8 @@ specific language governing permissions and limitations under the License.
 #ifndef SRC_AFF4_IMAGE_H_
 #define SRC_AFF4_IMAGE_H_
 
+#include "config.h"
+
 #include "aff4_io.h"
 
 /**
@@ -46,7 +48,7 @@ specific language governing permissions and limitations under the License.
   Length      Date    Time    Name
   ---------  ---------- -----   ----
        20  2015-01-18 17:29   image.dd/00000000
-        4  2015-01-18 17:29   image.dd/00000000/index
+        4  2015-01-18 17:29   image.dd/00000000.index
       538  2015-01-18 17:29   information.yaml
       434  2015-01-18 17:29   information.turtle
   ---------                     -------
@@ -56,101 +58,114 @@ specific language governing permissions and limitations under the License.
  */
 
 // Compression methods we support.
-AFF4Status CompressZlib_(const char *data, size_t length, string *output);
-AFF4Status DeCompressZlib_(const char *data, size_t length, string *output);
-AFF4Status CompressSnappy_(const char *data, size_t length, string *output);
-AFF4Status DeCompressSnappy_(const char *data, size_t length, string *output);
+AFF4Status CompressZlib_(const char* data, size_t length, std::string* output);
+AFF4Status DeCompressZlib_(const char* data, size_t length, std::string* output);
+AFF4Status CompressSnappy_(const char* data, size_t length, std::string* output);
+AFF4Status DeCompressSnappy_(const char* data, size_t length, std::string* output);
+
+
+// This is the type written to the map stream in this exact binary layout.
+struct BevvyIndex {
+    uint64_t offset = 0;
+    uint32_t length = 0;
+} __attribute__((packed));
 
 
 class AFF4Image: public AFF4Stream {
- protected:
-  // Delegates to the workers for support compression methods.
-  AFF4Status FlushChunk(const char *data, size_t length);
+  protected:
+    // Delegates to the workers for support compression methods.
+    AFF4Status FlushChunk(const char* data, size_t length);
 
-  AFF4Status _FlushBevy();
+    AFF4Status _FlushBevy();
 
-  int _ReadPartial(
-      unsigned int chunk_id, int chunks_to_read, string &result);
+    // Convert the legecy formatted bevvy data into the new format.
+    std::string _FixupBevvyData(std::string* data);
 
-  AFF4Status _ReadChunkFromBevy(
-      string &result, unsigned int chunk_id,
-      AFF4ScopedPtr<AFF4Stream> &bevy, uint32_t bevy_index[],
-      uint32_t index_size);
+    int _ReadPartial(
+        unsigned int chunk_id, int chunks_to_read, std::string& result);
 
-  string buffer;
+    AFF4Status _ReadChunkFromBevy(
+        std::string& result, unsigned int chunk_id,
+        AFF4ScopedPtr<AFF4Stream>& bevy, BevvyIndex bevy_index[],
+        uint32_t index_size);
 
-  // The current bevy we write into.
-  StringIO bevy_index;
-  StringIO bevy;
+    std::string buffer;
 
-  unsigned int bevy_number = 0;           /**< The current bevy number for
+    // The current bevy we write into.
+    StringIO bevy_index;
+    StringIO bevy;
+
+    unsigned int bevy_number = 0;           /**< The current bevy number for
                                            * writing. */
-  unsigned int chunk_count_in_bevy = 0;
+    unsigned int chunk_count_in_bevy = 0;
 
-  URN volume_urn;                       /**< The Volume we are stored on. */
+    URN volume_urn;                       /**< The Volume we are stored on. */
 
-  AFF4Status _write_metadata();
+    AFF4Status _write_metadata();
 
- public:
-  AFF4Image(DataStore *resolver, URN urn): AFF4Stream(resolver, urn) {}
-  explicit AFF4Image(DataStore *resolver): AFF4Stream(resolver) {}
+    // FALSE if stream is aff4:ImageStream, true if stream is aff4:stream.
+    bool isAFF4Legacy = false;
 
-  unsigned int chunk_size = 32*1024;    /**< The number of bytes in each
+  public:
+    AFF4Image(DataStore* resolver, URN urn): AFF4Stream(resolver, urn) {}
+    explicit AFF4Image(DataStore* resolver): AFF4Stream(resolver) {}
+
+    unsigned int chunk_size = 32*1024;    /**< The number of bytes in each
                                          * chunk. */
-  unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
+    unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
                                            * Bevy. */
 
-  // Which compression should we use.
-  AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
+    // Which compression should we use.
+    AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
 
-  /**
-   * Create a new AFF4Image instance.
-   *
-   * After callers receive a new AFF4Image object they may modify the parameters
-   * before calling Write().
-   *
-   * @param image_urn: The URN of the stream which will be created in the
-   *                   volume.
-   *
-   * @param volume: An AFF4Volume instance. We take a shared reference to the
-   *                volume object and write segments into it as required.
-   *
-   * @return A unique reference to a new AFF4Image object.
-   */
-  static AFF4ScopedPtr<AFF4Image> NewAFF4Image(
-      DataStore *resolver, const URN &image_urn, const URN &volume_urn);
+    /**
+     * Create a new AFF4Image instance.
+     *
+     * After callers receive a new AFF4Image object they may modify the parameters
+     * before calling Write().
+     *
+     * @param image_urn: The URN of the stream which will be created in the
+     *                   volume.
+     *
+     * @param volume: An AFF4Volume instance. We take a shared reference to the
+     *                volume object and write segments into it as required.
+     *
+     * @return A unique reference to a new AFF4Image object.
+     */
+    static AFF4ScopedPtr<AFF4Image> NewAFF4Image(
+        DataStore* resolver, const URN& image_urn, const URN& volume_urn);
 
-  /**
-   * Load the file from an AFF4 URN.
-   *
-   *
-   * @return
-   */
-  virtual AFF4Status LoadFromURN();
-
-
-  /**
-   * An optimized WriteStream() API.
-   */
-  virtual AFF4Status WriteStream(
-      AFF4Stream *source,
-      ProgressContext *progress = nullptr);
-
-  virtual int Write(const char *data, int length);
-
-  /**
-   * Read data from the current read pointer.
-   *
-   * @param length: How much data to read.
-   *
-   * @return A string containing the data to read.
-   */
-  virtual string Read(size_t length);
+    /**
+     * Load the file from an AFF4 URN.
+     *
+     *
+     * @return
+     */
+    virtual AFF4Status LoadFromURN();
 
 
-  AFF4Status Flush();
+    /**
+     * An optimized WriteStream() API.
+     */
+    virtual AFF4Status WriteStream(
+        AFF4Stream* source,
+        ProgressContext* progress = nullptr);
 
-  using AFF4Stream::Write;
+    virtual int Write(const char* data, int length);
+
+    /**
+     * Read data from the current read pointer.
+     *
+     * @param length: How much data to read.
+     *
+     * @return A string containing the data to read.
+     */
+    virtual std::string Read(size_t length);
+
+
+    AFF4Status Flush();
+
+    using AFF4Stream::Write;
 };
 
 extern void aff4_image_init();

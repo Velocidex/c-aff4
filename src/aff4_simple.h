@@ -34,7 +34,7 @@ specific language governing permissions and limitations under the License.
  *
  * @return
  */
-AFF4Status aff4_image(char *output_file, char *stream_name,
+AFF4Status aff4_image(char* output_file, char* stream_name,
                       unsigned int chunks_per_segment,
                       uint64_t max_volume_size,
-                      AFF4Stream &input_stream);
+                      AFF4Stream& input_stream);

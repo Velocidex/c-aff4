@@ -17,6 +17,8 @@ specific language governing permissions and limitations under the License.
 #ifndef     SRC_LIBAFF4_H_
 #define     SRC_LIBAFF4_H_
 
+#include "config.h"
+
 #include "rdf.h"
 #include "aff4_io.h"
 #include "aff4_image.h"
@@ -51,14 +53,14 @@ specific language governing permissions and limitations under the License.
  *
  * @return The member name in the zip archive.
  */
-string member_name_for_urn(const URN member, const URN base_urn,
-                           bool slash_ok = false);
+std::string member_name_for_urn(const URN member, const URN base_urn,
+                                bool slash_ok = false);
 
-URN urn_from_member_name(const string member, const URN base_urn);
+URN urn_from_member_name(const std::string member, const URN base_urn);
 
 
 extern "C" {
-  char *AFF4_version();
+    char* AFF4_version();
 }
 
 #endif    // SRC_LIBAFF4_H_

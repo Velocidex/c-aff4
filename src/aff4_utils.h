@@ -15,21 +15,26 @@ specific language governing permissions and limitations under the License.
 
 #ifndef SRC_AFF4_UTILS_H_
 #define SRC_AFF4_UTILS_H_
+
+#include "config.h"
+
 #include <sys/time.h>
 #include <vector>
 #include <string>
 #include <sstream>
 
+#define UNUSED(x) (void)x
+
 std::string aff4_sprintf(std::string fmt, ...);
 
 inline uint64_t time_from_epoch() {
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  return tv.tv_sec * 1000000 + tv.tv_usec;
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
 std::string GetLastErrorMessage();
 
-std::vector<std::string> split(const std::string &s, char delim);
+std::vector<std::string> split(const std::string& s, char delim);
 
 #endif  // SRC_AFF4_UTILS_H_

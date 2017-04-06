@@ -18,7 +18,7 @@ TEST_F(MemoryDataStoreTest, IncompatibleGet) {
   // This should fail since the value is the wrong type.
   EXPECT_EQ(INCOMPATIBLE_TYPES,
             store.Get(URN("hello"), URN("World"), result));
-};
+}
 
 
 TEST_F(MemoryDataStoreTest, StorageTest) {
@@ -36,7 +36,7 @@ TEST_F(MemoryDataStoreTest, StorageTest) {
             store.Get(URN("hello"), URN("World"), result));
 
   EXPECT_STREQ(result.SerializeToString().c_str(), "bar");
-};
+}
 
 
 #if defined(HAVE_LIBYAML_CPP)
@@ -56,7 +56,7 @@ TEST_F(MemoryDataStoreTest, YamlSerializationTest) {
 
 TEST_F(MemoryDataStoreTest, TurtleSerializationTest) {
   MemoryDataStore new_store;
-  unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
+  std::unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
   XSDString result;
 
   store.DumpToTurtle(*output, "");
@@ -78,8 +78,8 @@ class AFF4ObjectCacheMock: public AFF4ObjectCache {
  public:
   AFF4ObjectCacheMock(size_t size): AFF4ObjectCache(size) {};
 
-  vector<string> GetKeys() {
-    vector<string> result;
+  std::vector<std::string> GetKeys() {
+	  std::vector<std::string> result;
     for (AFF4ObjectCacheEntry *it=lru_list.next; it!=&lru_list; it=it->next) {
       result.push_back(it->key);
     };
@@ -87,8 +87,8 @@ class AFF4ObjectCacheMock: public AFF4ObjectCache {
     return result;
   };
 
-  vector<string> GetInUse() {
-    vector<string> result;
+  std::vector<std::string> GetInUse() {
+	  std::vector<std::string> result;
     for(auto it: in_use) {
       result.push_back(it.first);
     };
@@ -115,7 +115,7 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   cache.Put(obj3);
 
   {
-    vector<string> result = cache.GetKeys();
+	  std::vector<std::string> result = cache.GetKeys();
 
     EXPECT_EQ(result[0], c.SerializeToString());
     EXPECT_EQ(result[1], b.SerializeToString());
@@ -126,12 +126,12 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   // list.
   EXPECT_EQ(cache.Get(a), obj1);
   {
-    vector<string> result = cache.GetKeys();
+	  std::vector<std::string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 2);
     EXPECT_EQ(result[0], c.SerializeToString());
     EXPECT_EQ(result[1], b.SerializeToString());
 
-    vector<string> in_use = cache.GetInUse();
+    std::vector<std::string> in_use = cache.GetInUse();
     EXPECT_EQ(in_use.size(), 1);
     EXPECT_EQ(in_use[0], a.SerializeToString());
 
@@ -140,14 +140,14 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   };
 
   {
-    vector<string> result = cache.GetKeys();
+	  std::vector<std::string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 3);
 
     EXPECT_EQ(result[0], a.SerializeToString());
     EXPECT_EQ(result[1], c.SerializeToString());
     EXPECT_EQ(result[2], b.SerializeToString());
 
-    vector<string> in_use = cache.GetInUse();
+    std::vector<std::string> in_use = cache.GetInUse();
     EXPECT_EQ(in_use.size(), 0);
   }
 
@@ -155,7 +155,7 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   cache.Put(obj4);
 
   {
-    vector<string> result = cache.GetKeys();
+	  std::vector<std::string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 3);
 
     EXPECT_EQ(result[0], d.SerializeToString());
@@ -172,7 +172,7 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   {
     EXPECT_EQ(cache.Get(d), (AFF4Object *)NULL);
 
-    vector<string> result = cache.GetKeys();
+    std::vector<std::string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 2);
   }
-};
+}

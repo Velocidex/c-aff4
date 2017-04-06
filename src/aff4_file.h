@@ -16,6 +16,8 @@ specific language governing permissions and limitations under the License.
 #ifndef  SRC_AFF4_FILE_H_
 #define  SRC_AFF4_FILE_H_
 
+#include "config.h"
+
 #include "aff4_io.h"
 #include "data_store.h"
 #include "aff4_utils.h"
@@ -36,32 +38,32 @@ specific language governing permissions and limitations under the License.
   urn using the AFF4_FILE_NAME attribute.
  */
 class FileBackedObject: public AFF4Stream {
- public:
-  // The filename for this object.
-  string filename;
+  public:
+    // The filename for this object.
+    std::string filename;
 
-  explicit FileBackedObject(DataStore *resolver): AFF4Stream(resolver) {}
-  virtual ~FileBackedObject();
+    explicit FileBackedObject(DataStore* resolver): AFF4Stream(resolver), fd(0){}
+    virtual ~FileBackedObject();
 
-  virtual string Read(size_t length);
-  virtual int Write(const char *data, int length);
+    virtual std::string Read(size_t length);
+    virtual int Write(const char* data, int length);
 
-  /**
-   * Load the file from a file:/ URN.
-   *
-   *
-   * @return STATUS_OK if we were able to open it successfully.
-   */
-  virtual AFF4Status LoadFromURN();
+    /**
+     * Load the file from a file:/ URN.
+     *
+     *
+     * @return STATUS_OK if we were able to open it successfully.
+     */
+    virtual AFF4Status LoadFromURN();
 
-  virtual AFF4Status Truncate();
+    virtual AFF4Status Truncate();
 
-  // We provide access to the underlying file handle so callers can do other
-  // things with the stream (i.e. ioctl on raw devices).
+    // We provide access to the underlying file handle so callers can do other
+    // things with the stream (i.e. ioctl on raw devices).
 #if defined(_WIN32)
-  HANDLE fd;
+    HANDLE fd;
 #else
-  int fd;
+    int fd;
 #endif
 };
 
@@ -71,18 +73,20 @@ class FileBackedObject: public AFF4Stream {
   A stream which just returns the same char over.
  */
 class AFF4ConstantStream: public AFF4Stream {
-  char constant = 0;
- public:
-  explicit AFF4ConstantStream(DataStore *resolver): AFF4Stream(resolver) {}
+    char constant = 0;
+  public:
+    explicit AFF4ConstantStream(DataStore* resolver): AFF4Stream(resolver) {}
 
-  virtual aff4_off_t Size() {return -1;}
-  virtual AFF4Status LoadFromURN() {
-    size = Size();
-    return STATUS_OK;
-  }
-  virtual string Read(size_t length) {
-    return string(length, constant);
-  }
+    virtual aff4_off_t Size() {
+        return -1;
+    }
+    virtual AFF4Status LoadFromURN() {
+        size = Size();
+        return STATUS_OK;
+    }
+    virtual std::string Read(size_t length) {
+        return std::string(length, constant);
+    }
 };
 
 extern void aff4_file_init();

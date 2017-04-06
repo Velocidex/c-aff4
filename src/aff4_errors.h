@@ -16,6 +16,8 @@ specific language governing permissions and limitations under the License.
 #ifndef AFF4_ERRORS_H
 #define AFF4_ERRORS_H
 
+#include "config.h"
+
 /**
  * @file
  * @author scudette <scudette@google.com>
@@ -28,22 +30,22 @@ specific language governing permissions and limitations under the License.
 
 /// Return values from AFF4 methods and functions.
 typedef enum {
-  STATUS_OK = 0,                        /**< Function succeeded. */
-  NOT_FOUND = -1,                       /**< URN or file was not found. */
-  INCOMPATIBLE_TYPES = -2,              /**< Types passed in as arguments were
+    STATUS_OK = 0,                        /**< Function succeeded. */
+    NOT_FOUND = -1,                       /**< URN or file was not found. */
+    INCOMPATIBLE_TYPES = -2,              /**< Types passed in as arguments were
                                          * not compatible. */
-  MEMORY_ERROR = -3,                    /**< Failed to allocate sufficient
+    MEMORY_ERROR = -3,                    /**< Failed to allocate sufficient
                                          * memory. */
-  GENERIC_ERROR = -4,                   /**< Generic Error. */
-  INVALID_INPUT = -5,                   /**<  */
-  PARSING_ERROR = -6,                   /**< Unable to parse the required
+    GENERIC_ERROR = -4,                   /**< Generic Error. */
+    INVALID_INPUT = -5,                   /**<  */
+    PARSING_ERROR = -6,                   /**< Unable to parse the required
                                          * input. */
-  NOT_IMPLEMENTED = -7,                 /**< This function is not yet
+    NOT_IMPLEMENTED = -7,                 /**< This function is not yet
                                          * implemented. */
-  IO_ERROR = -8,                        /**< Unable to open URN for IO. */
-  FATAL_ERROR = -9,
-  CONTINUE = -10,
-  ABORTED = -11
+    IO_ERROR = -8,                        /**< Unable to open URN for IO. */
+    FATAL_ERROR = -9,
+    CONTINUE = -10,
+    ABORTED = -11
 } AFF4Status;
 
 

@@ -2,14 +2,14 @@
 #include <libaff4.h>
 #include <iostream>
 
-void URNVerifySerialization(string url) {
+void URNVerifySerialization(std::string url) {
   URN test(url);
   EXPECT_EQ(test.SerializeToString(), url);
-};
+}
 
 
 TEST(URNTest, SerializeURN) {
-  string url = "http://www.google.com/path/to/element#hash_data";
+	std::string url = "http://www.google.com/path/to/element#hash_data";
   uri_components components = URN(url).Parse();
 
   EXPECT_EQ(components.scheme, "http");
@@ -38,10 +38,11 @@ TEST(URNTest, SerializeURN) {
   // Relative paths are relative to the current working directory.
   {
     char cwd[1024];
-    string cwd_string = "/";
+    std::string cwd_string = "/";
     memset(cwd, 0, sizeof(cwd));
 
-    getcwd(cwd, sizeof(cwd));
+    char* u = getcwd(cwd, sizeof(cwd));
+    UNUSED(u);
     for(unsigned int i=0; i<sizeof(cwd)-1; i++)
       if(cwd[i]=='\\')
         cwd[i]='/';
@@ -52,10 +53,10 @@ TEST(URNTest, SerializeURN) {
       cwd_string = cwd;
 
     EXPECT_EQ(URN("etc/passwd").SerializeToString(),
-              string("file://") + cwd_string + "/etc/passwd");
+    		std::string("file://") + cwd_string + "/etc/passwd");
   };
   components = URN("http:www.google.com").Parse();
-};
+}
 
 
 TEST(URNTest, Append) {
@@ -111,4 +112,4 @@ TEST(XSDIntegerTest, SerializeToString) {
             value.UnSerializeFromString("0xfff880000000000", 17));
 
   EXPECT_EQ(value.value, 0xfff880000000000);
-};
+}

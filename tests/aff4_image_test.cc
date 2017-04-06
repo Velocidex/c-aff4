@@ -20,8 +20,8 @@ specific language governing permissions and limitations under the License.
 
 class AFF4ImageTest: public ::testing::Test {
  protected:
-  string filename = "/tmp/aff4_test.zip";
-  string image_name = "image.dd";
+  std::string filename = "/tmp/aff4_test.zip";
+  std::string image_name = "image.dd";
   URN volume_urn;
   URN image_urn;
   URN image_urn_2;
@@ -53,6 +53,8 @@ class AFF4ImageTest: public ::testing::Test {
       // Now an image is created inside the volume.
       AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
           &resolver, image_urn, zip->urn);
+      ASSERT_NE(image.get(), nullptr);
+
 
       // For testing - rediculously small chunks. This will create many bevies.
       image->chunk_size = 10;
@@ -70,6 +72,7 @@ class AFF4ImageTest: public ::testing::Test {
       AFF4ScopedPtr<AFF4Image> image_2 = AFF4Image::NewAFF4Image(
           &resolver, image_urn_2, zip->urn);
 
+      ASSERT_NE(image_2.get(), nullptr);
       // Make the second image use snappy for compression.
       image_2->compression = AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
       image_2->Write("This is a test");
@@ -77,7 +80,7 @@ class AFF4ImageTest: public ::testing::Test {
 
     // Now test the streaming API.
     {
-      unique_ptr<AFF4Stream> test_stream = StringIO::NewStringIO();
+    	std::unique_ptr<AFF4Stream> test_stream = StringIO::NewStringIO();
       test_stream->Write("This is a test");
       test_stream->Seek(0, SEEK_SET);
 
@@ -86,7 +89,7 @@ class AFF4ImageTest: public ::testing::Test {
       // Now an image is created inside the volume.
       AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
           &resolver, image_urn_stream, zip->urn);
-
+      ASSERT_NE(image.get(), nullptr);
       // For testing - rediculously small chunks. This will create many bevies.
       image->chunk_size = 10;
       image->chunks_per_segment = 3;
@@ -137,7 +140,7 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
 
   ASSERT_TRUE(image.get()) << "Unable to open the image urn!";
 
-  unique_ptr<StringIO> stream_copy = StringIO::NewStringIO();
+  std::unique_ptr<StringIO> stream_copy = StringIO::NewStringIO();
   for (int i = 0; i < 100; i++) {
     stream_copy->sprintf("Hello world %02d!", i);
   }
@@ -147,8 +150,8 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
     stream_copy->Seek(i, SEEK_SET);
 
     // Randomly read buffers in the image to ensure Seek/Read works.
-    string read_data = image->Read(13);
-    string expected_data = stream_copy->Read(13);
+    std::string read_data = image->Read(13);
+    std::string expected_data = stream_copy->Read(13);
 
     LOG(INFO) << "Expected:" << expected_data.c_str();
     LOG(INFO) << "Read:" << read_data.c_str();
@@ -170,7 +173,7 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
     EXPECT_STREQ(compression_urn.SerializeToString().c_str(),
                  AFF4_IMAGE_COMPRESSION_SNAPPY);
 
-    string data = image_2->Read(100);
+    std::string data = image_2->Read(100);
     EXPECT_STREQ(data.c_str(), "This is a test");
   }
 
@@ -189,7 +192,7 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
     EXPECT_STREQ(compression_urn.SerializeToString().c_str(),
                  AFF4_IMAGE_COMPRESSION_SNAPPY);
 
-    string data = image_stream->Read(100);
+    std::string data = image_stream->Read(100);
     EXPECT_STREQ(data.c_str(), "This is a test");
   }
 }

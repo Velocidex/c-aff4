@@ -17,41 +17,42 @@ specific language governing permissions and limitations under the License.
 
 #include <unordered_map>
 
-std::unordered_map<string, Schema> Schema::cache;
+std::unordered_map<std::string, Schema> Schema::cache;
 
 
-Schema Schema::GetSchema(string object_type) {
-  // If we did not add any schema yet, do so now.
-  if(cache.size() == 0) {
-    // Define all the Schema and attributes.
-    Schema AFF4_OBJECT_SCHEMA("object");
-    AFF4_OBJECT_SCHEMA.AddAttribute("type", Attribute(
-        RDF_NAMESPACE "type", URNType, "The type of this object."));
+Schema Schema::GetSchema(std::string object_type) {
+    // If we did not add any schema yet, do so now.
+    if(cache.size() == 0) {
+        // Define all the Schema and attributes.
+        Schema AFF4_OBJECT_SCHEMA("object");
+        AFF4_OBJECT_SCHEMA.AddAttribute("type", Attribute(
+                                            RDF_NAMESPACE "type", URNType, "The type of this object."));
 
-    Schema AFF4_STREAM_SCHEMA("generic_stream");
-    AFF4_STREAM_SCHEMA.AddParent(AFF4_OBJECT_SCHEMA);
+        Schema AFF4_STREAM_SCHEMA("generic_stream");
+        AFF4_STREAM_SCHEMA.AddParent(AFF4_OBJECT_SCHEMA);
 
-    AFF4_STREAM_SCHEMA.AddAttribute("size", Attribute(
-        AFF4_NAMESPACE "size", XSDIntegerType,
-        "How large the object is in bytes."));
+        AFF4_STREAM_SCHEMA.AddAttribute("size", Attribute(
+                                            AFF4_NAMESPACE "size", XSDIntegerType,
+                                            "How large the object is in bytes."));
 
-    // Volumes contain other objects.
-    Schema AFF4_VOLUME_SCHEMA("volume");
-    AFF4_VOLUME_SCHEMA.AddParent(AFF4_OBJECT_SCHEMA);
+        // Volumes contain other objects.
+        Schema AFF4_VOLUME_SCHEMA("volume");
+        AFF4_VOLUME_SCHEMA.AddParent(AFF4_OBJECT_SCHEMA);
 
-    Schema AFF4_ZIP_VOLUME_SCHEMA("zip_volume");
-    AFF4_ZIP_VOLUME_SCHEMA.AddParent(AFF4_VOLUME_SCHEMA);
+        Schema AFF4_ZIP_VOLUME_SCHEMA("zip_volume");
+        AFF4_ZIP_VOLUME_SCHEMA.AddParent(AFF4_VOLUME_SCHEMA);
 
-    cache["object"] = AFF4_OBJECT_SCHEMA;
-    cache["stream"] = AFF4_STREAM_SCHEMA;
-    cache["volume"] = AFF4_VOLUME_SCHEMA;
-    cache["zip_volume"] = AFF4_ZIP_VOLUME_SCHEMA;
-  };
+        cache["object"] = AFF4_OBJECT_SCHEMA;
+        cache["stream"] = AFF4_STREAM_SCHEMA;
+        cache["volume"] = AFF4_VOLUME_SCHEMA;
+        cache["zip_volume"] = AFF4_ZIP_VOLUME_SCHEMA;
+    };
 
-  auto it = cache.find(object_type);
-  if (it != cache.end()){
-    return it->second;
-  };
+    auto it = cache.find(object_type);
+    if (it != cache.end()) {
+        return it->second;
+    };
 
-  return Schema();
-};
+
+    return Schema();
+}

@@ -19,10 +19,10 @@ specific language governing permissions and limitations under the License.
 
 class ZipTest: public ::testing::Test {
  protected:
-  string filename = "/tmp/aff4_test.zip";
-  string segment_name = "Foobar.txt";
-  string data1 = "I am a segment!";
-  string data2 = "I am another segment!";
+	std::string filename = "/tmp/aff4_test.zip";
+	std::string segment_name = "Foobar.txt";
+	std::string data1 = "I am a segment!";
+	std::string data2 = "I am another segment!";
   URN volume_urn;
 
   // Remove the file on teardown.
@@ -71,7 +71,7 @@ class ZipTest: public ::testing::Test {
     // Test the streamed interface.
     {
       URN streamed_urn = segment_urn.Append("streamed");
-      unique_ptr<AFF4Stream> test_stream = StringIO::NewStringIO();
+      std::unique_ptr<AFF4Stream> test_stream = StringIO::NewStringIO();
       test_stream->Write(data1);
       test_stream->Seek(0, SEEK_SET);
 
@@ -103,7 +103,7 @@ TEST_F(ZipTest, CreateMember) {
   AFF4ScopedPtr<ZipFileSegment> segment(zip->OpenZipSegment(segment_name));
   ASSERT_TRUE(segment.get());
 
-  string expected = data1 + data2;
+  std::string expected = data1 + data2;
   EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
 
   ASSERT_FALSE(zip->IsDirty());
@@ -111,7 +111,7 @@ TEST_F(ZipTest, CreateMember) {
   // Test conversion between urn and zip.
   {
     URN test = zip->urn.Append("URN-with!special$chars/and/path");
-    string member_name = member_name_for_urn(test.SerializeToString(),
+    std::string member_name = member_name_for_urn(test.SerializeToString(),
                                              zip->urn, true);
     EXPECT_STREQ(member_name.c_str(),
                  "URN-with%21special%24chars/and/path");
@@ -125,7 +125,7 @@ TEST_F(ZipTest, CreateMember) {
   {
     // A windows based URN.
     URN test = zip->urn.Append("/C:/Windows/notepad.exe");
-    string member_name = member_name_for_urn(test.SerializeToString(),
+    std::string member_name = member_name_for_urn(test.SerializeToString(),
                                              zip->urn, true);
     EXPECT_STREQ(member_name.c_str(),
                  "C%3a/Windows/notepad.exe");
@@ -139,7 +139,7 @@ TEST_F(ZipTest, CreateMember) {
   {
     // An AFF4 URN not based at zip->urn should be emitted fully escaped.
     URN test("aff4://123456/URN-with!special$chars/and/path");
-    string member_name = member_name_for_urn(test.SerializeToString(),
+    std::string member_name = member_name_for_urn(test.SerializeToString(),
                                              zip->urn, true);
     EXPECT_STREQ(member_name.c_str(),
                  "aff4%3a%2f%2f123456/URN-with%21special%24chars/and/path");
@@ -184,7 +184,7 @@ TEST_F(ZipTest, OpenMemberByURN) {
   // Should work.
   ASSERT_TRUE(segment.get()) << "Failed to open segment by URN";
 
-  string expected = data1 + data2;
+  std::string expected = data1 + data2;
   EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
 }
 
@@ -197,7 +197,7 @@ TEST_F(ZipTest, ConcatenatedVolumes) {
   {
     MemoryDataStore resolver;
 
-    string concate_filename = filename + "_con.zip";
+    std::string concate_filename = filename + "_con.zip";
 
     resolver.Set(concate_filename, AFF4_STREAM_WRITE_MODE, new XSDString(
         "truncate"));
@@ -227,7 +227,7 @@ TEST_F(ZipTest, ConcatenatedVolumes) {
     AFF4ScopedPtr<ZipFileSegment> segment(zip->OpenZipSegment(segment_name));
     ASSERT_TRUE(segment.get());
 
-    string expected = data1 + data2;
+    std::string expected = data1 + data2;
     EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
 
     // Now ensure we can modify the file.
@@ -238,7 +238,7 @@ TEST_F(ZipTest, ConcatenatedVolumes) {
   // Now check with a fresh resolver.
   MemoryDataStore resolver;
 
-  string concate_filename = filename + "_con.zip";
+  std::string concate_filename = filename + "_con.zip";
 
   // Now open the zip file from the concatenated file.
   AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, concate_filename);
@@ -269,6 +269,6 @@ TEST_F(ZipTest, testStreamedSegment) {
 
   ASSERT_TRUE(segment.get());
 
-  string expected = data1;
+  std::string expected = data1;
   EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
 }
