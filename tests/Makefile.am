@@ -2,7 +2,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 # This is so we can #include <package/foo>
-AM_CPPFLAGS = -I../src -I../tests -I../third_party/gtest/ -I../third_party/gtest/include
+AM_CPPFLAGS = -I../src -I../tests -I../third_party/gtest/googletest/ -I../third_party/gtest/googletest/include
 
 # The -no-undefined flag allows libtool to generate shared libraries for
 # Cygwin and MinGW.  LIBSTDCXX_LA_LINKER_FLAG is used to fix a Solaris bug.
@@ -28,7 +28,7 @@ noinst_SCRIPTS =
 # Libraries that are built but not installed.
 noinst_LTLIBRARIES = libgtest.la
 
-libgtest_la_SOURCES = ../third_party/gtest/src/gtest-all.cc
+libgtest_la_SOURCES = ../third_party/gtest/googletest/src/gtest-all.cc
 libgtest_la_CXXFLAGS = -g -Wall -O0 -pthread
 libgtest_la_LIBADD = -lpthread
 
