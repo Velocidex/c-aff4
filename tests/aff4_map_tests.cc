@@ -5,9 +5,9 @@
 
 class AFF4MapTest: public ::testing::Test {
  protected:
-  string filename = "/tmp/aff4_test.zip";
-  string source_filename = "/tmp/source.txt";
-  string image_name = "image.dd";
+	std::string filename = "/tmp/aff4_test.zip";
+	std::string source_filename = "/tmp/source.txt";
+	std::string image_name = "image.dd";
 
   URN volume_urn;
   URN image_urn;
@@ -81,7 +81,7 @@ class AFF4MapTest: public ::testing::Test {
 
 TEST_F(AFF4MapTest, TestAddRange) {
   MemoryDataStore resolver;
-  vector<Range> ranges;
+  std::vector<Range> ranges;
   URN filename_urn = URN::NewURNFromFilename(filename);
 
   // Load the zip file into the resolver.
@@ -198,7 +198,7 @@ TEST_F(AFF4MapTest, CreateMapStream) {
     map->Seek(0, SEEK_SET);
     EXPECT_STREQ(map->Read(2).c_str(), "00");
 
-    vector<Range> ranges = map->GetRanges();
+    std::vector<Range> ranges = map->GetRanges();
     EXPECT_EQ(ranges.size(), 3);
     EXPECT_EQ(ranges[0].length, 26);
     EXPECT_EQ(ranges[0].map_offset, 0);
@@ -216,7 +216,7 @@ TEST_F(AFF4MapTest, CreateMapStream) {
 
     // Test that reads outside the ranges null pad correctly.
     map->Seek(48, SEEK_SET);
-    string read_string = map->Read(4);
+    std::string read_string = map->Read(4);
     EXPECT_EQ(read_string[0], 0);
     EXPECT_EQ(read_string[1], 0);
     EXPECT_EQ(read_string[2], '5');
@@ -230,8 +230,8 @@ TEST_F(AFF4MapTest, CreateMapStream) {
 
     EXPECT_EQ(map->Size(), 16);
 
-    string read_string = map->Read(1000);
-    EXPECT_EQ(read_string, string("DDDDAAAA\0\0\0\0EEEE", 16));
+    std::string read_string = map->Read(1000);
+    EXPECT_EQ(read_string, std::string("DDDDAAAA\0\0\0\0EEEE", 16));
   }
 
   // Check the untransformed data stream - it is written in the same order as
@@ -239,7 +239,7 @@ TEST_F(AFF4MapTest, CreateMapStream) {
   {
     AFF4ScopedPtr<AFF4Stream> map_data = resolver.AFF4FactoryOpen<AFF4Stream>(
         image_urn.Append("streamed").Append("data"));
-    string read_string = map_data->Read(1000);
+    std::string read_string = map_data->Read(1000);
     EXPECT_STREQ(read_string.c_str(), "DDDDAAAAEEEE");
   }
 }

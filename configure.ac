@@ -2,82 +2,31 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([AFF4], [0.1], [aff4-users@googlegroups.com], [],
+AC_INIT([AFF4], [1.0], [aff4-users@googlegroups.com], [],
                 [http://www.aff4.org/])
-AM_INIT_AUTOMAKE([-Wall foreign])
+
+SO_VERSION=1:0:0
+
 AC_CONFIG_MACRO_DIR([m4])
-AC_LANG_SOURCE
-
-SO_VERSION=0:0:0
-
+AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_SRCDIR([src])
 AC_CONFIG_HEADERS([src/config.h])
+AC_CANONICAL_HOST
+AC_SUBST(ARCH,[host_cpu])
 
-AC_LANG(C++)
-
+AM_INIT_AUTOMAKE([1.10 no-define foreign])
 # Checks for programs.
 AC_PROG_CXX
-AC_PROG_CC
-
-# Checks for libraries.
-AC_CHECK_LIB([raptor2], [raptor_new_term_from_counted_uri_string], [], [
-  echo raptor RDF library not found. On debian systems this is provided by
-  echo apt-get install libraptor2-dev
-  exit -1
-])
-
-AC_CHECK_LIB(uuid, uuid_generate)
-
-AC_CHECK_LIB([z], [compress], [], [
-  echo zlib not found. On debian systems this is provided by
-  echo apt-get install zlib1g-dev
-  exit -1
-])
-
-AC_ARG_ENABLE([yaml],
-  AS_HELP_STRING([--enable-yaml], [Enable YAML support.]))
-
-AS_IF([test "x$enable_yaml" = "xyes"],
-  AC_CHECK_LIB([yaml-cpp], [main], [
-    AC_SUBST(HAVE_LIBYAML_CPP, ["#define AFF4_HAS_LIBYAML_CPP"])
-  ], [
-    echo libyaml-cpp not found. On debian systems this is provided by
-    echo apt-get install libyaml-cpp-dev
-    exit -1
-  ])
-)
-AM_CONDITIONAL([HAVE_LIBYAML_CPP], [test x$ac_cv_lib_yaml_cpp_main = xyes])
-
-AC_CHECK_LIB([pcre++], [main]. [], [
-  echo Libpcre++ not found. On debian systems this is provided by
-  echo apt-get install libpcre++-dev
-  exit -1
-])
-
-AC_CHECK_LIB([glog], [main], [], [
-  echo Google logging library not found. On debian systems this is provided by
-  echo apt-get install libgoogle-glog-dev
-  exit -1
-])
-
-AC_CHECK_LIB([snappy], [main], [], [
-  echo Google snappy compression library not found. On debian systems this is provided by
-  echo apt-get install libsnappy-dev
-  exit -1
-])
-
-AC_CHECK_HEADER([tclap/CmdLine.h], [main], [], [
-  echo The TCLAP flag parsing library is not found. On Debian systems this is provided by
-  echo apt-get install libtclap-dev
-  exit -1
-])
-
-AC_CHECK_LIB(pthread, pthread_create)
-
-# Checks for header files.
-AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h])
+AC_PROG_INSTALL
+AC_PROG_LN_S
+AM_PROG_AR
+LT_INIT
+AC_PROG_LIBTOOL
+AC_LANG(C++)
+AX_CXX_COMPILE_STDCXX_11([noext],[mandatory])
 
 # Checks for typedefs, structures, and compiler characteristics.
+AC_HEADER_STDC
 AC_CHECK_HEADER_STDBOOL
 AC_TYPE_INT32_T
 AC_TYPE_OFF_T
@@ -87,35 +36,81 @@ AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
 
+# Checks for header files.
+AC_CHECK_HEADERS([fcntl.h stdlib.h string.h unistd.h sstream climits cstring])
+
 AC_CHECK_SIZEOF([off_t])
 AC_CHECK_SIZEOF([size_t])
 
-AM_PROG_AR
-LT_INIT
-AM_CONDITIONAL(GCC, test "$GCC" = yes)   # let the Makefile know if we're gcc
+AC_SYS_LARGEFILE
 
-AC_ARG_ENABLE([static-binaries],
-  AS_HELP_STRING([--enable-static-binaries], [Build completely static binaries.]))
+# Checks for library functions.
+AC_CHECK_FUNCS([ftruncate localtime_r memset setenv])
 
-AM_CONDITIONAL([STATIC_BUILD], [test x$enable_static_binaries = xyes])
+# Stick in "-Werror" if you want to be more aggressive.
+# (No need to use AC_SUBST on this default substituted environment variable.)
+# Only add these additional CFLAGS if we are using GCC. Other C compilers may
+# not support them.
+if test x"$GCC" == "xyes" ; then
+    AX_CHECK_COMPILE_FLAG([ -Wall -Wextra -Wpedantic -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare ], 
+        [CXXFLAGS="$CXXFLAGS -Wall -Wextra -Wpedantic -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare "])
+fi
+
+# Checks for libraries.
+PKG_CHECK_MODULES([RAPTOR2], [raptor2], [], [AC_MSG_ERROR([raptor RDF library (libraptor2-dev) not found])])
+PKG_CHECK_MODULES([UUID], [uuid], [AC_DEFINE([HAVE_LIBUUID], [1], ["Have UUID"])], [AC_MSG_ERROR([uuid library (uuid-dev) not found])])
+PKG_CHECK_MODULES([ZLIB], [zlib], [], [AC_MSG_ERROR([zlib library (zlib1g-dev) not found])])
+AC_CHECK_LIB([pcre++], [main], [], [AC_MSG_ERROR([pcre++ library (libpcre++-dev) not found])])
+PKG_CHECK_MODULES([GLOG], [libglog], [], [AC_MSG_ERROR([Google Logging library (libgoogle-glog-dev) not found])])
+AC_CHECK_LIB([snappy], [main], [], [AC_MSG_ERROR([Google Snappy Compression library (libsnappy-dev) not found])])
+AC_CHECK_LIB([pthread], [pthread_create], [], [AC_MSG_ERROR([pthread library not found])])
+
+#Check for cpp header only libs
+PKG_CHECK_MODULES([TCLAP], [tclap], [], [AC_MSG_ERROR([The TCLAP flag parsing library (libtclap-dev) is not found])])
+
+# configure options.
+AC_ARG_WITH([yaml], [AS_HELP_STRING([--with-yaml], [Enable YAML support (default is no)])], [WITH_YAML=$withval], [WITH_YAML=no]) 
+#AC_ARG_ENABLE([static-binaries], AS_HELP_STRING([--enable-static-binaries], [Build completely static binaries])
+
+# Check for optional libraries
+AS_IF([test "x$WITH_YAML" = "xyes"],
+  [PKG_CHECK_MODULES([YAML_CPP], [yaml-cpp], 
+  	[AC_SUBST(HAVE_LIBYAML_CPP, [AFF4_HAS_LIBYAML_CPP])], 
+  	[AC_MSG_ERROR([libyaml-cpp library (libyamp-cpp-dev) not found])])]
+)
+
+# Setup doxygen if present.
+AC_CHECK_PROGS([DOXYGEN], [doxygen], [])
+if test -z "$DOXYGEN";
+   then AC_MSG_WARN([Doxygen not found - continuing without Doxygen support])
+fi
 
 # Check for windows.
 MINGW_AC_WIN32_NATIVE_HOST
 URIPARSER_CHECK
 
+# Set Makefile / config.h values.
+AM_CONDITIONAL([HAVE_LIBYAML_CPP], [test "x$WITH_YAML" = "xyes"])
+if test "x$WITH_YAML" = "xyes"; then
+	AC_DEFINE([AFF4_HAS_LIBYAML_CPP], [1], ["Enable Yaml Support"])
+else 
+	AC_MSG_NOTICE([yaml-cpp disabled])
+fi
+AM_CONDITIONAL([GCC], test "$GCC" = yes)   # let the Makefile know if we're gcc
+AM_CONDITIONAL([STATIC_BUILD], [test x$enable_static_binaries = xyes])
 AM_CONDITIONAL([WIN32_NATIVE_HOST], [test x$mingw_cv_win32_host = xyes])
 
-# Checks for library functions.
-AC_CHECK_FUNCS([ftruncate localtime_r memset setenv])
-
-AC_PROG_LIBTOOL
 AC_SUBST(LIBTOOL_DEPS)
 AC_SUBST(SO_VERSION)
 
+AM_CONDITIONAL([HAVE_DOXYGEN], [test -n "$DOXYGEN"])
+AM_COND_IF([HAVE_DOXYGEN],
+	[AC_CONFIG_FILES([ docs/Doxyfile ])])
+	
 AC_CONFIG_FILES([
         Makefile
         src/Makefile
-        src/aff4_config.h
         tests/Makefile
+        docs/Makefile
         ])
 AC_OUTPUT

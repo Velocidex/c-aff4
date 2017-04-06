@@ -16,6 +16,8 @@ specific language governing permissions and limitations under the License.
 #ifndef SRC_AFF4_BASE_H_
 #define SRC_AFF4_BASE_H_
 
+#include "config.h"
+
 #include <iostream>
 
 
@@ -90,78 +92,79 @@ specific language governing permissions and limitations under the License.
  *        which reference it.
  */
 class AFF4Object {
- protected:
-  bool _dirty = false;                  /**< true if the object was modified. */
+  protected:
+    bool _dirty = false;                  /**< true if the object was modified. */
 
- public:
-  URN urn;                              /**< Each AFF4 object is addressable by
+  public:
+    URN urn;                              /**< Each AFF4 object is addressable by
                                          * its URN. */
 
-  DataStore *resolver;                  /**< All AFF4Objects have a resolver
+    DataStore* resolver;                  /**< All AFF4Objects have a resolver
                                          * which they use to access information
                                          * about the AFF4 universe. */
 
-  AFF4Object(DataStore *resolver);
-  AFF4Object(DataStore *resolver, URN new_urn): AFF4Object(resolver) {
-    urn = new_urn;
-  }
+    AFF4Object(DataStore* resolver);// : resolver(resolver){}
 
-  // Return this object to the resolver.
-  void Return();
+    AFF4Object(DataStore* resolver, URN new_urn): AFF4Object(resolver) {
+        urn = new_urn;
+    }
 
-  // By defining a virtual destructor this allows the destructor of derived
-  // objects to be called when deleting a pointer to a base object.
-  virtual ~AFF4Object() {}
+    // Return this object to the resolver.
+    void Return();
 
-  /**
-   * Load this AFF4 object from the URN provided.
-   *
-   *
-   * @return STATUS_OK if the object was properly loaded.
-   */
-  virtual AFF4Status LoadFromURN() {
-    return NOT_IMPLEMENTED;
-  }
+    // By defining a virtual destructor this allows the destructor of derived
+    // objects to be called when deleting a pointer to a base object.
+    virtual ~AFF4Object() {}
 
-  /**
-   * Prepares an object for re-use. Since AFF4Objects can be cached, we need a
-   * way to reset the object to a consistent state when returning it from the
-   * cache. The AFF4FactoryOpen() function will call this method before
-   * returning it to the caller in order to reset the object into a consistent
-   * state.
-   *
-   *
-   * @return STATUS_OK
-   */
-  virtual AFF4Status Prepare() {
-    return STATUS_OK;
-  }
+    /**
+     * Load this AFF4 object from the URN provided.
+     *
+     *
+     * @return STATUS_OK if the object was properly loaded.
+     */
+    virtual AFF4Status LoadFromURN() {
+        return NOT_IMPLEMENTED;
+    }
 
-  /**
-   * Flush the object state to the resolver data store.
-   * This is the reverse of LoadFromURN().
-   *
-   * @return
-   */
-  virtual AFF4Status Flush();
+    /**
+     * Prepares an object for re-use. Since AFF4Objects can be cached, we need a
+     * way to reset the object to a consistent state when returning it from the
+     * cache. The AFF4FactoryOpen() function will call this method before
+     * returning it to the caller in order to reset the object into a consistent
+     * state.
+     *
+     *
+     * @return STATUS_OK
+     */
+    virtual AFF4Status Prepare() {
+        return STATUS_OK;
+    }
 
-  /**
-   * Has the object been modified in any way?
-   *
-   *
-   * @return true if the object is dirty.
-   */
-  virtual bool IsDirty() {
-    return _dirty;
-  }
+    /**
+     * Flush the object state to the resolver data store.
+     * This is the reverse of LoadFromURN().
+     *
+     * @return
+     */
+    virtual AFF4Status Flush();
 
-  /**
-   * Mark the object as dirty. Note that the only way the object can become
-   * non-dirty is through a flush.
-   */
-  virtual void MarkDirty() {
-    _dirty = true;
-  }
+    /**
+     * Has the object been modified in any way?
+     *
+     *
+     * @return true if the object is dirty.
+     */
+    virtual bool IsDirty() {
+        return _dirty;
+    }
+
+    /**
+     * Mark the object as dirty. Note that the only way the object can become
+     * non-dirty is through a flush.
+     */
+    virtual void MarkDirty() {
+        _dirty = true;
+    }
 };
 
 
@@ -170,7 +173,7 @@ class AFF4Object {
  * AFF4Object at a specific URN.
  *
  */
-ClassFactory<AFF4Object> *GetAFF4ClassFactory();
+ClassFactory<AFF4Object>* GetAFF4ClassFactory();
 
 
 /**
@@ -189,16 +192,18 @@ static AFF4Registrar<ZipFile> r1(AFF4_ZIP_TYPE);
  */
 template<class T>
 class AFF4Registrar {
- public:
-  string name;
-  explicit AFF4Registrar(string name) {
-    this->name = name;
+  public:
+    std::string name;
+    explicit AFF4Registrar(std::string name) {
+        this->name = name;
 
-    GetAFF4ClassFactory()->RegisterFactoryFunction(
-        name,
-        [](DataStore *resolver, const URN *urn) -> T *{
-          return new T(resolver); });
-  }
+        GetAFF4ClassFactory()->RegisterFactoryFunction(
+            name,
+        [](DataStore *resolver, const URN *urn) -> T * {
+            UNUSED(urn);
+            return new T(resolver);
+        });
+    }
 };
 
 // In the AFF4 library all offsets are 64 bits - even on windows!

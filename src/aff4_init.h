@@ -16,5 +16,6 @@ specific language governing permissions and limitations under the License.
 #ifndef     AFF4_INIT_H_
 #define     AFF4_INIT_H_
 
+#include "config.h"
 
 #endif   // AFF4_INIT_H_

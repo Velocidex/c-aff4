@@ -1,14 +1,8 @@
-ACLOCAL_AMFLAGS = -I m4
+AUTOMAKE_OPTIONS = subdir-objects
+ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 # This is so we can #include <package/foo>
-AM_CPPFLAGS = -I$(top_srcdir)/src \
-  -I$(top_srcdir)/tests \
-  -I$(top_srcdir)/third_party/gtest/ -I$(top_srcdir)/third_party/gtest/include
-
-# These are good warnings to turn on by default
-if GCC
-AM_CXXFLAGS = -O0 -Wall -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare
-endif
+AM_CPPFLAGS = -I../src -I../tests -I../third_party/gtest/ -I../third_party/gtest/include
 
 # The -no-undefined flag allows libtool to generate shared libraries for
 # Cygwin and MinGW.  LIBSTDCXX_LA_LINKER_FLAG is used to fix a Solaris bug.
@@ -34,16 +28,24 @@ noinst_SCRIPTS =
 # Libraries that are built but not installed.
 noinst_LTLIBRARIES = libgtest.la
 
-libgtest_la_SOURCES = $(top_srcdir)/third_party/gtest/src/gtest-all.cc
+libgtest_la_SOURCES = ../third_party/gtest/src/gtest-all.cc
 libgtest_la_CXXFLAGS = -g -Wall -O0 -pthread
 libgtest_la_LIBADD = -lpthread
 
-bin_PROGRAMS = aff4-test
+noinst_PROGRAMS = aff4-test
 
 aff4_test_SOURCES =  \
-	aff4tests.cc  data_store_test.cc stream_test.cc zip_test.cc	\
-	aff4_image_test.cc rdf_tests.cc aff4_map_tests.cc directory_test.cc
+	aff4tests.cc  \
+	data_store_test.cc \
+	stream_test.cc \
+	zip_test.cc	\
+	aff4_image_test.cc \
+	rdf_tests.cc \
+	aff4_map_tests.cc \
+	directory_test.cc \
+	rdfquery_test.cc \
+	aff4_capi.cc
 
-aff4_test_LDADD = libgtest.la ../src/libaff4.la
-aff4_test_CXXFLAGS = -std=c++11 -g -Wall -O0
+aff4_test_LDADD = libgtest.la ../src/.libs/libaff4.a ${LIBS} ${GLOG_LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${UUID_LIBS} 
+aff4_test_CXXFLAGS = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS} ${GLOG_CFLAGS}
 aff4_test_LDFLAGS = $(STATIC_LINKERLDFLAGS)

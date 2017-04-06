@@ -16,70 +16,76 @@ specific language governing permissions and limitations under the License.
 #ifndef     SRC_AFF4_IO_H_
 #define     SRC_AFF4_IO_H_
 
+#include "config.h"
+
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
 #include <memory>
 #include <fstream>
+#include <cstdio>
 #include "aff4_base.h"
 #include "data_store.h"
 #include "aff4_utils.h"
 #include "rdf.h"
 
-using std::string;
-using std::unique_ptr;
-using std::unordered_map;
-using std::ofstream;
-using std::ifstream;
+//using std::string;
+//using std::unique_ptr;
+//using std::unordered_map;
+//using std::ofstream;
+//using std::ifstream;
 
 // A constant for various buffers used by the AFF4 library.
 #define AFF4_BUFF_SIZE (32 * 1024)
 
 
 struct AFF4StreamProperties {
-  // Set if the stream is non seekable (e.g. a pipe).
-  bool seekable = true;
+    // Set if the stream is non seekable (e.g. a pipe).
+    bool seekable = true;
 
-  // Do we know the size of this file?
-  bool sizeable = true;
+    // Do we know the size of this file?
+    bool sizeable = true;
 
-  // Can we write to this file.
-  bool writable = false;
+    // Can we write to this file.
+    bool writable = false;
 };
 
 
 struct AFF4VolumeProperties {
-  // Supports compression?
-  bool supports_compression = true;
+    // Supports compression?
+    bool supports_compression = true;
 
-  // Can we write to this volume?
-  bool writable = false;
+    // Can we write to this volume?
+    bool writable = false;
 
-  // Can file and directory names co-exist? (e.g. can we have a/b and a/b/c).
-  bool files_are_directories = true;
+    // Can file and directory names co-exist? (e.g. can we have a/b and a/b/c).
+    bool files_are_directories = true;
 };
 
 
 class ProgressContext {
- public:
-  // Maintained by the callback.
-  uint64_t last_time = 0;
-  aff4_off_t last_offset = 0;
+  public:
+    // Maintained by the callback.
+    uint64_t last_time = 0;
+    aff4_off_t last_offset = 0;
 
-  // The following are set in advance by users in order to get accurate progress
-  // reports.
+    // The following are set in advance by users in order to get accurate progress
+    // reports.
 
-  // Start offset of this current range.
-  aff4_off_t start = 0;
+    // Start offset of this current range.
+    aff4_off_t start = 0;
 
-  // Total length for this operation.
-  aff4_off_t length = 0;
+    // Total length for this operation.
+    aff4_off_t length = 0;
 
-  // This will be called periodically to report the progress. Note that readptr
-  // is specified relative to the start of the range operation (WriteStream and
-  // CopyToStream)
-  virtual bool Report(aff4_off_t readptr) {return true;}
-  virtual ~ProgressContext() {}
+    // This will be called periodically to report the progress. Note that readptr
+    // is specified relative to the start of the range operation (WriteStream and
+    // CopyToStream)
+    virtual bool Report(aff4_off_t readptr) {
+        UNUSED(readptr);
+        return true;
+    }
+    virtual ~ProgressContext() {}
 };
 
 // The empty progress renderer is always available.
@@ -88,100 +94,100 @@ extern ProgressContext empty_progress;
 
 // Some default progress functions that come out of the box.
 class DefaultProgress: public ProgressContext {
-  virtual bool Report(aff4_off_t readptr);
+    virtual bool Report(aff4_off_t readptr);
 };
 
 class AFF4Stream: public AFF4Object {
- protected:
-  aff4_off_t readptr;
-  aff4_off_t size;             // How many bytes are used in the stream?
+  protected:
+    aff4_off_t readptr;
+    aff4_off_t size;             // How many bytes are used in the stream?
 
- public:
-  AFF4StreamProperties properties;
+  public:
+    AFF4StreamProperties properties;
 
-  // Compression method supported by this stream. Note that not all compression
-  // methods are supported by all streams.
-  int compression_method = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
+    // Compression method supported by this stream. Note that not all compression
+    // methods are supported by all streams.
+    int compression_method = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
 
-  AFF4Stream(DataStore *resolver, URN urn):
-      AFF4Object(resolver, urn) {}
+    AFF4Stream(DataStore* resolver, URN urn):
+        AFF4Object(resolver, urn), readptr(0), size(0) {}
 
-  explicit AFF4Stream(DataStore *result):
-      AFF4Object(result), readptr(0), size(0) {}
+    explicit AFF4Stream(DataStore* result):
+        AFF4Object(result), readptr(0), size(0) {}
 
-  // Convenience methods.
-  int Write(const unique_ptr<string> &data);
-  int Write(const string &data);
-  int Write(const char data[]);
-  int sprintf(string fmt, ...);
+    // Convenience methods.
+    int Write(const std::unique_ptr<std::string>& data);
+    int Write(const std::string& data);
+    int Write(const char data[]);
+    int sprintf(std::string fmt, ...);
 
-  // Read a null terminated string.
-  string ReadCString(size_t length);
-  int ReadIntoBuffer(void *buffer, size_t length);
+    // Read a null terminated string.
+    std::string ReadCString(size_t length);
+    int ReadIntoBuffer(void* buffer, size_t length);
 
-  // Copies length bytes from this stream to the output stream.
-  virtual AFF4Status CopyToStream(
-      AFF4Stream &output, aff4_off_t length,
-      ProgressContext *progress = nullptr,
-      size_t buffer_size = 10*1024*1024);
+    // Copies length bytes from this stream to the output stream.
+    virtual AFF4Status CopyToStream(
+        AFF4Stream& output, aff4_off_t length,
+        ProgressContext* progress = nullptr,
+        size_t buffer_size = 10*1024*1024);
 
-  // Copies the entire source stream into this stream. This is the opposite of
-  // CopyToStream. By default we copy from the start to the end of the stream.
-  virtual AFF4Status WriteStream(
-      AFF4Stream *source,
-      ProgressContext *progress = nullptr);
+    // Copies the entire source stream into this stream. This is the opposite of
+    // CopyToStream. By default we copy from the start to the end of the stream.
+    virtual AFF4Status WriteStream(
+        AFF4Stream* source,
+        ProgressContext* progress = nullptr);
 
-  // The following should be overriden by derived classes.
-  virtual AFF4Status Seek(aff4_off_t offset, int whence);
-  virtual string Read(size_t length);
-  virtual int Write(const char *data, int length);
-  virtual aff4_off_t Tell();
-  virtual aff4_off_t Size();
+    // The following should be overriden by derived classes.
+    virtual AFF4Status Seek(aff4_off_t offset, int whence);
+    virtual std::string Read(size_t length);
+    virtual int Write(const char* data, int length);
+    virtual aff4_off_t Tell();
+    virtual aff4_off_t Size();
 
-  /**
-   * Streams are always reset to their begining when returned from the cache.
-   *
-   *
-   * @return
-   */
-  virtual AFF4Status Prepare() {
-    Seek(0, SEEK_SET);
-    return STATUS_OK;
-  }
+    /**
+     * Streams are always reset to their begining when returned from the cache.
+     *
+     *
+     * @return
+     */
+    virtual AFF4Status Prepare() {
+        Seek(0, SEEK_SET);
+        return STATUS_OK;
+    }
 
-  /**
-   * Streams can be truncated. This means the older stream data will be removed
-   * and the object is returned to its initial state.
-   *
-   *
-   * @return STATUS_OK if we were able to truncate the stream successfully.
-   */
-  virtual AFF4Status Truncate() {
-    return NOT_IMPLEMENTED;
-  }
+    /**
+     * Streams can be truncated. This means the older stream data will be removed
+     * and the object is returned to its initial state.
+     *
+     *
+     * @return STATUS_OK if we were able to truncate the stream successfully.
+     */
+    virtual AFF4Status Truncate() {
+        return NOT_IMPLEMENTED;
+    }
 };
 
 class StringIO: public AFF4Stream {
- public:
-  string buffer;
-  explicit StringIO(DataStore *resolver): AFF4Stream(resolver) {}
-  StringIO(): AFF4Stream(NULL) {}
-  explicit StringIO(string data): AFF4Stream(NULL), buffer(data) {}
+  public:
+    std::string buffer;
+    explicit StringIO(DataStore* resolver): AFF4Stream(resolver) {}
+    StringIO(): AFF4Stream(nullptr) {}
+    explicit StringIO(std::string data): AFF4Stream(nullptr), buffer(data) {}
 
-  // Convenience constructors.
-  static unique_ptr<StringIO> NewStringIO() {
-    unique_ptr<StringIO> result(new StringIO());
+    // Convenience constructors.
+    static std::unique_ptr<StringIO> NewStringIO() {
+        std::unique_ptr<StringIO> result(new StringIO());
 
-    return result;
-  }
+        return result;
+    }
 
-  virtual string Read(size_t length);
-  virtual int Write(const char *data, int length);
+    virtual std::string Read(size_t length);
+    virtual int Write(const char* data, int length);
 
-  virtual AFF4Status Truncate();
-  virtual aff4_off_t Size();
+    virtual AFF4Status Truncate();
+    virtual aff4_off_t Size();
 
-  using AFF4Stream::Write;
+    using AFF4Stream::Write;
 };
 
 
@@ -204,18 +210,18 @@ class StringIO: public AFF4Stream {
    location of the volume has not changed.
 */
 class AFF4Volume: public AFF4Object {
- public:
-  AFF4VolumeProperties properties;
+  public:
+    AFF4VolumeProperties properties;
 
-  // This is a list of URNs contained in this volume.
-  std::unordered_set<string> children;
-  AFF4Volume(DataStore *resolver, URN urn): AFF4Object(resolver, urn) {}
-  explicit AFF4Volume(DataStore *resolver): AFF4Object(resolver) {}
+    // This is a list of URNs contained in this volume.
+    std::unordered_set<std::string> children;
+    AFF4Volume(DataStore* resolver, URN urn): AFF4Object(resolver, urn) {}
+    explicit AFF4Volume(DataStore* resolver): AFF4Object(resolver) {}
 
-  // Create a new contained member. Note that if the member already exists you
-  // should be able to just open it with the factory - so this is only for
-  // creating new members.
-  virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
+    // Create a new contained member. Note that if the member already exists you
+    // should be able to just open it with the factory - so this is only for
+    // creating new members.
+    virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
 };
 
 

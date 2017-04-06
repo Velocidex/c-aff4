@@ -19,8 +19,8 @@ specific language governing permissions and limitations under the License.
 
 class AFF4DirectoryTest: public ::testing::Test {
  protected:
-  string root_path = "/tmp/aff4_directory/";
-  string segment_name = "Foobar.txt";
+	std::string root_path = "/tmp/aff4_directory/";
+	std::string segment_name = "Foobar.txt";
 
   // Remove the file on teardown.
   virtual void TearDown() {

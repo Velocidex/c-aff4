@@ -58,14 +58,14 @@ class StreamTest : public ::testing::Test {
 };
 
 TEST_F(StreamTest, StringIOTest) {
-  unique_ptr<AFF4Stream> stream = StringIO::NewStringIO();
+	std::unique_ptr<AFF4Stream> stream = StringIO::NewStringIO();
 
   test_Stream(*stream);
-};
+}
 
 class FileBackedStreamTest: public StreamTest {
  protected:
-  string filename = "/tmp/test_filename.bin";
+	std::string filename = "/tmp/test_filename.bin";
 
   // Remove the file on teardown.
   virtual void TearDown() {
@@ -87,4 +87,6 @@ TEST_F(FileBackedStreamTest, FileBackedObjectIOTest) {
   EXPECT_NE((AFF4Stream *)NULL, file.get());
 
   test_Stream(*file);
-};
+}
+
+

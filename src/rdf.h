@@ -16,6 +16,9 @@ specific language governing permissions and limitations under the License.
 #ifndef  SRC_RDF_H_
 #define  SRC_RDF_H_
 
+#include "config.h"
+
+
 #include <string>
 #include <memory>
 #include "string.h"
@@ -25,10 +28,10 @@ specific language governing permissions and limitations under the License.
 #include "aff4_registry.h"
 #include <uriparser/Uri.h>
 
-using std::string;
-using std::shared_ptr;
-using std::unique_ptr;
-using std::vector;
+//using std::string;
+//using std::shared_ptr;
+//using std::unique_ptr;
+//using std::vector;
 
 /**
  * @file
@@ -40,6 +43,8 @@ using std::vector;
  *
  */
 
+#define URN_PATH_SEPARATOR "/"
+
 class DataStore;
 class URN;
 
@@ -49,35 +54,38 @@ class URN;
  *
  */
 class RDFValue {
- protected:
-  DataStore *resolver;
+  protected:
+    DataStore* resolver;
 
- public:
-  explicit RDFValue(DataStore *resolver): resolver(resolver) {}
-  RDFValue(): resolver(NULL) {}
+  public:
+    explicit RDFValue(DataStore* resolver): resolver(resolver) {}
+    RDFValue(): resolver(nullptr) {}
 
-  virtual raptor_term *GetRaptorTerm(raptor_world *world) const {
-    return NULL;
-  }
+    virtual raptor_term* GetRaptorTerm(raptor_world* world) const {
+        UNUSED(world);
+        return nullptr;
+    }
 
-  // RDFValues must provide methods for serializing and unserializing.
-  virtual string SerializeToString() const {
-    return "";
-  }
+    // RDFValues must provide methods for serializing and unserializing.
+    virtual std::string SerializeToString() const {
+        return "";
+    }
 
-  virtual AFF4Status UnSerializeFromString(const char *data, int length) {
-    return GENERIC_ERROR;
-  }
+    virtual AFF4Status UnSerializeFromString(const char* data, int length) {
+        UNUSED(data);
+        UNUSED(length);
+        return GENERIC_ERROR;
+    }
 
-  AFF4Status UnSerializeFromString(const string data) {
-    return UnSerializeFromString(data.data(), data.size());
-  }
+    AFF4Status UnSerializeFromString(const std::string data) {
+        return UnSerializeFromString(data.data(), data.size());
+    }
 
-  AFF4Status Set(const string data) {
-    return UnSerializeFromString(data.c_str(), data.size());
-  }
+    AFF4Status Set(const std::string data) {
+        return UnSerializeFromString(data.c_str(), data.size());
+    }
 
-  virtual ~RDFValue() {}
+    virtual ~RDFValue() {}
 };
 
 
@@ -88,14 +96,16 @@ extern ClassFactory<RDFValue> RDFValueRegistry;
 
 template<class T>
 class RDFValueRegistrar {
- public:
-  explicit RDFValueRegistrar(string name) {
-    // register the class factory function
-    RDFValueRegistry.RegisterFactoryFunction(
-        name,
+  public:
+    explicit RDFValueRegistrar(std::string name) {
+        // register the class factory function
+        RDFValueRegistry.RegisterFactoryFunction(
+            name,
         [](DataStore *resolver, const URN *urn) -> RDFValue * {
-          return new T(resolver);});
-  }
+            UNUSED(urn);
+            return new T(resolver);
+        });
+    }
 };
 
 
@@ -107,30 +117,30 @@ static const char* const lut = "0123456789ABCDEF";
  *
  */
 class RDFBytes: public RDFValue {
- public:
-  string value;
+  public:
+    std::string value;
 
-  explicit RDFBytes(string data):
-      RDFBytes(data.c_str(), data.size()) {}
+    explicit RDFBytes(std::string data):
+        RDFBytes(data.c_str(), data.size()) {}
 
-  RDFBytes(const char * data, unsigned int length):
-      RDFValue(), value(data, length) {}
+    RDFBytes(const char* data, unsigned int length):
+        RDFValue(), value(data, length) {}
 
-  explicit RDFBytes(DataStore *resolver): RDFValue(resolver) {}
+    explicit RDFBytes(DataStore* resolver): RDFValue(resolver) {}
 
-  RDFBytes() {}
+    RDFBytes() {}
 
-  string SerializeToString() const;
-  AFF4Status UnSerializeFromString(const char *data, int length);
-  raptor_term *GetRaptorTerm(raptor_world *world) const;
+    std::string SerializeToString() const;
+    AFF4Status UnSerializeFromString(const char* data, int length);
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
 
-  bool operator==(const RDFBytes& other) const {
-    return this->value == other.value;
-  }
+    bool operator==(const RDFBytes& other) const {
+        return this->value == other.value;
+    }
 
-  bool operator==(const string& other) const {
-    return this->value == other;
-  }
+    bool operator==(const std::string& other) const {
+        return this->value == other;
+    }
 };
 
 /**
@@ -138,20 +148,20 @@ class RDFBytes: public RDFValue {
  *
  */
 class XSDString: public RDFBytes {
- public:
-  XSDString(string data):
-      RDFBytes(data.c_str(), data.size()) {}
+  public:
+    XSDString(std::string data):
+        RDFBytes(data.c_str(), data.size()) {}
 
-  XSDString(const char * data):
-      RDFBytes(data, strlen(data)) {}
+    XSDString(const char* data):
+        RDFBytes(data, strlen(data)) {}
 
-  explicit XSDString(DataStore *resolver): RDFBytes(resolver) {}
+    explicit XSDString(DataStore* resolver): RDFBytes(resolver) {}
 
-  XSDString() {}
+    XSDString() {}
 
-  string SerializeToString() const;
-  AFF4Status UnSerializeFromString(const char *data, int length);
-  raptor_term *GetRaptorTerm(raptor_world *world) const;
+    std::string SerializeToString() const;
+    AFF4Status UnSerializeFromString(const char* data, int length);
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
 };
 
 
@@ -161,22 +171,22 @@ class XSDString: public RDFBytes {
  *
  */
 class XSDInteger: public RDFValue {
- public:
-  uint64_t value;
+  public:
+    uint64_t value;
 
-  explicit XSDInteger(uint64_t data):
-      RDFValue(NULL), value(data) {}
+    explicit XSDInteger(uint64_t data):
+        RDFValue(nullptr), value(data) {}
 
-  explicit XSDInteger(DataStore *resolver):
-      RDFValue(resolver) {}
+    explicit XSDInteger(DataStore* resolver):
+        RDFValue(resolver), value(0) {}
 
-  XSDInteger() {}
+    XSDInteger() : value(0){}
 
-  string SerializeToString() const;
+    std::string SerializeToString() const;
 
-  AFF4Status UnSerializeFromString(const char *data, int length);
+    AFF4Status UnSerializeFromString(const char* data, int length);
 
-  raptor_term *GetRaptorTerm(raptor_world *world) const;
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
 };
 
 
@@ -185,22 +195,22 @@ class XSDInteger: public RDFValue {
  *
  */
 class XSDBoolean: public RDFValue {
- public:
-  bool value;
+  public:
+    bool value;
 
-  explicit XSDBoolean(bool data):
-      RDFValue(NULL), value(data) {}
+    explicit XSDBoolean(bool data):
+        RDFValue(nullptr), value(data) {}
 
-  explicit XSDBoolean(DataStore *resolver):
-      RDFValue(resolver) {}
+    explicit XSDBoolean(DataStore* resolver):
+        RDFValue(resolver), value(false) {}
 
-  XSDBoolean() {}
+    XSDBoolean() : value(false){}
 
-  string SerializeToString() const;
+    std::string SerializeToString() const;
 
-  AFF4Status UnSerializeFromString(const char *data, int length);
+    AFF4Status UnSerializeFromString(const char* data, int length);
 
-  raptor_term *GetRaptorTerm(raptor_world *world) const;
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
 };
 
 /**
@@ -208,10 +218,10 @@ class XSDBoolean: public RDFValue {
  *
  */
 struct uri_components {
-  string scheme;
-  string domain;
-  string fragment;
-  string path;
+    std::string scheme;
+    std::string domain;
+    std::string fragment;
+    std::string path;
 };
 
 /**
@@ -219,83 +229,96 @@ struct uri_components {
  *
  */
 class URN: public XSDString {
- protected:
-  string original_filename;
+  protected:
+    //std::string original_filename;
 
- public:
-  /**
-   * Create a new URN from a filename.
-   *
-   * @param filename: The filename to convert.
-   * @param windows_filename: If true interpret the filename as a windows
-   * filename, else it will be considered a unix filename. Currently windows and
-   * unix filenames are escaped differently.
-   *
-   * @return a URN object.
-   */
-  static URN NewURNFromOSFilename(string filename, bool windows_filename,
-                                  bool absolute_path = true);
+  public:
+    /**
+     * Create a new URN from a filename.
+     *
+     * @param filename: The filename to convert.
+     * @param windows_filename: If true interpret the filename as a windows
+     * filename, else it will be considered a unix filename. Currently windows and
+     * unix filenames are escaped differently.
+     *
+     * @return a URN object.
+     */
+    static URN NewURNFromOSFilename(std::string filename, bool windows_filename,
+                                    bool absolute_path = true);
 
-  /**
-   * Create a URN from filename.
-   * This variant of the function automatically selects the type.
-   *
-   * @param filename
-   * @param absolute_path: If specified we convert the filename to an absolute
-   * path first.
-   *
-   * @return
-   */
-  static URN NewURNFromFilename(string filename, bool absolute_path = true);
+    /**
+     * Create a URN from filename.
+     * This variant of the function automatically selects the type.
+     *
+     * @param filename
+     * @param absolute_path: If specified we convert the filename to an absolute
+     * path first.
+     *
+     * @return
+     */
+    static URN NewURNFromFilename(std::string filename, bool absolute_path = true);
 
-  /**
-   * Returns the current URN as a filename.
-   *
-   *
-   * @return If this is a file:// URN, returns the filename, else "".
-   */
-  string ToFilename() const;
+    /**
+     * Returns the current URN as a filename.
+     *
+     *
+     * @return If this is a file:// URN, returns the filename, else "".
+     */
+    std::string ToFilename() const;
 
-  URN(const char * data);
-  URN(const string data): URN(data.c_str()) {};
-  explicit URN(DataStore *resolver): URN() {};
-  URN() {};
+    URN(const char* data);
+    URN(const std::string data): URN(data.c_str()) {};
+    explicit URN(DataStore* resolver): URN() {
+        UNUSED(resolver);
+    };
+    URN() {};
 
-  URN Append(const string &component) const;
+    URN Append(const std::string& component) const;
 
-  raptor_term *GetRaptorTerm(raptor_world *world) const;
-  uri_components Parse() const;
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
+    uri_components Parse() const;
 
-  // Convenience methods for Parse()
-  string Scheme() const {
-    return Parse().scheme;
-  }
+    // Convenience methods for Parse()
+    std::string Scheme() const {
+        return Parse().scheme;
+    }
 
-  string Path() const {
-    return Parse().path;
-  }
+    std::string Path() const {
+        return Parse().path;
+    }
 
-  string Domain() const {
-    return Parse().domain;
-  }
+    std::string Domain() const {
+        return Parse().domain;
+    }
 
-  /**
-   * returns the path of the URN relative to ourselves.
-   *
-   * If the urn contains us as a common prefix, we remove that and return a
-   * relative path. Otherwise we return the complete urn as an absolution path.
-   *
-   * @param urn: The urn to check.
-   *
-   * @return A string representing the path.
-   */
-  string RelativePath(const URN urn) const;
+    /**
+     * returns the path of the URN relative to ourselves.
+     *
+     * If the urn contains us as a common prefix, we remove that and return a
+     * relative path. Otherwise we return the complete urn as an absolution path.
+     *
+     * @param urn: The urn to check.
+     *
+     * @return A string representing the path.
+     */
+    std::string RelativePath(const URN urn) const;
 
-  AFF4Status Set(const URN data) {
-    value = data.SerializeToString();
-    return STATUS_OK;
-  }
+    AFF4Status Set(const URN data) {
+        value = data.SerializeToString();
+        return STATUS_OK;
+    }
 };
+
+// custom specialization of std::hash injected into std namespace.
+namespace std {
+    template<> struct hash<URN> {
+        typedef std::size_t result_type;
+        result_type operator()(URN const& s) const {
+        	result_type const h1 (std::hash<std::string>{}(s.value));
+        	return h1;
+        }
+    };
+}
 
 
 #endif  // SRC_RDF_H_

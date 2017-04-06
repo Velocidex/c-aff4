@@ -24,17 +24,18 @@ specific language governing permissions and limitations under the License.
 BasicImager imager;
 
 int main(int argc, char* argv[]) {
-  // Initialize Google's logging library.
-  google::InitGoogleLogging(argv[0]);
+    // Initialize Google's logging library.
+    google::InitGoogleLogging(argv[0]);
 
-  google::LogToStderr();
-  google::SetStderrLogging(google::GLOG_ERROR);
+    google::LogToStderr();
+    google::SetStderrLogging(google::GLOG_ERROR);
 
-  AFF4Status res = imager.Run(argc, argv);
-  if (res == STATUS_OK || res == CONTINUE)
-    return 0;
+    AFF4Status res = imager.Run(argc, argv);
+    if (res == STATUS_OK || res == CONTINUE) {
+        return 0;
+    }
 
-  LOG(ERROR) << "Imaging failed with error: " << res;
+    LOG(ERROR) << "Imaging failed with error: " << res;
 
-  return res;
+    return res;
 }

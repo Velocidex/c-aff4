@@ -14,3 +14,34 @@ TESTING
 
 * Build and run the tests:
   $ make check
+  
+  
+BUILDING OS X
+================
+
+I have it building (somewhat clean) on OS X now:
+
+$ cd ~/git
+$ git clone ssh://bastion/srv/git/aff4.git
+$ cd aff4
+$ git submodule update --init third_party/gtest
+   Ignore the error about tree reference.
+$ cd third_party/gtest
+$ git reset --hard
+$ cd ../..
+$ ./autogen.sh
+$ ./configure CC=clang CXX=clang++ CXXFLAGS="-std=c++11 -stdlib=libc++ -O2 -g0 -I/opt/local/include" LDFLAGS="-stdlib=libc++ -L/opt/local/lib"
+$ make
+
+Requirements via macports:
+* zlib
+* raptor2
+* google-glog
+* pcrexx
+* tclap (missing *.pc file - place in /opt/local/lib/pkgconfig/)
+
+Requirements via manual installation:
+* snappy 
+* uuid 
+
+For the manual installations, need to ensure they are installed in /opt/local. ("./configure --prefix=/opt/local")
