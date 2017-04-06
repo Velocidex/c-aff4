@@ -19,7 +19,16 @@ TESTING
 BUILDING OS X
 ================
 
-I have it building (somewhat clean) on OS X now:
+Install the following via macports
+* zlib
+* raptor2
+* google-glog
+* pcrexx
+* tclap (missing *.pc file - place in /opt/local/lib/pkgconfig/)
+
+Install the following manually as they aren't in macports
+* snappy 
+* uuid 
 
 $ cd ~/git
 $ git clone ssh://bastion/srv/git/aff4.git
@@ -32,16 +41,5 @@ $ cd ../..
 $ ./autogen.sh
 $ ./configure CC=clang CXX=clang++ CXXFLAGS="-std=c++11 -stdlib=libc++ -O2 -g0 -I/opt/local/include" LDFLAGS="-stdlib=libc++ -L/opt/local/lib"
 $ make
-
-Requirements via macports:
-* zlib
-* raptor2
-* google-glog
-* pcrexx
-* tclap (missing *.pc file - place in /opt/local/lib/pkgconfig/)
-
-Requirements via manual installation:
-* snappy 
-* uuid 
 
 For the manual installations, need to ensure they are installed in /opt/local. ("./configure --prefix=/opt/local")
