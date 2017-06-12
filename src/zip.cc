@@ -276,21 +276,36 @@ AFF4Status ZipFile::parse_cd() {
         zip_info->lastmodtime = entry.dostime;
 
         // Zip64 local header - parse the extra field.
-        if (zip_info->local_header_offset < 0) {
+        if (zip_info->local_header_offset == 4294967295) {
             // Parse all the extra field records.
-            Zip64FileHeaderExtensibleField extra;
+        	ZipExtraFieldHeader extra;
             aff4_off_t real_end_of_extra = (backing_store->Tell() + entry.extra_field_len);
 
-            while (backing_store->Tell() < real_end_of_extra) {
-                backing_store->ReadIntoBuffer(&extra, entry.extra_field_len);
+			while (backing_store->Tell() < real_end_of_extra) {
+				backing_store->ReadIntoBuffer(&extra, 4);
 
-                if (extra.header_id == 1) {
-                    zip_info->local_header_offset = extra.relative_offset_local_header;
-                    zip_info->file_size = extra.file_size;
-                    zip_info->compress_size = extra.compress_size;
-                    break;
-                }
-            }
+				if (extra.header_id == 1) {
+					uint16_t data_size = extra.data_size;
+					if ((zip_info->file_size == 4294967295) && (data_size >= 8)) {
+						backing_store->ReadIntoBuffer(&(zip_info->file_size), 8);
+						data_size -= 8;
+					}
+					if ((zip_info->compress_size == 4294967295) && (data_size >= 8)) {
+						backing_store->ReadIntoBuffer(&(zip_info->compress_size), 8);
+						data_size -= 8;
+					}
+					if ((zip_info->local_header_offset == 4294967295) && (data_size >= 8)) {
+						backing_store->ReadIntoBuffer(&(zip_info->local_header_offset), 8);
+						data_size -= 8;
+					}
+					if (data_size > 0) {
+						backing_store->Seek(data_size, 1);
+					}
+				} else {
+					// skip the data length going forward.
+					backing_store->Seek(extra.data_size, 1);
+				}
+			}
         }
 
         if (zip_info->local_header_offset >= 0) {
