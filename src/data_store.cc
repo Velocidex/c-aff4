@@ -438,6 +438,30 @@ AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute, RDFValue& 
 	return value.UnSerializeFromString(values[0]->SerializeToString());
 }
 
+AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute, std::vector<std::shared_ptr<RDFValue>>& values) {
+	auto urn_it = store.find(urn.SerializeToString());
+
+	if (urn_it == store.end()) {
+		return NOT_FOUND;
+	}
+
+	auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
+	if (attribute_itr == urn_it->second.end()) {
+		return NOT_FOUND;
+	}
+
+	std::vector<std::shared_ptr<RDFValue>> ivalues = (attribute_itr->second);
+	if (ivalues.empty()) {
+		return NOT_FOUND;
+	}
+	// Load up our keys.
+	for(std::vector<std::shared_ptr<RDFValue>>::iterator it = ivalues.begin(); it != ivalues.end(); it++){
+		std::shared_ptr<RDFValue> v = *it;
+		values.push_back(v);
+	}
+	return STATUS_OK;
+}
+
 AFF4Status MemoryDataStore::Has(const URN& urn) {
 	auto urn_it = store.find(urn.SerializeToString());
 

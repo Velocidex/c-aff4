@@ -64,7 +64,7 @@ struct CDFileHeader {
     uint16_t disk_number_start = 0;
     uint16_t internal_file_attr = 0;
     uint32_t external_file_attr = 0644 << 16L;
-    int32_t relative_offset_local_header = -1;
+    uint32_t relative_offset_local_header = -1;
 } __attribute__((packed));
 
 
@@ -88,8 +88,13 @@ struct Zip64FileHeaderExtensibleField {
     uint16_t data_size = 28;
     uint64_t file_size;
     uint64_t compress_size;
-    uint64_t relative_offset_local_header;
+    int64_t relative_offset_local_header;
     uint32_t disk_number_start = 0;
+} __attribute__((packed));
+
+struct ZipExtraFieldHeader {
+	uint16_t header_id;
+	uint16_t data_size;
 } __attribute__((packed));
 
 struct Zip64EndCD {
@@ -191,13 +196,13 @@ class ZipInfo {
     uint64_t compress_size = 0;
     uint64_t file_size = 0;
     std::string filename;
-    off_t local_header_offset = 0;
+    aff4_off_t local_header_offset = 0;
     int crc32_cs = 0;
     int lastmoddate = 0;
     int lastmodtime = 0;
 
     // Where the zip file header is located.
-    off_t file_header_offset = -1;
+    aff4_off_t file_header_offset = -1;
 
     AFF4Status WriteFileHeader(AFF4Stream& output);
     AFF4Status WriteCDFileHeader(AFF4Stream& output);

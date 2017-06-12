@@ -371,6 +371,9 @@ class DataStore {
     virtual AFF4Status Get(const URN& urn, const URN& attribute,
                            RDFValue& value) = 0;
 
+    virtual AFF4Status Get(const URN& urn, const URN& attribute,
+    		std::vector<std::shared_ptr<RDFValue>>& values) = 0;
+
     /**
      * Does the given URN have the given attribute set to the given value.
      */
@@ -491,6 +494,7 @@ class DataStore {
     template<typename T>
     AFF4ScopedPtr<T> AFF4FactoryOpen(const URN& urn) {
 
+    	LOG(INFO) << "AFF4FactoryOpen : " << urn.SerializeToString();
     	// Check the symbolic aff4:ImageStream cache.
 
     	std::unordered_map<std::string, std::shared_ptr<AFF4Stream>>::const_iterator it = SymbolicStreams.find(urn.value);
@@ -513,17 +517,30 @@ class DataStore {
         URN type_urn;
         std::unique_ptr<AFF4Object> obj;
 
-        const uri_components components = urn.Parse();
+		const uri_components components = urn.Parse();
 
-        // Check if there is a resolver triple for it.
-        if (Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
-            obj = GetAFF4ClassFactory()->CreateInstance(type_urn.value, this, &urn);
-        }
+		// Check if there is a resolver triple for it.
+		std::vector<std::shared_ptr<RDFValue>> types;
+		if(Get(urn, AFF4_TYPE, types) == STATUS_OK) {
+			for(std::shared_ptr<RDFValue> v : types) {
+				obj = GetAFF4ClassFactory()->CreateInstance(v->SerializeToString(), this, &urn);
+				if(obj != nullptr) {
+					type_urn = URN(v->SerializeToString());
+					break;
+				}
+			}
+		}
+
+		// Check if there is a resolver triple for it.
+		if(!obj) {
+			if (Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
+				obj = GetAFF4ClassFactory()->CreateInstance(type_urn.value, this, &urn);
+			}
+		}
 
         // Try to instantiate the handler based on the URN scheme alone.
         if (!obj) {
-            obj = GetAFF4ClassFactory()->CreateInstance(
-                      components.scheme, this, &urn);
+            obj = GetAFF4ClassFactory()->CreateInstance(components.scheme, this, &urn);
         }
 
         // Failed to find the object.
@@ -596,6 +613,7 @@ class MemoryDataStore: public DataStore {
     virtual void Set(const URN& urn, const URN& attribute, std::shared_ptr<RDFValue> value);
 
     AFF4Status Get(const URN& urn, const URN& attribute, RDFValue& value);
+    AFF4Status Get(const URN& urn, const URN& attribute, std::vector<std::shared_ptr<RDFValue>>& value);
     AFF4Status Has(const URN& urn);
     AFF4Status Has(const URN& urn, const URN& attribute);
     AFF4Status Has(const URN& urn, const URN& attribute, RDFValue& value);
