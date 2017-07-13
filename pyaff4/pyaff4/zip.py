@@ -99,7 +99,7 @@ class CDFileHeader(struct_parser.CreateStruct(
         uint16_t file_comment_length = 0;
         uint16_t disk_number_start = 0;
         uint16_t internal_file_attr = 0;
-        uint32_t external_file_attr = 0644 << 16L;
+        uint32_t external_file_attr = 0o644 << 16L;
         uint32_t relative_offset_local_header = -1;
         """)):
     def IsValid(self):
