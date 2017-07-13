@@ -12,8 +12,11 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
 import os
-import StringIO
+import io
 import unittest
 
 from pyaff4 import aff4_image
@@ -68,7 +71,7 @@ class AFF4ImageTest(unittest.TestCase):
                     resolver, self.image_urn_3, self.volume_urn) as image:
                     image.chunk_size = 10
                     image.chunks_per_segment = 3
-                    stream = StringIO.StringIO()
+                    stream = io.StringIO()
                     for i in range(100):
                         stream.write("Hello world %02d!" % i)
 

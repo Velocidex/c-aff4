@@ -1,5 +1,7 @@
 """An implementation of a struct parser which is fast and convenient."""
 
+from builtins import zip
+from builtins import object
 import struct
 
 format_string_map = dict(
@@ -26,7 +28,7 @@ class BaseParser(object):
                 struct.unpack_from(self._format_string, data))
 
         if kwargs:
-            for k, v in kwargs.iteritems():
+            for k, v in kwargs.items():
                 setattr(self, k, v)
 
     def __str__(self):

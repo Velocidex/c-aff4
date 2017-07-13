@@ -24,7 +24,7 @@ except IOError:
     long_description = ""
 
 ENV = {"__file__": __file__}
-exec open("pyaff4/_version.py").read() in ENV
+exec(open("pyaff4/_version.py").read(), ENV)
 VERSION = ENV["get_versions"]()
 
 

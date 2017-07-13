@@ -1,3 +1,5 @@
+from __future__ import division
+from __future__ import absolute_import
 # Copyright 2016,2017 Schatz Forensic Pty Ltd. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,7 +14,9 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
-from aff4 import AFF4Stream
+from builtins import str
+from past.utils import old_div
+from .aff4 import AFF4Stream
 import sys
 import binascii
 import math
@@ -76,7 +80,7 @@ class RepeatedStringStream(AFF4Stream):
         self.repeatedString = None
 
     def initializeTile(self):
-        countRepetitions = math.ceil(self.tilesize / len(self.repeatedString))
+        countRepetitions = math.ceil(old_div(self.tilesize, len(self.repeatedString)))
         repeatedBytes = bytearray(self.repeatedString, "ascii")
         while len(repeatedBytes) < self.tilesize:
             repeatedBytes = repeatedBytes + repeatedBytes

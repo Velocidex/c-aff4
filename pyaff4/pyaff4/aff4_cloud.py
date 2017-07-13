@@ -16,6 +16,8 @@
 
 It allows use of cloud buckets as transparent AFF4 images.
 """
+from builtins import str
+from builtins import range
 import json
 import logging
 from multiprocessing.dummy import Pool as ThreadPool
@@ -223,7 +225,7 @@ class AFF4GCSStream(aff4_file.FileBackedObject):
                 slash_ok=False)
 
             filename = os.path.join(
-                unicode(cache_directory), filename)
+                str(cache_directory), filename)
 
             # When truncating a stream we just overwrite it with new data.
             if mode == "truncate":

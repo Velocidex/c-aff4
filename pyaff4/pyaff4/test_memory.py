@@ -1,3 +1,4 @@
+from __future__ import print_function
 # Copyright 2016,2017 Schatz Forensic Pty Ltd. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,6 +13,7 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
+from builtins import str
 import unittest
 
 from pyaff4 import data_store
@@ -43,8 +45,8 @@ class ValidatorTest(unittest.TestCase):
 
         validator = LinearHasher()
         hash = validator.hash(self.memoryImage, "aff4://ad0c6ce0-1e1c-4e8f-8114-7f876237138f/dev/pmem", lexicon.HASH_SHA1)
-        print dir(hash)
-        print hash.value
+        print(dir(hash))
+        print(hash.value)
         self.assertEqual(hash.value, "5d5f183ae7355b8dc8938b67aab77c0215c29ab4")
 
     def testLinearHashPreStdLinearImage2(self):
@@ -53,8 +55,8 @@ class ValidatorTest(unittest.TestCase):
 
         validator = LinearHasher()
         hash = validator.hash(self.memoryImage2, "aff4://a862d4b0-ff3d-4ccf-a1e9-5316a4f7b8fe", lexicon.HASH_SHA1)
-        print dir(hash)
-        print hash.value
+        print(dir(hash))
+        print(hash.value)
         self.assertEqual(hash.value, "8667a82bafa7b4b3513838aac31bbd20498afe3f")
 
 
@@ -63,7 +65,7 @@ class ValidatorTest(unittest.TestCase):
         cont = Container.open(self.memoryImage3)
 
         for run in cont.GetRanges():
-            print str(run)
+            print(str(run))
 
         address = 0x2b708ac
         baseBlock = 0x2900000

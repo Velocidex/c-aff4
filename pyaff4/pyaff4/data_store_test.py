@@ -13,13 +13,15 @@
 # the License.
 
 
+from future import standard_library
+standard_library.install_aliases()
 from pyaff4 import aff4
 from pyaff4 import data_store
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 import unittest
 
-import StringIO
+import io
 
 
 class DataStoreTest(unittest.TestCase):
@@ -52,7 +54,7 @@ class DataStoreTest(unittest.TestCase):
     def testTurtleSerialization(self):
         data = self.store.DumpToTurtle(verbose=True)
         new_store = data_store.MemoryDataStore()
-        new_store.LoadFromTurtle(StringIO.StringIO(data))
+        new_store.LoadFromTurtle(io.StringIO(data))
         res = new_store.Get(rdfvalue.URN("hello"), rdfvalue.URN("World"))
         self.assertEquals(res, "foo")
 

@@ -1,3 +1,5 @@
+from __future__ import print_function
+from __future__ import absolute_import
 # Copyright 2016,2017 Schatz Forensic Pty Ltd. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,6 +14,8 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
+from builtins import str
+from builtins import object
 from pyaff4 import data_store
 from pyaff4 import hashes
 from pyaff4 import lexicon
@@ -20,10 +24,10 @@ from pyaff4 import rdfvalue
 from pyaff4 import aff4
 
 import yaml
-import zip
+from . import zip
 
 localcache = {}
-class Container:
+class Container(object):
     def __init__(self):
         pass
 
@@ -31,7 +35,7 @@ class Container:
     def identify(filename):
         resolver = data_store.MemoryDataStore(lexicon.standard)
         with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
-            if len(zip_file.members.keys()) == 0:
+            if len(list(zip_file.members.keys())) == 0:
                 # it's a new zipfile
                 raise IOError("Not an AFF4 Volume")
             try:
@@ -63,7 +67,7 @@ class Container:
             resolver = data_store.MemoryDataStore(lex)
             with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
                 if lex == lexicon.standard:
-                    image = resolver.QueryPredicateObject(lexicon.AFF4_TYPE, lex.Image).next()
+                    image = next(resolver.QueryPredicateObject(lexicon.AFF4_TYPE, lex.Image))
 
                     datastreams = list(resolver.QuerySubjectPredicate(image, lex.dataStream))
 
@@ -75,8 +79,8 @@ class Container:
                             return res
 
                 elif lex == lexicon.scudette:
-                    m = resolver.QueryPredicateObject(lexicon.AFF4_TYPE, lex.map).next()
-                    cat = resolver.QuerySubjectPredicate(m, lex.category).next()
+                    m = next(resolver.QueryPredicateObject(lexicon.AFF4_TYPE, lex.map))
+                    cat = next(resolver.QuerySubjectPredicate(m, lex.category))
                     if cat == lex.memoryPhysical:
                         res = resolver.AFF4FactoryOpen(m)
                         localcache[filename] = res
@@ -86,7 +90,7 @@ class Container:
                         with resolver.AFF4FactoryOpen(legacyYamlInfoURI) as fd:
                             txt = fd.read(10000000)
                             dt = yaml.safe_load(txt)
-                            print txt
+                            print(txt)
                             try:
                                 CR3 = dt["Registers"]["CR3"]
                                 resolver.Add(res.parent.urn, lexicon.standard.memoryPageTableEntryOffset, rdfvalue.XSDInteger(CR3))
