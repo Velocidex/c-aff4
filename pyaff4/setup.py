@@ -58,7 +58,7 @@ setup(
         "aff4-snappy == 0.5",
         "rdflib == 4.2.1",
         "intervaltree == 2.1.0",
-        "pyblake2 == 0.0.3",
+        "pyblake2 == 0.9.3",
         "expiringdict == 1.1.4"
     ],
     extras_require=dict(
