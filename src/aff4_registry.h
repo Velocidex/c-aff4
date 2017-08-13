@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <iostream>
+#include <functional>
 
 //using std::string;
 //using std::unique_ptr;
