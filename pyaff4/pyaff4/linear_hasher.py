@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 # Copyright 2016,2017 Schatz Forensic Pty Ltd. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,6 +13,7 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
+from builtins import object
 from pyaff4.block_hasher import ValidationListener
 
 from pyaff4 import data_store
@@ -20,11 +22,11 @@ from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4.container import Container
 import rdflib
-import zip
+from . import zip
 import hashlib
 
 
-class LinearHasher:
+class LinearHasher(object):
     def __init__(self, listener=None):
         if listener == None:
             self.listener = ValidationListener()

@@ -1,8 +1,11 @@
+from future import standard_library
+standard_library.install_aliases()
+from builtins import chr
 import os
 import re
 import shutil
 import string
-import urlparse
+import urllib.parse
 
 
 PRINTABLES = set(string.printable)
@@ -47,7 +50,7 @@ def urn_from_member_name(member, base_urn):
     member = re.sub(
         "%(..)", lambda x: chr(int("0x" + x.group(1), 0)),
         member)
-    if urlparse.urlparse(member).scheme == "aff4":
+    if urllib.parse.urlparse(member).scheme == "aff4":
         return member
 
     return base_urn.Append(member, quote=False)

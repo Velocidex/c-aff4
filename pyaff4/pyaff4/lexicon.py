@@ -16,6 +16,7 @@
 # This is the version of the AFF4 specification we support - not the library
 # version itself.
 
+from builtins import object
 import rdflib
 
 AFF4_VERSION = "0.2"
@@ -145,7 +146,7 @@ HASH_BLAKE2B = rdflib.URIRef("http://aff4.org/Schema#Blake2b")
 
 HASH_BLOCKMAPHASH_SHA512 = rdflib.URIRef("http://aff4.org/Schema#blockMapHashSHA512")
 
-class Lexicon:
+class Lexicon(object):
     def __init__(self):
         pass
 

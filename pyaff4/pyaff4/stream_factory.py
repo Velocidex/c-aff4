@@ -12,11 +12,13 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
+from builtins import str
+from builtins import object
 from pyaff4.symbolic_streams import  *
 from pyaff4 import rdfvalue
 import re
 
-class StreamFactory:
+class StreamFactory(object):
     def __init__(self, resolver, lex):
         self.lexicon = lex
         self.resolver = resolver

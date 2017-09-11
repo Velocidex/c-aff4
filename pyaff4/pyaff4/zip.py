@@ -14,8 +14,12 @@
 
 """An implementation of the ZipFile based AFF4 volume."""
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import object
 import logging
-import StringIO
+import io
 import zlib
 import struct
 
@@ -95,7 +99,7 @@ class CDFileHeader(struct_parser.CreateStruct(
         uint16_t file_comment_length = 0;
         uint16_t disk_number_start = 0;
         uint16_t internal_file_attr = 0;
-        uint32_t external_file_attr = 0644 << 16L;
+        uint32_t external_file_attr = 0o644 << 16L;
         uint32_t relative_offset_local_header = -1;
         """)):
     def IsValid(self):
@@ -122,7 +126,7 @@ class ZipFileHeader(struct_parser.CreateStruct(
         return self.magic == 0x4034b50
 
 # see APPNOTE.txt 4.5.3 -Zip64 Extended Information Extra Field (0x0001):
-class Zip64FileHeaderExtensibleField:
+class Zip64FileHeaderExtensibleField(object):
 
     header_id = -1                      # uint16_t
     data_size = -1                      # uint16_t
@@ -339,7 +343,7 @@ class ZipFileSegment(aff4_file.FileBackedObject):
         zip_info = owner.members.get(member_name)
         if zip_info is None:
             # The owner does not have this file yet - we add it when closing.
-            self.fd = StringIO.StringIO()
+            self.fd = io.StringIO()
             return
 
         backing_store_urn = owner.backing_store_urn
@@ -376,7 +380,7 @@ class ZipFileSegment(aff4_file.FileBackedObject):
                     LOGGER.info("Unable to decompress file %s", self.urn)
                     raise IOError()
 
-                self.fd = StringIO.StringIO(decomp_buffer)
+                self.fd = io.StringIO(decomp_buffer)
 
             elif file_header.compression_method == ZIP_STORED:
                 # Otherwise we map a slice into it.
@@ -525,7 +529,7 @@ class ZipFile(aff4.AFF4Volume):
 
             # Now iterate over the directory and read all the ZipInfo structs.
             entry_offset = directory_offset
-            for _ in xrange(directory_number_of_entries):
+            for _ in range(directory_number_of_entries):
                 backing_store.Seek(entry_offset + self.global_offset, 0)
                 entry = CDFileHeader(
                     backing_store.Read(CDFileHeader.sizeof()))
@@ -773,7 +777,7 @@ class ZipFile(aff4.AFF4Volume):
             # We write to a memory stream first, and then copy it into the
             # backing_store at once. This really helps when we have lots of
             # members in the zip archive.
-            cd_stream = StringIO.StringIO()
+            cd_stream = io.StringIO()
 
             # Append a new central directory to the end of the zip file.
             backing_store.Seek(0, aff4.SEEK_END)
@@ -782,7 +786,7 @@ class ZipFile(aff4.AFF4Volume):
             ecd_real_offset = backing_store.Tell()
 
             total_entries = len(self.members)
-            for urn, zip_info in self.members.iteritems():
+            for urn, zip_info in self.members.items():
                 LOGGER.info("Writing CD entry for %s", urn)
                 zip_info.WriteCDFileHeader(cd_stream)
 

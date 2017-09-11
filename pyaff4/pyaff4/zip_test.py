@@ -13,8 +13,10 @@
 # the License.
 
 
+from future import standard_library
+standard_library.install_aliases()
 import os
-import StringIO
+import io
 import unittest
 
 from pyaff4 import data_store
@@ -51,7 +53,7 @@ class ZipTest(unittest.TestCase):
                 streamed_urn = self.volume_urn.Append(self.streamed_segment)
                 with zip_file.CreateMember(streamed_urn) as streamed:
                     streamed.compression_method = zip.ZIP_DEFLATE
-                    src = StringIO.StringIO(self.data1)
+                    src = io.StringIO(self.data1)
                     streamed.WriteStream(src)
 
     def tearDown(self):

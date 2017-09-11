@@ -13,6 +13,10 @@
 # the License.
 
 """This module implements the standard AFF4 Image."""
+from __future__ import division
+from builtins import str
+from past.utils import old_div
+from builtins import object
 import logging
 import struct
 import zlib
@@ -322,12 +326,12 @@ class AFF4Image(aff4.AFF4Stream):
                 continue
 
 
-            bevy_id = chunk_id / self.chunks_per_segment
+            bevy_id = old_div(chunk_id, self.chunks_per_segment)
             bevy_urn = self.urn.Append("%08d" % bevy_id)
             bevy_index_urn = self.urn.Append("%08d/index" % bevy_id)
 
             with self.resolver.AFF4FactoryOpen(bevy_index_urn) as bevy_index:
-                index_size = bevy_index.Size() / 4
+                index_size = old_div(bevy_index.Size(), 4)
                 bevy_index_data = bevy_index.Read(bevy_index.Size())
 
                 bevy_index_array = self.deserializeIndexV0b(index_size, bevy_index_data)
@@ -354,7 +358,7 @@ class AFF4Image(aff4.AFF4Stream):
                     chunks_read += 1
 
                     # This bevy is exhausted, get the next one.
-                    if bevy_id < chunk_id / self.chunks_per_segment:
+                    if bevy_id < old_div(chunk_id, self.chunks_per_segment):
                         break
 
         return chunks_read, result
@@ -423,12 +427,12 @@ class AFF4PreSImage(AFF4Image):
                 chunks_read += 1
                 continue
 
-            bevy_id = chunk_id / self.chunks_per_segment
+            bevy_id = old_div(chunk_id, self.chunks_per_segment)
             bevy_urn = self.urn.Append("%08d" % bevy_id)
             bevy_index_urn = self.urn.Append("%08d/index" % bevy_id)
 
             with self.resolver.AFF4FactoryOpen(bevy_index_urn) as bevy_index:
-                index_size = bevy_index.Size() / 4
+                index_size = old_div(bevy_index.Size(), 4)
                 bevy_index_data = bevy_index.Read(bevy_index.Size())
 
                 bevy_index_array = self.deserializeIndexPreV4S(index_size, bevy_index_data)
@@ -456,7 +460,7 @@ class AFF4PreSImage(AFF4Image):
                     chunks_read += 1
 
                     # This bevy is exhausted, get the next one.
-                    if bevy_id < chunk_id / self.chunks_per_segment:
+                    if bevy_id < old_div(chunk_id, self.chunks_per_segment):
                         break
 
         return chunks_read, result
@@ -496,7 +500,7 @@ class AFF4PreSImage(AFF4Image):
                 "Unable to process compression %s" % self.compression)
 
     def readBlockHash(self, chunk_id, hash_datatype):
-        bevy_id = chunk_id / self.chunks_per_segment
+        bevy_id = old_div(chunk_id, self.chunks_per_segment)
         bevy_blockHash_urn = self.urn.Append("%08d/blockHash.%s" % (bevy_id, hashes.toShortAlgoName(hash_datatype)))
         blockLength = hashes.length(hash_datatype)
 
@@ -525,7 +529,7 @@ class AFF4SImage(AFF4Image):
         return res
 
     def readBlockHash(self, chunk_id, hash_datatype):
-        bevy_id = chunk_id / self.chunks_per_segment
+        bevy_id = old_div(chunk_id, self.chunks_per_segment)
         bevy_blockHash_urn = self.urn.Append("%08d.blockHash.%s" % (bevy_id, hashes.toShortAlgoName(hash_datatype)))
         blockLength = hashes.length(hash_datatype)
 
@@ -551,12 +555,12 @@ class AFF4SImage(AFF4Image):
                 chunks_read += 1
                 continue
 
-            bevy_id = chunk_id / self.chunks_per_segment
+            bevy_id = old_div(chunk_id, self.chunks_per_segment)
             bevy_urn = self.urn.Append("%08d" % bevy_id)
             bevy_index_urn = self.urn.Append("%08d.index" % bevy_id)
 
             with self.resolver.AFF4FactoryOpen(bevy_index_urn) as bevy_index:
-                index_size = bevy_index.Size() / 12
+                index_size = old_div(bevy_index.Size(), 12)
                 bevy_index_data = bevy_index.Read(bevy_index.Size())
 
                 bevy_index_array = self.deserializeIndexV4S(index_size, bevy_index_data)
@@ -582,7 +586,7 @@ class AFF4SImage(AFF4Image):
                     chunks_read += 1
 
                     # This bevy is exhausted, get the next one.
-                    if bevy_id < chunk_id / self.chunks_per_segment:
+                    if bevy_id < old_div(chunk_id, self.chunks_per_segment):
                         break
 
         return chunks_read, result

@@ -13,6 +13,9 @@
 # the License.
 
 """This module implements the standard AFF4 Image."""
+from __future__ import print_function
+from builtins import str
+from builtins import object
 import collections
 import intervaltree
 import logging
@@ -214,7 +217,7 @@ class AFF4Map(aff4.AFF4Stream):
                     if not data:
                         break
                     range = self.deserializeMapPoint(data)
-                    print str(range)
+                    print(str(range))
                     if range.length > 0:
                         self.tree.addi(range.map_offset, range.map_end, range)
 
@@ -249,7 +252,7 @@ class AFF4Map(aff4.AFF4Stream):
                     assert len(buffer) == length_to_read_in_target
                     result += buffer
             except IOError:
-                print "*** Stream not found. Substituting zeros. ***"
+                print("*** Stream not found. Substituting zeros. ***")
                 result += "\x00" * length_to_read_in_target
             finally:
                 length -= length_to_read_in_target

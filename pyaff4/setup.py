@@ -24,7 +24,7 @@ except IOError:
     long_description = ""
 
 ENV = {"__file__": __file__}
-exec open("pyaff4/_version.py").read() in ENV
+exec(open("pyaff4/_version.py").read(), ENV)
 VERSION = ENV["get_versions"]()
 
 
@@ -58,8 +58,8 @@ setup(
         "aff4-snappy == 0.5",
         "rdflib == 4.2.1",
         "intervaltree == 2.1.0",
-        "pyblake2 == 0.0.3",
-        "expiringdict == 1.1.3"
+        "pyblake2 == 0.9.3",
+        "expiringdict == 1.1.4"
     ],
     extras_require=dict(
         cloud="google-api-python-client"

@@ -13,9 +13,13 @@
 # the License.
 
 """RDF Values are responsible for serialization."""
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import object
 import functools
-import urlparse
-import urllib
+import urllib.parse
+import urllib.request, urllib.parse, urllib.error
 
 import posixpath
 import rdflib
@@ -100,10 +104,10 @@ class XSDString(RDFValue):
         self.Set(string.decode("utf8"))
 
     def Set(self, data):
-        self.value = unicode(data)
+        self.value = str(data)
 
     def __unicode__(self):
-        return unicode(self.value)
+        return str(self.value)
 
 
 class XSDInteger(RDFValue):
@@ -127,7 +131,7 @@ class XSDInteger(RDFValue):
         return self.value
 
     def __long__(self):
-        return long(self.value)
+        return int(self.value)
 
     def __cmp__(self, o):
         return self.value - o
@@ -189,7 +193,7 @@ class URN(RDFValue):
 
     @classmethod
     def FromFileName(cls, filename):
-        result = cls("file:" + urllib.pathname2url(filename))
+        result = cls("file:" + urllib.request.pathname2url(filename))
         result.original_filename = filename
         return result
 
@@ -201,7 +205,7 @@ class URN(RDFValue):
         # For file: urls we exactly reverse the conversion applied in
         # FromFileName.
         if self.value.startswith("file:"):
-            return urllib.url2pathname(self.value[5:])
+            return urllib.request.url2pathname(self.value[5:])
 
         components = self.Parse()
         if components.scheme == "file":
@@ -212,7 +216,7 @@ class URN(RDFValue):
 
     def SerializeToString(self):
         components = self.Parse()
-        return urlparse.urlunparse(components)
+        return urllib.parse.urlunparse(components)
 
     def UnSerializeFromString(self, string):
         self.Set(int(string))
@@ -229,7 +233,7 @@ class URN(RDFValue):
     # URL parsing seems to be slow in Python so we cache it as much as possible.
     @Memoize()
     def _Parse(self, value):
-        components = urlparse.urlparse(value)
+        components = urllib.parse.urlparse(value)
 
         # dont normalise path for http URI's
         if components.scheme and not components.scheme == "http":
@@ -242,7 +246,7 @@ class URN(RDFValue):
             # For file:// URNs, we need to parse them from a filename.
             components = components._replace(
                 netloc="",
-                path=urllib.pathname2url(value),
+                path=urllib.request.pathname2url(value),
                 scheme="file")
             self.original_filename = value
 
@@ -255,7 +259,7 @@ class URN(RDFValue):
     def Append(self, component, quote=True):
         components = self.Parse()
         if quote:
-            component = urllib.quote(component)
+            component = urllib.parse.quote(component)
 
         # Work around usual posixpath.join bug.
         component = component.lstrip("/")
@@ -264,7 +268,7 @@ class URN(RDFValue):
 
         components = components._replace(path=new_path)
 
-        return URN(urlparse.urlunparse(components))
+        return URN(urllib.parse.urlunparse(components))
 
     def RelativePath(self, urn):
         value = self.SerializeToString()

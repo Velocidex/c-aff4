@@ -13,9 +13,12 @@
 # the License.
 
 """An implementation of AFF4 file backed objects."""
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
 import logging
 import os
-import StringIO
+import io
 
 from pyaff4 import aff4
 from pyaff4 import aff4_utils
@@ -72,7 +75,7 @@ class FileBackedObject(aff4.AFF4Stream):
         if not filename:
             raise IOError("Unable to find storage for %s" % self.urn)
 
-        filename = unicode(filename)
+        filename = str(filename)
 
         directory_components = os.sep.split(filename)
         directory_components.pop(-1)
@@ -161,4 +164,4 @@ class AFF4MemoryStream(FileBackedObject):
 
     def __init__(self, *args, **kwargs):
         super(AFF4MemoryStream, self).__init__(*args, **kwargs)
-        self.fd = StringIO.StringIO()
+        self.fd = io.StringIO()

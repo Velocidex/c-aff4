@@ -1,3 +1,4 @@
+from __future__ import print_function
 # Copyright 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -12,6 +13,8 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
+from builtins import str
+from builtins import object
 import logging
 import rdflib
 
@@ -39,13 +42,13 @@ class AFF4ObjectCacheEntry(object):
 
     def unlink(self):
         self.next.prev = self.prev
-        self.prev.next = self.next
+        self.prev.next = self.__next__
         self.next = self.prev = self
 
     def append(self, entry):
-        CHECK(entry.next == entry.prev,
+        CHECK(entry.__next__ == entry.prev,
               "Appending an element already in the list")
-        entry.next = self.next
+        entry.next = self.__next__
 
         self.next.prev = entry
 
@@ -53,10 +56,10 @@ class AFF4ObjectCacheEntry(object):
         self.next = entry
 
     def __iter__(self):
-        entry = self.next
+        entry = self.__next__
         while entry != self:
             yield entry
-            entry = entry.next
+            entry = entry.__next__
 
 
 class AFF4ObjectCache(object):
@@ -154,13 +157,13 @@ class AFF4ObjectCache(object):
 
     def Dump(self):
         # Now dump the objects in use.
-        print "Objects in use:"
-        for key, entry in self.in_use.iteritems():
-            print "%s - %s" % (key, entry.use_count)
+        print("Objects in use:")
+        for key, entry in self.in_use.items():
+            print("%s - %s" % (key, entry.use_count))
 
-        print "Objects in cache:"
+        print("Objects in cache:")
         for entry in self.lru_list:
-            print "%s - %s" % (entry.key, entry.use_count)
+            print("%s - %s" % (entry.key, entry.use_count))
 
     def Flush(self):
         # It is an error to flush the object cache while there are still items
@@ -186,7 +189,7 @@ class AFF4ObjectCache(object):
                 break
 
         # Now delete all entries.
-        for it in self.lru_map.values():
+        for it in list(self.lru_map.values()):
             it.unlink()
 
         # Clear the map.
@@ -221,7 +224,7 @@ class MemoryDataStore(object):
     def Flush(self):
         # Flush and expunge the cache.
         self.ObjectCache.Flush()
-        for cb in self.flush_callbacks.values():
+        for cb in list(self.flush_callbacks.values()):
             cb()
 
     def DeleteSubject(self, subject):
@@ -232,7 +235,7 @@ class MemoryDataStore(object):
         attribute = rdfvalue.URN(attribute)
         CHECK(isinstance(value, rdfvalue.RDFValue), "Value must be an RDFValue")
 
-        if not self.store.setdefault(str(subject), {}).has_key(str(attribute)):
+        if str(attribute) not in self.store.setdefault(str(subject), {}):
             self.store.get(str(subject))[str(attribute)] = value
         else:
             oldvalue = self.store.get(str(subject))[str(attribute)]
@@ -275,13 +278,13 @@ class MemoryDataStore(object):
     def DumpToTurtle(self, stream=None, verbose=False):
         g = rdflib.Graph()
 
-        for urn, items in self.store.iteritems():
+        for urn, items in self.store.items():
             urn = rdflib.URIRef(urn)
             type = items.get(lexicon.AFF4_TYPE)
             if type is None:
                 continue
 
-            for attr, value in items.iteritems():
+            for attr, value in items.items():
                 # We suppress certain facts which can be deduced from the file
                 # format itself. This ensures that we do not have conflicting
                 # data in the data store. The data in the data store is a
@@ -376,7 +379,7 @@ class MemoryDataStore(object):
         return obj
 
     def Dump(self, verbose=False):
-        print self.DumpToTurtle(verbose=verbose)
+        print(self.DumpToTurtle(verbose=verbose))
         self.ObjectCache.Dump()
 
     def isImageStream(self, subject):
@@ -409,8 +412,8 @@ class MemoryDataStore(object):
 
 
     def QueryPredicateObject(self, predicate, object):
-        for subject, data in self.store.iteritems():
-            for pred, value in data.iteritems():
+        for subject, data in self.store.items():
+            for pred, value in data.items():
                 if pred == predicate:
                     if type(value) == type([]):
                         if object in value:
@@ -421,9 +424,9 @@ class MemoryDataStore(object):
                         yield subject
 
     def QuerySubjectPredicate(self, subject, predicate):
-        for s, data in self.store.iteritems():
+        for s, data in self.store.items():
             if s == subject:
-                for pred, value in data.iteritems():
+                for pred, value in data.items():
                     if pred == predicate:
                         if type(value) == type([]):
                             for o in value:
@@ -438,7 +441,7 @@ class MemoryDataStore(object):
                 yield subject
 
     def QueryPredicatesBySubject(self, subject):
-        for pred, value in self.store.get(subject, {}).iteritems():
+        for pred, value in self.store.get(subject, {}).items():
             yield pred, value
 
 

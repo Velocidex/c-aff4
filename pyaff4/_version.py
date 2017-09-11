@@ -6,6 +6,7 @@
 # setup.py. Configuration is maintain in version.yaml at the project's top
 # level.
 
+from builtins import str
 def get_versions():
     return tag_version_data(raw_versions(), """version.yaml""")
 
