@@ -42,13 +42,13 @@ class AFF4ObjectCacheEntry(object):
 
     def unlink(self):
         self.next.prev = self.prev
-        self.prev.next = self.__next__
+        self.prev.next = self.next
         self.next = self.prev = self
 
     def append(self, entry):
-        CHECK(entry.__next__ == entry.prev,
+        CHECK(entry.next == entry.prev,
               "Appending an element already in the list")
-        entry.next = self.__next__
+        entry.next = self.next
 
         self.next.prev = entry
 
@@ -56,10 +56,10 @@ class AFF4ObjectCacheEntry(object):
         self.next = entry
 
     def __iter__(self):
-        entry = self.__next__
+        entry = self.next
         while entry != self:
             yield entry
-            entry = entry.__next__
+            entry = entry.next
 
 
 class AFF4ObjectCache(object):
