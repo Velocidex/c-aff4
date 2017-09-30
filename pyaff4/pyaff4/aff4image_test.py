@@ -30,6 +30,7 @@ from pyaff4 import plugins
 
 class AFF4ImageTest(unittest.TestCase):
     filename = "/tmp/aff4_test.zip"
+    filename_urn = rdfvalue.URN.FromFileName(filename)
     image_name = "image.dd"
 
     def tearDown(self):
@@ -40,10 +41,10 @@ class AFF4ImageTest(unittest.TestCase):
 
     def setUp(self):
         with data_store.MemoryDataStore() as resolver:
-            resolver.Set(self.filename, lexicon.AFF4_STREAM_WRITE_MODE,
+            resolver.Set(self.filename_urn, lexicon.AFF4_STREAM_WRITE_MODE,
                          rdfvalue.XSDString("truncate"))
 
-            with zip.ZipFile.NewZipFile(resolver, self.filename) as zip_file:
+            with zip.ZipFile.NewZipFile(resolver, self.filename_urn) as zip_file:
                 self.volume_urn = zip_file.urn
                 image_urn = self.volume_urn.Append(self.image_name)
 
@@ -71,9 +72,9 @@ class AFF4ImageTest(unittest.TestCase):
                     resolver, self.image_urn_3, self.volume_urn) as image:
                     image.chunk_size = 10
                     image.chunks_per_segment = 3
-                    stream = io.StringIO()
+                    stream = io.BytesIO()
                     for i in range(100):
-                        stream.write("Hello world %02d!" % i)
+                        stream.write(b"Hello world %02d!" % i)
 
                     stream.seek(0)
                     image.WriteStream(stream)
@@ -83,7 +84,7 @@ class AFF4ImageTest(unittest.TestCase):
 
         # This is required in order to load and parse metadata from this volume
         # into a fresh empty resolver.
-        with zip.ZipFile.NewZipFile(resolver, self.filename) as zip_file:
+        with zip.ZipFile.NewZipFile(resolver, self.filename_urn) as zip_file:
             image_urn = zip_file.urn.Append(self.image_name)
 
         with resolver.AFF4FactoryOpen(image_urn) as image:

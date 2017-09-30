@@ -14,28 +14,28 @@ from __future__ import absolute_import
 # the License.
 
 from builtins import object
-from pyaff4.block_hasher import ValidationListener
+import hashlib
+import rdflib
 
+from pyaff4 import block_hasher
+from pyaff4 import container
 from pyaff4 import data_store
 from pyaff4 import hashes
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
-from pyaff4.container import Container
-import rdflib
-from . import zip
-import hashlib
+from pyaff4 import zip
 
 
 class LinearHasher(object):
     def __init__(self, listener=None):
         if listener == None:
-            self.listener = ValidationListener()
+            self.listener = block_hasher.ValidationListener()
         else:
             self.listener = listener
         self.delegate = None
 
     def hash(self, filename, mapURI, hashDataType):
-        lex = Container.identify(filename)
+        lex = container.Container.identify(filename)
         resolver = data_store.MemoryDataStore(lex)
 
         with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
@@ -51,7 +51,7 @@ class LinearHasher(object):
             return self.delegate.doHash(mapURI, hashDataType)
 
     def hashMulti(self, filenamea, filenameb, mapURI, hashDataType):
-        lex = Container.identify(filenamea)
+        lex = container.Container.identify(filenamea)
         resolver = data_store.MemoryDataStore(lex)
 
         with zip.ZipFile.NewZipFile(resolver, filenamea) as zip_filea:
@@ -64,8 +64,6 @@ class LinearHasher(object):
                     raise ValueError
 
                 return self.delegate.doHash(mapURI, hashDataType)
-
-
 
     def doHash(self, mapURI, hashDataType):
         hash = hashes.new(hashDataType)
@@ -93,6 +91,7 @@ class LinearHasher(object):
 
         return False
 
+
 class PreStdLinearHasher(LinearHasher):
     def __init__(self, resolver, lex, listener=None):
         LinearHasher.__init__(self, listener)
@@ -105,6 +104,7 @@ class InterimStdLinearHasher(LinearHasher):
         LinearHasher.__init__(self, listener)
         self.lexicon = lex
         self.resolver = resolver
+
 
 class ScudetteLinearHasher(LinearHasher):
     def __init__(self, resolver, lex, listener=None):

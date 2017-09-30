@@ -17,10 +17,6 @@ class BaseParser(object):
     __slots__ = ("_data", "_fields", "_name", "_format_string", "_defaults")
 
     def __init__(self, data=None, **kwargs):
-        self._format_string = ""
-        self._fields = []
-        self._name = "Unknown"
-        self._defaults = []
         if data is None:
             self._data = self._defaults[:]
         else:

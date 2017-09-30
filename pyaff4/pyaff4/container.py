@@ -16,6 +16,7 @@ from __future__ import absolute_import
 
 from builtins import str
 from builtins import object
+
 from pyaff4 import data_store
 from pyaff4 import hashes
 from pyaff4 import lexicon
@@ -24,7 +25,7 @@ from pyaff4 import rdfvalue
 from pyaff4 import aff4
 
 import yaml
-from . import zip
+from pyaff4 import zip
 
 localcache = {}
 class Container(object):
@@ -32,9 +33,9 @@ class Container(object):
         pass
 
     @staticmethod
-    def identify(filename):
+    def identify(urn):
         resolver = data_store.MemoryDataStore(lexicon.standard)
-        with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
+        with zip.ZipFile.NewZipFile(resolver, urn) as zip_file:
             if len(list(zip_file.members.keys())) == 0:
                 # it's a new zipfile
                 raise IOError("Not an AFF4 Volume")
@@ -58,14 +59,14 @@ class Container(object):
         return False
 
     @staticmethod
-    def open(filename):
+    def open(urn):
         try:
-            cached = localcache[filename]
+            cached = localcache[urn]
             return cached
         except:
-            lex = Container.identify(filename)
+            lex = Container.identify(urn)
             resolver = data_store.MemoryDataStore(lex)
-            with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
+            with zip.ZipFile.NewZipFile(resolver, urn) as zip_file:
                 if lex == lexicon.standard:
                     image = next(resolver.QueryPredicateObject(lexicon.AFF4_TYPE, lex.Image))
 
@@ -74,7 +75,7 @@ class Container(object):
                     for stream in datastreams:
                         if lex.map in resolver.QuerySubjectPredicate(stream, lexicon.AFF4_TYPE):
                             res = resolver.AFF4FactoryOpen(stream)
-                            localcache[filename] = res
+                            localcache[urn] = res
                             res.parent = aff4.Image(resolver, urn=image)
                             return res
 
@@ -83,7 +84,7 @@ class Container(object):
                     cat = next(resolver.QuerySubjectPredicate(m, lex.category))
                     if cat == lex.memoryPhysical:
                         res = resolver.AFF4FactoryOpen(m)
-                        localcache[filename] = res
+                        localcache[urn] = res
                         res.parent = aff4.Image(resolver, urn=m)
 
                         legacyYamlInfoURI = res.urn.Append("information.yaml")
@@ -101,5 +102,3 @@ class Container(object):
                             except:
                                 pass
                         return res
-
-

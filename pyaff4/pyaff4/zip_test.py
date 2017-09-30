@@ -29,6 +29,7 @@ from pyaff4 import zip
 
 class ZipTest(unittest.TestCase):
     filename = "/tmp/aff4_test.zip"
+    filename_urn = rdfvalue.URN.FromFileName(filename)
     segment_name = "Foobar.txt"
     streamed_segment = "streamed.txt"
     data1 = "I am a segment!"
@@ -36,10 +37,10 @@ class ZipTest(unittest.TestCase):
 
     def setUp(self):
         with data_store.MemoryDataStore() as resolver:
-            resolver.Set(self.filename, lexicon.AFF4_STREAM_WRITE_MODE,
+            resolver.Set(self.filename_urn, lexicon.AFF4_STREAM_WRITE_MODE,
                          rdfvalue.XSDString("truncate"))
 
-            with zip.ZipFile.NewZipFile(resolver, self.filename) as zip_file:
+            with zip.ZipFile.NewZipFile(resolver, self.filename_urn) as zip_file:
                 self.volume_urn = zip_file.urn
                 segment_urn = self.volume_urn.Append(self.segment_name)
 
@@ -53,7 +54,7 @@ class ZipTest(unittest.TestCase):
                 streamed_urn = self.volume_urn.Append(self.streamed_segment)
                 with zip_file.CreateMember(streamed_urn) as streamed:
                     streamed.compression_method = zip.ZIP_DEFLATE
-                    src = io.StringIO(self.data1)
+                    src = io.BytesIO(self.data1)
                     streamed.WriteStream(src)
 
     def tearDown(self):
@@ -67,7 +68,7 @@ class ZipTest(unittest.TestCase):
 
         # This is required in order to load and parse metadata from this volume
         # into a fresh empty resolver.
-        with zip.ZipFile.NewZipFile(resolver, self.filename) as zip_file:
+        with zip.ZipFile.NewZipFile(resolver, self.filename_urn) as zip_file:
             segment_urn = zip_file.urn.Append(self.streamed_segment)
 
         with resolver.AFF4FactoryOpen(segment_urn) as segment:
@@ -78,9 +79,8 @@ class ZipTest(unittest.TestCase):
 
         # This is required in order to load and parse metadata from this volume
         # into a fresh empty resolver.
-        with zip.ZipFile.NewZipFile(resolver, self.filename) as zip_file:
+        with zip.ZipFile.NewZipFile(resolver, self.filename_urn) as zip_file:
             segment_urn = zip_file.urn.Append(self.segment_name)
-
         with resolver.AFF4FactoryOpen(segment_urn) as segment:
             self.assertEquals(segment.Read(1000), self.data1 + self.data2)
 

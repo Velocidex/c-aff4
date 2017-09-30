@@ -22,8 +22,8 @@ from pyaff4 import aff4
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
-from pyaff4.stream_factory import *
-
+from pyaff4 import stream_factory
+from pyaff4 import utils
 
 
 LOGGER = logging.getLogger("pyaff4")
@@ -210,9 +210,11 @@ class MemoryDataStore(object):
         self.flush_callbacks = {}
 
         if self.lexicon == lexicon.legacy:
-            self.streamFactory = PreStdStreamFactory(self, self.lexicon)
+            self.streamFactory = stream_factory.PreStdStreamFactory(
+                self, self.lexicon)
         else:
-            self.streamFactory = StdStreamFactory(self, self.lexicon)
+            self.streamFactory = stream_factory.StdStreamFactory(
+                self, self.lexicon)
 
 
     def __enter__(self):
@@ -231,31 +233,31 @@ class MemoryDataStore(object):
         self.store.pop(rdfvalue.URN(subject), None)
 
     def Add(self, subject, attribute, value):
-        subject = rdfvalue.URN(subject)
-        attribute = rdfvalue.URN(attribute)
+        subject = rdfvalue.URN(subject).SerializeToString()
+        attribute = rdfvalue.URN(attribute).SerializeToString()
         CHECK(isinstance(value, rdfvalue.RDFValue), "Value must be an RDFValue")
 
-        if str(attribute) not in self.store.setdefault(str(subject), {}):
-            self.store.get(str(subject))[str(attribute)] = value
+        if attribute not in self.store.setdefault(subject, {}):
+            self.store.get(subject)[attribute] = value
         else:
-            oldvalue = self.store.get(str(subject))[str(attribute)]
+            oldvalue = self.store.get(subject)[attribute]
             t = type(oldvalue)
             if  t != type([]):
-                self.store.get(str(subject))[str(attribute)] = [oldvalue, value]
+                self.store.get(subject)[attribute] = [oldvalue, value]
             else:
-                self.store.get(str(subject))[str(attribute)].append(value)
+                self.store.get(subject)[attribute].append(value)
 
     def Set(self, subject, attribute, value):
-        subject = rdfvalue.URN(subject)
-        attribute = rdfvalue.URN(attribute)
+        subject = rdfvalue.URN(subject).SerializeToString()
+        attribute = rdfvalue.URN(attribute).SerializeToString()
         CHECK(isinstance(value, rdfvalue.RDFValue), "Value must be an RDFValue")
 
-        self.store.setdefault(str(subject), {})[str(attribute)] = value
+        self.store.setdefault(subject, {})[attribute] = value
 
     def Get(self, subject, attribute):
-        subject = rdfvalue.URN(subject)
-        attribute = rdfvalue.URN(attribute)
-        return self.store.get(str(subject), {}).get(str(attribute))
+        subject = rdfvalue.URN(subject).SerializeToString()
+        attribute = rdfvalue.URN(attribute).SerializeToString()
+        return self.store.get(subject, {}).get(attribute)
 
     def CacheGet(self, urn):
         result = self.ObjectCache.Get(urn)
@@ -297,7 +299,11 @@ class MemoryDataStore(object):
                         continue
 
                 attr = rdflib.URIRef(attr)
-                g.add((urn, attr, value.GetRaptorTerm()))
+                if not isinstance(value, list):
+                    value = [value]
+
+                for item in value:
+                    g.add((urn, attr, item.GetRaptorTerm()))
 
         result = g.serialize(format='turtle')
         if stream:
@@ -311,15 +317,16 @@ class MemoryDataStore(object):
         g.parse(data=data, format="turtle")
 
         for urn, attr, value in g:
-            urn = rdfvalue.URN(str(urn))
-            attr = rdfvalue.URN(str(attr))
+            urn = rdfvalue.URN(utils.SmartStr(urn))
+            attr = rdfvalue.URN(utils.SmartStr(attr))
+            serialized_value = utils.SmartStr(value)
 
             if isinstance(value, rdflib.URIRef):
-                value = rdfvalue.URN(str(value))
+                value = rdfvalue.URN(serialized_value)
             elif value.datatype in registry.RDF_TYPE_MAP:
                 dt = value.datatype
                 value = registry.RDF_TYPE_MAP[value.datatype](
-                    str(value))
+                    serialized_value)
 
             else:
                 # Default to a string literal.
@@ -328,11 +335,11 @@ class MemoryDataStore(object):
             self.Add(urn, attr, value)
 
         # look for the AFF4 namespace defined in the turtle
-        for (a,b) in g.namespace_manager.namespaces():
-            if str(b) == lexicon.AFF4_NAMESPACE or str(b) == lexicon.AFF4_LEGACY_NAMESPACE:
+        for (_, b) in g.namespace_manager.namespaces():
+            b = utils.SmartStr(b)
+            if (b == lexicon.AFF4_NAMESPACE or
+                b == lexicon.AFF4_LEGACY_NAMESPACE):
                 self.aff4NS = b
-
-
 
     def AFF4FactoryOpen(self, urn):
         urn = rdfvalue.URN(urn)
@@ -410,7 +417,6 @@ class MemoryDataStore(object):
             if subject_regex is not None and subject_regex.match(subject):
                 yield subject
 
-
     def QueryPredicateObject(self, predicate, object):
         for subject, data in self.store.items():
             for pred, value in data.items():
@@ -420,7 +426,8 @@ class MemoryDataStore(object):
                             yield subject
                     elif object == value:
                         yield subject
-                    elif object == str(value):
+
+                    elif object == value:
                         yield subject
 
     def QuerySubjectPredicate(self, subject, predicate):
@@ -435,7 +442,7 @@ class MemoryDataStore(object):
                             yield value
 
     def SelectSubjectsByPrefix(self, prefix):
-        prefix = str(prefix)
+        prefix = utils.SmartStr(prefix)
         for subject in self.store:
             if subject.startswith(prefix):
                 yield subject
@@ -443,5 +450,3 @@ class MemoryDataStore(object):
     def QueryPredicatesBySubject(self, subject):
         for pred, value in self.store.get(subject, {}).items():
             yield pred, value
-
-

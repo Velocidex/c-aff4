@@ -1,5 +1,4 @@
-from __future__ import absolute_import
-from . import rdfvalue
+from pyaff4 import rdfvalue
 import unittest
 
 class URNTest(unittest.TestCase):

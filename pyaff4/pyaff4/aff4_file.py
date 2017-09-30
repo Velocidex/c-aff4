@@ -164,4 +164,4 @@ class AFF4MemoryStream(FileBackedObject):
 
     def __init__(self, *args, **kwargs):
         super(AFF4MemoryStream, self).__init__(*args, **kwargs)
-        self.fd = io.StringIO()
+        self.fd = io.BytesIO()

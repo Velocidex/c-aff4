@@ -21,10 +21,12 @@ import functools
 import urllib.parse
 import urllib.request, urllib.parse, urllib.error
 
+import binascii
 import posixpath
 import rdflib
 
 from pyaff4 import registry
+from pyaff4 import utils
 
 # pylint: disable=protected-access
 
@@ -58,9 +60,11 @@ class RDFValue(object):
                               datatype=self.datatype)
 
     def SerializeToString(self):
+        """Serializes to a sequence of bytes."""
         return ""
 
     def UnSerializeFromString(self, string):
+        """Unserializes from bytes."""
         raise NotImplementedError
 
     def Set(self, string):
@@ -70,21 +74,24 @@ class RDFValue(object):
         return self.SerializeToString()
 
     def __eq__(self, other):
-        return str(self) == str(other)
+        return utils.SmartStr(self) == utils.SmartStr(other)
+
+    def __req__(self, other):
+        return utils.SmartStr(self) == utils.SmartStr(other)
 
     def __hash__(self):
         return hash(self.SerializeToString())
 
 
 class RDFBytes(RDFValue):
-    value = ""
+    value = b""
     datatype = rdflib.XSD.hexBinary
 
     def SerializeToString(self):
-        return self.value.encode("hex")
+        return binascii.hexlify(self.value)
 
     def UnSerializeFromString(self, string):
-        self.Set(string.decode("hex"))
+        self.Set(binascii.unhexlify(string))
 
     def Set(self, data):
         self.value = data
@@ -95,19 +102,20 @@ class RDFBytes(RDFValue):
 
 
 class XSDString(RDFValue):
+    """A unicode string."""
     datatype = rdflib.XSD.string
 
     def SerializeToString(self):
-        return self.value.encode("utf8")
+        return utils.SmartStr(self.value)
 
     def UnSerializeFromString(self, string):
-        self.Set(string.decode("utf8"))
+        self.Set(utils.SmartUnicode(string))
 
     def Set(self, data):
-        self.value = str(data)
+        self.value = utils.SmartUnicode(data)
 
-    def __unicode__(self):
-        return str(self.value)
+    def __str__(self):
+        return self.value
 
 
 class XSDInteger(RDFValue):
@@ -163,7 +171,7 @@ class RDFHash(RDFValue):
         return self.value
 
     def digest(self):
-        return self.value.decode('hex')
+        return binascii.unhexlify(self.value)
 
 class SHA512Hash(RDFHash):
     datatype = rdflib.URIRef("http://aff4.org/Schema#SHA512")
@@ -188,12 +196,25 @@ class SHA512BlockMapHash(RDFHash):
 
 
 class URN(RDFValue):
+    """Represent a URN.
+
+    According to RFC1738 URLs must be encoded in ASCII. Therefore the
+    internal representation of a URN is bytes. When creating the URN
+    from other forms (e.g. filenames, we assume UTF8 encoding if the
+    filename is a unicode string.
+    """
 
     original_filename = None
 
     @classmethod
     def FromFileName(cls, filename):
-        result = cls("file:" + urllib.request.pathname2url(filename))
+        """Parse the URN from filename.
+
+        Filename may be a unicode string, in which case it will be
+        UTF8 encoded into the URN. URNs are always ASCII.
+        """
+        result = cls("file:" + urllib.request.pathname2url(
+            utils.SmartStr(filename)))
         result.original_filename = filename
         return result
 
@@ -205,27 +226,28 @@ class URN(RDFValue):
         # For file: urls we exactly reverse the conversion applied in
         # FromFileName.
         if self.value.startswith("file:"):
-            return urllib.request.url2pathname(self.value[5:])
+            return utils.SmartUnicode(urllib.request.url2pathname(self.value[5:]))
 
         components = self.Parse()
         if components.scheme == "file":
-            return components.path
+            return utils.SmartUnicode(components.path)
 
     def GetRaptorTerm(self):
         return rdflib.URIRef(self.SerializeToString())
 
     def SerializeToString(self):
         components = self.Parse()
-        return urllib.parse.urlunparse(components)
+        return utils.SmartStr(urllib.parse.urlunparse(components))
 
     def UnSerializeFromString(self, string):
-        self.Set(int(string))
+        self.Set(string)
 
     def Set(self, data):
         if isinstance(data, URN):
             self.value = data.value
         else:
-            self.value = str(data)
+            utils.AssertStr(data)
+            self.value = utils.SmartStr(data)
 
     def Parse(self):
         return self._Parse(self.value)
@@ -246,7 +268,7 @@ class URN(RDFValue):
             # For file:// URNs, we need to parse them from a filename.
             components = components._replace(
                 netloc="",
-                path=urllib.request.pathname2url(value),
+                path=utils.SmartStr(urllib.request.pathname2url(value)),
                 scheme="file")
             self.original_filename = value
 
@@ -257,18 +279,20 @@ class URN(RDFValue):
         return components.scheme
 
     def Append(self, component, quote=True):
+        component = utils.SmartStr(component)
+
         components = self.Parse()
         if quote:
-            component = urllib.parse.quote(component)
+            component = utils.SmartStr(urllib.parse.quote(component))
 
         # Work around usual posixpath.join bug.
         component = component.lstrip("/")
         new_path = posixpath.normpath(posixpath.join(
-            components.path, component))
+            "/", components.path, component))
 
         components = components._replace(path=new_path)
 
-        return URN(urllib.parse.urlunparse(components))
+        return URN(utils.SmartStr(urllib.parse.urlunparse(components)))
 
     def RelativePath(self, urn):
         value = self.SerializeToString()
@@ -278,6 +302,11 @@ class URN(RDFValue):
 
     def __repr__(self):
         return "<%s>" % self.SerializeToString()
+
+
+def AssertURN(urn):
+    if not isinstance(urn, URN):
+        raise TypeError("Expecting a URN.")
 
 
 registry.RDF_TYPE_MAP.update({
@@ -292,10 +321,9 @@ registry.RDF_TYPE_MAP.update({
     rdflib.URIRef("http://aff4.org/Schema#MD5"): MD5Hash,
     rdflib.URIRef("http://aff4.org/Schema#Blake2b"): Blake2bHash,
     rdflib.URIRef("http://aff4.org/Schema#blockMapHashSHA512"): SHA512BlockMapHash,
-     rdflib.URIRef("http://afflib.org/2009/aff4#SHA512"): SHA512Hash,
-     rdflib.URIRef("http://afflib.org/2009/aff4#SHA256"): SHA256Hash,
-     rdflib.URIRef("http://afflib.org/2009/aff4#SHA1"): SHA1Hash,
-     rdflib.URIRef("http://afflib.org/2009/aff4#MD5"): MD5Hash,
+    rdflib.URIRef("http://afflib.org/2009/aff4#SHA512"): SHA512Hash,
+    rdflib.URIRef("http://afflib.org/2009/aff4#SHA256"): SHA256Hash,
+    rdflib.URIRef("http://afflib.org/2009/aff4#SHA1"): SHA1Hash,
+    rdflib.URIRef("http://afflib.org/2009/aff4#MD5"): MD5Hash,
     rdflib.URIRef("http://afflib.org/2009/aff4#blockMapHashSHA512"): SHA512BlockMapHash
-
-    })
+})

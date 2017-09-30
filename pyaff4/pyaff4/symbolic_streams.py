@@ -16,19 +16,21 @@ from __future__ import absolute_import
 
 from builtins import str
 from past.utils import old_div
-from .aff4 import AFF4Stream
+from pyaff4 import aff4
+from pyaff4 import utils
 import sys
 import binascii
 import math
 
-class RepeatedStream(AFF4Stream):
+class RepeatedStream(aff4.AFF4Stream):
 
-    def __init__(self, *args, **kwargs):
-        super(RepeatedStream, self).__init__(*args, **kwargs)
+    def __init__(self, resolver=None, urn=None, symbol="\x00"):
+        super(RepeatedStream, self).__init__(
+            resolver=resolver, urn=urn)
+        self.symbol = symbol
 
     def Read(self, length):
-        res = bytearray([self.symbol] * length)
-        return str(res)
+        return self.symbol * length
 
     def Write(self, data):
         raise NotImplementedError()
@@ -60,46 +62,25 @@ class RepeatedStream(AFF4Stream):
     def Prepare(self):
         self.Seek(0)
 
-class ZeroStream(RepeatedStream):
-    def __init__(self, *args, **kwargs):
-        super(ZeroStream, self).__init__(*args, **kwargs)
+
+class RepeatedStringStream(aff4.AFF4Stream):
+
+    def __init__(self, resolver=None, urn=None, repeated_string=None):
+        super(RepeatedStringStream, self).__init__(
+            resolver=resolver, urn=urn)
+
+        self.tile = repeated_string
+        self.tilesize = len(self.tile)
 
     def Read(self, length):
-        res = bytearray(length)
-        return str(res)
-
-
-class RepeatedStringStream(AFF4Stream):
-
-    def __init__(self, *args, **kwargs):
-        super(RepeatedStringStream, self).__init__(*args, **kwargs)
-
-        # the tile is a fixed size block of the repeated string.
-        self.tile = None
-        self.tilesize = 1024*1024
-        self.repeatedString = None
-
-    def initializeTile(self):
-        countRepetitions = math.ceil(old_div(self.tilesize, len(self.repeatedString)))
-        repeatedBytes = bytearray(self.repeatedString, "ascii")
-        while len(repeatedBytes) < self.tilesize:
-            repeatedBytes = repeatedBytes + repeatedBytes
-
-        self.tile = repeatedBytes[0:self.tilesize]
-
-    def Read(self, length):
-        if self.tile == None:
-            self.initializeTile()
-
         toRead = length
-        res = ""
+        res = b""
         while toRead > 0:
             offsetInTile = self.readptr % self.tilesize
-            currentLength = min(self.tilesize - offsetInTile, toRead)
-            chunk = bytearray(self.tile)[offsetInTile:offsetInTile+currentLength]
+            chunk = self.tile[offsetInTile : offsetInTile + toRead]
             res += chunk
-            toRead -= currentLength
-            self.readptr += currentLength
+            toRead -= len(chunk)
+            self.readptr += len(chunk)
 
         return res
 

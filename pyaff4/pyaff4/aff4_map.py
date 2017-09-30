@@ -29,7 +29,6 @@ from pyaff4 import rdfvalue
 from pyaff4 import registry
 
 
-
 LOGGER = logging.getLogger("pyaff4")
 
 
@@ -233,7 +232,7 @@ class AFF4Map(aff4.AFF4Stream):
             # The start of the range is ahead of us - we pad with zeros.
             if range.map_offset > self.readptr:
                 padding = min(length, range.map_offset - self.readptr)
-                result += "\x00" * padding
+                result += b"\x00" * padding
                 self.readptr += padding
                 length -= padding
 
@@ -278,7 +277,7 @@ class AFF4Map(aff4.AFF4Stream):
             target_id = self.target_idx_map[target] = len(self.targets)
             self.targets.append(target)
 
-        range = Range(map_offset, target_offset, length, target_id)
+        range = Range(map_offset, length, target_offset, target_id)
 
         # Try to merge with the left interval.
         left_interval = self.tree[range.map_offset-1]
@@ -332,7 +331,9 @@ class AFF4Map(aff4.AFF4Stream):
         self.tree.remove_envelop(range.map_offset, range.map_end)
 
         # Add the new interval.
-        self.tree[range.map_offset:range.map_end] = range
+        if range.length > 0:
+            self.tree[range.map_offset:range.map_end] = range
+
         self.MarkDirty()
 
     def Flush(self):
@@ -429,13 +430,14 @@ class AFF4Map(aff4.AFF4Stream):
         self.target_idx_map.clear()
         self.tree.clear()
 
+
 # Rekall/libAFF4 accidentally swapped the struct in Evimetry's update map
 class ScudetteAFF4Map(AFF4Map):
 
     def deserializeMapPoint(self, data):
         # swap them back
         range = Range.FromSerialized(data)
-        return Range.FromList([range[0], range[2], range[1], range[3]])
+        return Range(range[0], range[2], range[1], range[3])
 
 
 class AFF4Map2(AFF4Map):
@@ -496,4 +498,3 @@ class AFF4Map2(AFF4Map):
 registry.AFF4_TYPE_MAP[lexicon.AFF4_MAP_TYPE] = AFF4Map2
 registry.AFF4_TYPE_MAP[lexicon.AFF4_LEGACY_MAP_TYPE] = AFF4Map
 registry.AFF4_TYPE_MAP[lexicon.AFF4_SCUDETTE_MAP_TYPE] = ScudetteAFF4Map
-

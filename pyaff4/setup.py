@@ -59,7 +59,8 @@ setup(
         "rdflib[sparql] == 4.2.2",
         "intervaltree == 2.1.0",
         "pyblake2 == 0.9.3",
-        "expiringdict == 1.1.4"
+        "expiringdict == 1.1.4",
+        "html5lib",
     ],
     extras_require=dict(
         cloud="google-api-python-client"

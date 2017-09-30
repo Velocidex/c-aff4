@@ -54,7 +54,7 @@ class DataStoreTest(unittest.TestCase):
     def testTurtleSerialization(self):
         data = self.store.DumpToTurtle(verbose=True)
         new_store = data_store.MemoryDataStore()
-        new_store.LoadFromTurtle(io.StringIO(data))
+        new_store.LoadFromTurtle(io.BytesIO(data))
         res = new_store.Get(rdfvalue.URN("hello"), rdfvalue.URN("World"))
         self.assertEquals(res, "foo")
 

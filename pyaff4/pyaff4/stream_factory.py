@@ -67,40 +67,35 @@ class PreStdStreamFactory(StreamFactory):
             urn = str(urn)
 
         if urn == self.lexicon.base + "Zero":
-            stream =  ZeroStream(resolver=self.resolver, urn=urn)
-            stream.symbol = 0
-            return stream
+            return RepeatedStream(resolver=self.resolver, urn=urn,
+                                  symbol="\x00")
 
         if urn == self.lexicon.base + "FF":
-            stream =  RepeatedStream(resolver=self.resolver, urn=urn)
-            stream.symbol = 255
-            return stream
+            return RepeatedStream(resolver=self.resolver, urn=urn,
+                                  symbol="\xff")
 
         if urn == self.lexicon.base + "UnknownData":
-            stream =  RepeatedStringStream(resolver=self.resolver, urn=urn)
-            stream.repeatedString = "UNKNOWN"
-            return stream
+            return RepeatedStringStream(resolver=self.resolver, urn=urn,
+                                        repeated_string=GetUnknownString())
 
-        if urn.startswith(self.lexicon.base + "SymbolicStream") and len(urn) == len(self.lexicon.base + "SymbolicStream") + 2:
+        if (urn.startswith(self.lexicon.base + "SymbolicStream") and
+            len(urn) == len(self.lexicon.base + "SymbolicStream") + 2):
             shortName = urn[len(self.lexicon.base + "SymbolicStream"):].upper()
-            value = shortName.decode('hex')
-            stream = RepeatedStream(resolver=self.resolver, urn=urn)
-            stream.symbol = value
-            return stream
+            value = binascii.unhexlify(shortName)
+            return RepeatedStream(resolver=self.resolver, urn=urn, symbol=value)
 
-        if urn.startswith("http://afflib.org/2012/SymbolicStream#") and len(urn) == len("http://afflib.org/2012/SymbolicStream#") + 2:
+        if (urn.startswith("http://afflib.org/2012/SymbolicStream#") and
+            len(urn) == len("http://afflib.org/2012/SymbolicStream#") + 2):
             shortName = urn[len("http://afflib.org/2012/SymbolicStream#"):].upper()
-            value = shortName.decode('hex')
-            stream = RepeatedStream(resolver=self.resolver, urn=urn)
-            stream.symbol = value
-            return stream
+            value = binascii.unhexlify(shortName)
+            return RepeatedStream(resolver=self.resolver, urn=urn,
+                                    symbol=value)
 
         if urn.startswith(self.lexicon.base) and len(urn) == len(self.lexicon.base) + 2:
             shortName = urn[len(self.lexicon.base):].upper()
-            value = shortName.decode('hex')
-            stream = RepeatedStream(resolver=self.resolver, urn=urn)
-            stream.symbol = value
-            return stream
+            value = binascii.unhexlify(shortName)
+            return RepeatedStream(resolver=self.resolver, urn=urn,
+                                    symbol=value)
 
         raise ValueError
 
@@ -126,25 +121,53 @@ class StdStreamFactory(StreamFactory):
             urn = str(urn)
 
         if urn == self.lexicon.base + "Zero":
-            stream =  ZeroStream(resolver=self.resolver, urn=urn)
-            stream.symbol = 0
-            return stream
+            return RepeatedStream(resolver=self.resolver, urn=urn,
+                                  symbol="\x00")
 
         if urn == self.lexicon.base + "UnknownData":
-            stream =  RepeatedStringStream(resolver=self.resolver, urn=urn)
-            stream.repeatedString = "UNKNOWN"
-            return stream
+            return RepeatedStringStream(
+                resolver=self.resolver, urn=urn,
+                repeated_string=GetUnknownString())
 
         if urn == self.lexicon.base + "UnreadableData":
-            stream =  RepeatedStringStream(resolver=self.resolver, urn=urn)
-            stream.repeatedString = "UNREADABLEDATA"
-            return stream
+            return RepeatedStringStream(
+                resolver=self.resolver, urn=urn,
+                repeated_string=GetUnreadableString())
 
-        if urn.startswith(self.lexicon.base + "SymbolicStream") and len(urn) == len(self.lexicon.base + "SymbolicStream") + 2:
+        if (urn.startswith(self.lexicon.base + "SymbolicStream") and
+            len(urn) == len(self.lexicon.base + "SymbolicStream") + 2):
             shortName = urn[len(self.lexicon.base + "SymbolicStream"):].upper()
-            value = shortName.decode('hex')
-            stream = RepeatedStream(resolver=self.resolver, urn=urn)
-            stream.symbol = value
-            return stream
+            value = binascii.unhexlify(shortName)
+            return RepeatedStream(resolver=self.resolver, urn=urn,
+                                    symbol=value)
 
         raise ValueError
+
+
+def _MakeTile(repeated_string):
+    """Make exactly 1Mb tile of the repeated string."""
+    total_size = 1024*1024
+    tile = repeated_string * (total_size // len(repeated_string))
+    tile += repeated_string[:total_size % len(repeated_string)]
+    return tile
+
+# Exactly 1Mb.
+_UNKNOWN_STRING = None
+def GetUnknownString():
+    global _UNKNOWN_STRING
+    if _UNKNOWN_STRING is not None:
+        return _UNKNOWN_STRING
+
+    _UNKNOWN_STRING = _MakeTile("UNKNOWN")
+    return _UNKNOWN_STRING
+
+
+# Exactly 1Mb.
+_UNREADABLE_STRING = None
+def GetUnreadableString():
+    global _UNREADABLE_STRING
+    if _UNREADABLE_STRING is not None:
+        return _UNREADABLE_STRING
+
+    _UNREADABLE_STRING = _MakeTile("UNREADABLEDATA")
+    return _UNREADABLE_STRING

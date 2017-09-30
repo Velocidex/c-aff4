@@ -19,23 +19,29 @@ from builtins import str
 from builtins import range
 from past.utils import old_div
 from builtins import object
+
+import binascii
+import hashlib
+
+from pyaff4 import container
 from pyaff4 import data_store
 from pyaff4 import hashes
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
-from pyaff4.container import Container
+from pyaff4 import zip
 
-from . import zip
-import hashlib
 
 class InvalidBlockHashComparison(Exception):
     pass
 
+
 class InvalidHashComparison(Exception):
     pass
 
+
 class InconsistentHashMethod(Exception):
     pass
+
 
 # the following is for ordering hashes when calculating
 
@@ -63,7 +69,7 @@ class ValidationListener(object):
     def onValidBlockHash(self, a):
         pass
 
-    def onInValidBlockHash(self, a, b, imageStreamURI, offset):
+    def onInvalidBlockHash(self, a, b, imageStreamURI, offset):
         raise InvalidBlockHashComparison(
             "Invalid block hash comarison for stream %s at offset %d" % (imageStreamURI, offset))
 
@@ -89,7 +95,7 @@ class BlockHashesHash(object):
         return not self.__eq__(other)
 
     def digest(self):
-        return self.hash.decode('hex')
+        return binascii.unhexlify(self.hash)
 
 
 class Validator(object):
@@ -101,7 +107,7 @@ class Validator(object):
         self.delegate = None
 
     def validateContainer(self, filename):
-        lex = Container.identify(filename)
+        lex = container.Container.identify(filename)
         resolver = data_store.MemoryDataStore(lex)
 
         with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
@@ -116,7 +122,7 @@ class Validator(object):
 
     def validateContainerMultiPart(self, filenamea, filenameb):
         # in this simple example, we assume that both files passed are members of the Container
-        lex = Container.identify(filenamea)
+        lex = container.Container.identify(filenamea)
         resolver = data_store.MemoryDataStore(lex)
 
         with zip.ZipFile.NewZipFile(resolver, filenamea) as zip_filea:
@@ -205,7 +211,10 @@ class Validator(object):
                     chunkIdx = old_div(offset, imageStream.chunk_size)
                     storedBlockHash = imageStream.readBlockHash(chunkIdx, hashDataType)
                     if calculatedBlockHash != storedBlockHash.value:
-                        self.listener.onInvalidBlockHash(calculatedBlockHash, storedBlockHash.value, imageStreamURI, offset)
+                        self.listener.onInvalidBlockHash(
+                            calculatedBlockHash,
+                            storedBlockHash.value,
+                            imageStreamURI, offset)
                     else:
                         self.listener.onValidBlockHash(calculatedBlockHash)
 
@@ -427,7 +436,7 @@ class InterimStdValidator(Validator):
         hashb = ""
         parentmap = None
 
-        # TODO: handle more cleanlythe sematic difference between datatypes
+        # TODO: handle more cleanly the sematic difference between datatypes
         if len(list(calculatedHashes.keys())) == 1:
             # This is a single part image
             # The single AFF4 hash is just the blockMapHash
@@ -462,8 +471,6 @@ class InterimStdValidator(Validator):
             self.listener.onInvalidHash("AFF4Hash", hasha, hashb, parentMap)
         else:
             self.listener.onValidHash("AFF4Hash", hasha, parentMap)
-
-
 
     def getStoredBlockHashes(self, imageStreamURI):
         res = []

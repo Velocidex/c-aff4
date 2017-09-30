@@ -24,7 +24,6 @@ from pyaff4 import zip
 from pyaff4 import hashes
 from pyaff4.block_hasher import *
 from pyaff4.linear_hasher import *
-import volatility.obj as obj
 from volatility.conf import ConfObject
 from volatility.plugins.addrspaces import aff4
 

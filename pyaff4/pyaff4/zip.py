@@ -18,6 +18,7 @@ from future import standard_library
 standard_library.install_aliases()
 from builtins import range
 from builtins import object
+import copy
 import logging
 import io
 import zlib
@@ -30,6 +31,7 @@ from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
 from pyaff4 import struct_parser
+from pyaff4 import utils
 
 LOGGER = logging.getLogger("pyaff4")
 
@@ -37,7 +39,8 @@ LOGGER = logging.getLogger("pyaff4")
 # the aff4_image compression.
 ZIP_STORED = 0
 ZIP_DEFLATE = 8
-
+# The field size at which we switch to zip64 semantics.
+ZIP32_MAX_SIZE = 2**32 -1
 
 BUFF_SIZE = 64 * 1024
 
@@ -51,11 +54,11 @@ class EndCentralDirectory(struct_parser.CreateStruct(
         uint16_t total_entries_in_cd_on_disk;
         uint16_t total_entries_in_cd;
         int32_t size_of_cd = -1;
-        uint32_t offset_of_cd = -1;
+        int32_t offset_of_cd = -1;
         uint16_t comment_len = 0;
         """)):
 
-    magic_string = 'PK\x05\x06'
+    magic_string = b'PK\x05\x06'
 
     def IsValid(self):
         return self.magic == 0x6054b50
@@ -95,7 +98,7 @@ class CDFileHeader(struct_parser.CreateStruct(
         int32_t compress_size = -1;
         int32_t file_size = -1;
         uint16_t file_name_length;
-        uint16_t extra_field_len = 32;
+        uint16_t extra_field_len = 0;
         uint16_t file_comment_length = 0;
         uint16_t disk_number_start = 0;
         uint16_t internal_file_attr = 0;
@@ -119,7 +122,7 @@ class ZipFileHeader(struct_parser.CreateStruct(
         int32_t compress_size;
         int32_t file_size;
         uint16_t file_name_length;
-        uint16_t extra_field_len;
+        uint16_t extra_field_len = 0;
         """)):
 
     def IsValid(self):
@@ -127,13 +130,42 @@ class ZipFileHeader(struct_parser.CreateStruct(
 
 # see APPNOTE.txt 4.5.3 -Zip64 Extended Information Extra Field (0x0001):
 class Zip64FileHeaderExtensibleField(object):
+    fields = [
+        ["uint16_t", "header_id", 1],
+        ["uint16_t", "data_size", 0],
+        ["uint64_t", "file_size", None],
+        ["uint64_t", "compress_size", None],
+        ["uint64_t", "relative_offset_local_header", None],
+        ["uint32_t", "disk_number_start", None]
+    ]
 
-    header_id = -1                      # uint16_t
-    data_size = -1                      # uint16_t
-    file_size = -1                      # uint64_t
-    compress_size = -1                  # uint64_t
-    relative_offset_local_header = -1   # uint64_t
-    disk_number_start = -1;             # uint32_t
+    def __init__(self):
+        self.fields = copy.deepcopy(self.fields)
+
+    def format_string(self):
+        return "<" + "".join(
+            [struct_parser.format_string_map[t]
+             for t, _, d in self.fields if d is not None])
+
+    def sizeof(self):
+        """Calculate the total size of the header."""
+        return struct.calcsize(self.format_string())
+
+    def empty(self):
+        return [] == [d for _, _, d in self.fields[2:] if d is not None]
+
+    def Pack(self):
+        self.data_size = self.sizeof()
+        return struct.pack(self.format_string(),
+                           [v for t, _, v in self.fields if v is not None])
+
+    def Set(self, field, value):
+        for row in self.fields:
+            if row[1] == field:
+                row[2] = value
+                return
+        raise AttributeError("Unknown field %s." % field)
+
 
     @classmethod
     def FromBuffer(cls, fileRecord, buffer):
@@ -185,7 +217,7 @@ class Zip64EndCD(struct_parser.CreateStruct(
         uint64_t offset_of_cd;
         """)):
 
-    magic_string = 'PK\x06\x06'
+    magic_string = b'PK\x06\x06'
 
     def IsValid(self):
         return self.magic == 0x06064b50
@@ -246,43 +278,67 @@ class ZipInfo(object):
 
         header = ZipFileHeader(
             crc32=self.crc32,
-            compress_size=-1,
-            file_size=-1,
+            compress_size=self.compress_size,
+            file_size=self.file_size,
             file_name_length=len(self.filename),
             compression_method=self.compression_method,
             lastmodtime=self.lastmodtime,
             lastmoddate=self.lastmoddate,
-            extra_field_len=Zip64FileHeaderExtensibleField.sizeof())
+            extra_field_len=0)
+
+        extra_header_64 = Zip64FileHeaderExtensibleField()
+        if self.file_size > ZIP32_MAX_SIZE:
+            header.file_size = -1
+            extra_header_64.Set("file_size", self.file_size)
+
+        if self.compress_size > ZIP32_MAX_SIZE:
+            header.compress_size = -1
+            extra_header_64.Set("compress_size", self.compress_size)
+
+        # Only write the extra header if we have to.
+        if not extra_header_64.empty():
+            header.extra_field_len = extra_header_64.sizeof()
 
         backing_store.Seek(self.file_header_offset)
         backing_store.Write(header.Pack())
-        backing_store.write(self.filename)
+        backing_store.write(utils.SmartStr(self.filename))
 
-        header_64 = Zip64FileHeaderExtensibleField(
-            file_size=self.file_size,
-            compress_size=self.compress_size,
-            relative_offset_local_header=self.local_header_offset)
-
-        backing_store.Write(header_64.Pack())
+        if not extra_header_64.empty():
+            backing_store.Write(extra_header_64.Pack())
 
     def WriteCDFileHeader(self, backing_store):
         header = CDFileHeader(
             compression_method=self.compression_method,
+            file_size=self.file_size,
+            compress_size=self.compress_size,
+            relative_offset_local_header=self.local_header_offset,
             crc32=self.crc32,
             file_name_length=len(self.filename),
             dostime=self.lastmodtime,
-            dosdate=self.lastmoddate,
-            extra_field_len=Zip64FileHeaderExtensibleField.sizeof())
+            dosdate=self.lastmoddate)
+
+        extra_header_64 = Zip64FileHeaderExtensibleField()
+        if self.file_size > ZIP32_MAX_SIZE:
+            header.file_size = -1
+            extra_header_64.Set("file_size", self.file_size)
+
+        if self.compress_size > ZIP32_MAX_SIZE:
+            header.compress_size = -1
+            extra_header_64.Set("compress_size", self.compress_size)
+
+        if self.local_header_offset > ZIP32_MAX_SIZE:
+            header.relative_offset_local_header = -1
+            extra_header_64.Set("relative_offset_local_header", self.compress_size)
+
+        # Only write the extra header if we have to.
+        if not extra_header_64.empty():
+            header.extra_field_len = extra_header_64.sizeof()
 
         backing_store.write(header.Pack())
-        backing_store.write(self.filename)
+        backing_store.write(utils.SmartStr(self.filename))
 
-        zip64header = Zip64FileHeaderExtensibleField(
-            file_size=self.file_size,
-            compress_size=self.compress_size,
-            relative_offset_local_header=self.local_header_offset)
-
-        backing_store.write(zip64header.Pack())
+        if not extra_header_64.empty():
+            backing_store.Write(extra_header_64.Pack())
 
 
 class FileWrapper(object):
@@ -343,7 +399,7 @@ class ZipFileSegment(aff4_file.FileBackedObject):
         zip_info = owner.members.get(member_name)
         if zip_info is None:
             # The owner does not have this file yet - we add it when closing.
-            self.fd = io.StringIO()
+            self.fd = io.BytesIO()
             return
 
         backing_store_urn = owner.backing_store_urn
@@ -380,7 +436,7 @@ class ZipFileSegment(aff4_file.FileBackedObject):
                     LOGGER.info("Unable to decompress file %s", self.urn)
                     raise IOError()
 
-                self.fd = io.StringIO(decomp_buffer)
+                self.fd = io.BytesIO(decomp_buffer)
 
             elif file_header.compression_method == ZIP_STORED:
                 # Otherwise we map a slice into it.
@@ -594,6 +650,7 @@ class ZipFile(aff4.AFF4Volume):
 
     @staticmethod
     def NewZipFile(resolver, backing_store_urn):
+        rdfvalue.AssertURN(backing_store_urn)
         result = ZipFile(resolver, urn=None)
 
         resolver.Set(result.urn, lexicon.AFF4_TYPE,
@@ -610,7 +667,6 @@ class ZipFile(aff4.AFF4Volume):
 
     def CreateZipSegment(self, filename):
         self.MarkDirty()
-
         segment_urn = aff4_utils.urn_from_member_name(filename, self.urn)
 
         # Is it in the cache?
@@ -760,7 +816,7 @@ class ZipFile(aff4.AFF4Volume):
                     self.children.remove(child)
 
             # Add the turtle file to the volume.
-            with self.CreateZipSegment("information.turtle") as turtle_segment:
+            with self.CreateZipSegment(u"information.turtle") as turtle_segment:
                 turtle_segment.compression_method = ZIP_DEFLATE
 
                 self.resolver.DumpToTurtle(stream=turtle_segment)
@@ -777,7 +833,7 @@ class ZipFile(aff4.AFF4Volume):
             # We write to a memory stream first, and then copy it into the
             # backing_store at once. This really helps when we have lots of
             # members in the zip archive.
-            cd_stream = io.StringIO()
+            cd_stream = io.BytesIO()
 
             # Append a new central directory to the end of the zip file.
             backing_store.Seek(0, aff4.SEEK_END)

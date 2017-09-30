@@ -7,6 +7,9 @@ import shutil
 import string
 import urllib.parse
 
+from pyaff4 import rdfvalue
+from pyaff4 import utils
+
 
 PRINTABLES = set(string.printable)
 for i in "!$\\:*%?\"<>|]":
@@ -46,14 +49,20 @@ def member_name_for_urn(member_urn, base_urn=None, slash_ok=True):
     return "".join(escaped_filename)
 
 def urn_from_member_name(member, base_urn):
+    """Returns a URN object from a zip file's member name."""
     # Remove %xx escapes.
     member = re.sub(
         "%(..)", lambda x: chr(int("0x" + x.group(1), 0)),
         member)
-    if urllib.parse.urlparse(member).scheme == "aff4":
-        return member
 
-    return base_urn.Append(member, quote=False)
+    # This is an absolute URN.
+    if urllib.parse.urlparse(member).scheme == "aff4":
+        result = member
+    else:
+        # Relative member becomes relative to the volume's URN.
+        result = base_urn.Append(member, quote=False)
+
+    return rdfvalue.URN(utils.SmartStr(result))
 
 def MkDir(path):
     try:
