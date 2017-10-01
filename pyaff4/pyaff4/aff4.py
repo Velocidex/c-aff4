@@ -14,6 +14,8 @@
 
 """This is the python AFF4 library."""
 from __future__ import division
+from __future__ import unicode_literals
+from builtins import next
 from builtins import str
 from past.utils import old_div
 from builtins import object

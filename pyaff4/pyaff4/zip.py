@@ -13,6 +13,7 @@
 # the License.
 
 """An implementation of the ZipFile based AFF4 volume."""
+from __future__ import unicode_literals
 
 from future import standard_library
 standard_library.install_aliases()
@@ -94,7 +95,7 @@ class CDFileHeader(struct_parser.CreateStruct(
         uint16_t compression_method;
         uint16_t dostime;
         uint16_t dosdate;
-        int32_t crc32;
+        uint32_t crc32;
         int32_t compress_size = -1;
         int32_t file_size = -1;
         uint16_t file_name_length;
@@ -118,7 +119,7 @@ class ZipFileHeader(struct_parser.CreateStruct(
         uint16_t compression_method;
         uint16_t lastmodtime;
         uint16_t lastmoddate;
-        int32_t crc32;
+        uint32_t crc32;
         int32_t compress_size;
         int32_t file_size;
         uint16_t file_name_length;
@@ -393,10 +394,8 @@ class ZipFileSegment(aff4_file.FileBackedObject):
 
     def LoadFromZipFile(self, owner):
         """Read the segment data from the ZipFile owner."""
-        member_name = aff4_utils.member_name_for_urn(self.urn, owner.urn)
-
         # Parse the ZipFileHeader for this filename.
-        zip_info = owner.members.get(member_name)
+        zip_info = owner.members.get(self.urn)
         if zip_info is None:
             # The owner does not have this file yet - we add it when closing.
             self.fd = io.BytesIO()
@@ -414,7 +413,7 @@ class ZipFileSegment(aff4_file.FileBackedObject):
 
             # The filename should be null terminated.
             file_header_filename = backing_store.Read(
-                file_header.file_name_length).split("\x00")[0]
+                file_header.file_name_length).split(b"\x00")[0]
 
             if file_header_filename != zip_info.filename:
                 msg = (u"Local filename %s different from "
@@ -471,6 +470,7 @@ class ZipFile(aff4.AFF4Volume):
     def __init__(self, *args, **kwargs):
         super(ZipFile, self).__init__(*args, **kwargs)
         self.children = set()
+        # The members of this zip file. Keys is member URN, value is zip info.
         self.members = {}
         self.global_offset = 0
 
@@ -515,7 +515,7 @@ class ZipFile(aff4.AFF4Volume):
             # the old, randomly selected URN.
             if urn_string and self.urn != urn_string:
                 self.resolver.DeleteSubject(self.urn)
-                self.urn.Set(urn_string)
+                self.urn.Set(utils.SmartUnicode(urn_string))
 
                 # Set these triples so we know how to open the zip file again.
                 self.resolver.Set(self.urn, lexicon.AFF4_TYPE, rdfvalue.URN(
@@ -622,7 +622,7 @@ class ZipFile(aff4.AFF4Volume):
                             zip_info.file_size = extra.file_size
                         if extra.compress_size != -1:
                             zip_info.compress_size = extra.compress_size
-                        #break
+                            #break
 
                 if zip_info.local_header_offset >= 0:
                     LOGGER.info("Found file %s @ %#x", zip_info.filename,
@@ -640,7 +640,7 @@ class ZipFile(aff4.AFF4Volume):
                     self.resolver.Set(member_urn, lexicon.AFF4_STORED, self.urn)
                     self.resolver.Set(member_urn, lexicon.AFF4_STREAM_SIZE,
                                       rdfvalue.XSDInteger(zip_info.file_size))
-                    self.members[zip_info.filename] = zip_info
+                    self.members[member_urn] = zip_info
 
                 # Go to the next entry.
                 entry_offset += (entry.sizeof() +
@@ -693,11 +693,11 @@ class ZipFile(aff4.AFF4Volume):
         return self.resolver.CachePut(result)
 
     def OpenZipSegment(self, filename):
-        if filename not in self.members:
-            raise IOError("Segment %s does not exist yet" % filename)
-
         # Is it already in the cache?
         segment_urn = aff4_utils.urn_from_member_name(filename, self.urn)
+        if segment_urn not in self.members:
+            raise IOError("Segment %s does not exist yet" % filename)
+
         res = self.resolver.CacheGet(segment_urn)
 
         if res:
@@ -761,7 +761,6 @@ class ZipFile(aff4.AFF4Volume):
             # For now we do not support streamed writing so we need to seek back
             # to this position later with an updated crc32.
             zip_info.WriteFileHeader(backing_store)
-
             if compression_method == ZIP_DEFLATE:
                 zip_info.compression_method = ZIP_DEFLATE
                 compressor = zlib.compressobj(zlib.Z_DEFAULT_COMPRESSION,
@@ -774,7 +773,8 @@ class ZipFile(aff4.AFF4Volume):
                     c_data = compressor.compress(data)
                     zip_info.compress_size += len(c_data)
                     zip_info.file_size += len(data)
-                    zip_info.crc32 = zlib.crc32(data, zip_info.crc32)
+                    # Python 2 erronously returns a signed int here.
+                    zip_info.crc32 = zlib.crc32(data, zip_info.crc32) & 0xffffffff
                     backing_store.Write(c_data)
                     progress.Report(zip_info.file_size)
 
@@ -793,7 +793,8 @@ class ZipFile(aff4.AFF4Volume):
 
                     zip_info.compress_size += len(data)
                     zip_info.file_size += len(data)
-                    zip_info.crc32 = zlib.crc32(data, zip_info.crc32)
+                    # Python 2 erronously returns a signed int here.
+                    zip_info.crc32 = zlib.crc32(data, zip_info.crc32) & 0xffffffff
                     progress.Report(zip_info.file_size)
                     backing_store.Write(data)
             else:
@@ -842,7 +843,7 @@ class ZipFile(aff4.AFF4Volume):
             ecd_real_offset = backing_store.Tell()
 
             total_entries = len(self.members)
-            for urn, zip_info in self.members.items():
+            for urn, zip_info in list(self.members.items()):
                 LOGGER.info("Writing CD entry for %s", urn)
                 zip_info.WriteCDFileHeader(cd_stream)
 

@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 # Copyright 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -32,8 +33,8 @@ class ZipTest(unittest.TestCase):
     filename_urn = rdfvalue.URN.FromFileName(filename)
     segment_name = "Foobar.txt"
     streamed_segment = "streamed.txt"
-    data1 = "I am a segment!"
-    data2 = "I am another segment!"
+    data1 = b"I am a segment!"
+    data2 = b"I am another segment!"
 
     def setUp(self):
         with data_store.MemoryDataStore() as resolver:

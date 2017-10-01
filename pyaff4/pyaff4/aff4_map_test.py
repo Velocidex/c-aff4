@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 # Copyright 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -48,20 +49,20 @@ class AFF4MapTest(unittest.TestCase):
                     resolver, self.image_urn, self.volume_urn) as image:
                     # Maps are written in random order.
                     image.Seek(50)
-                    image.Write("XX - This is the position.")
+                    image.Write(b"XX - This is the position.")
 
                     image.Seek(0)
-                    image.Write("00 - This is the position.")
+                    image.Write(b"00 - This is the position.")
 
                     # We can "overwrite" data by writing the same range again.
                     image.Seek(50)
-                    image.Write("50")
+                    image.Write(b"50")
 
                 # Test the Stream method.
                 with resolver.CachePut(
                         aff4_file.AFF4MemoryStream(resolver)) as source:
                     # Fill it with data.
-                    source.Write("AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH")
+                    source.Write(b"AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH")
 
                     # Make a temporary map that defines our plan.
                     helper_map = aff4_map.AFF4Map(resolver)
@@ -89,9 +90,12 @@ class AFF4MapTest(unittest.TestCase):
             image_urn = zip_file.urn.Append(self.image_name)
 
         with resolver.AFF4FactoryOpen(image_urn) as map:
+            a = rdfvalue.URN("aff4://a")
+            b = rdfvalue.URN("aff4://b")
+
             # First test - overlapping regions:
-            map.AddRange(0, 0, 100, "a")
-            map.AddRange(10, 10, 100, "a")
+            map.AddRange(0, 0, 100, a)
+            map.AddRange(10, 10, 100, a)
 
             # Should be merged into a single range.
             ranges = map.GetRanges()
@@ -102,8 +106,8 @@ class AFF4MapTest(unittest.TestCase):
 
             # Repeating regions - should not be merged but first region should
             # be truncated.
-            map.AddRange(0, 0, 100, "a")
-            map.AddRange(50, 0, 100, "a")
+            map.AddRange(0, 0, 100, a)
+            map.AddRange(50, 0, 100, a)
 
             ranges = map.GetRanges()
             self.assertEquals(len(ranges), 2)
@@ -112,8 +116,8 @@ class AFF4MapTest(unittest.TestCase):
             # Inserted region. Should split existing region into three.
             map.Clear()
 
-            map.AddRange(0, 0, 100, "a")
-            map.AddRange(50, 0, 10, "b")
+            map.AddRange(0, 0, 100, a)
+            map.AddRange(50, 0, 10, b)
 
             ranges = map.GetRanges()
             self.assertEquals(len(ranges), 3)
@@ -127,7 +131,7 @@ class AFF4MapTest(unittest.TestCase):
             self.assertEquals(ranges[2].target_id, 0)
 
             # New range overwrites all the old ranges.
-            map.AddRange(0, 0, 100, "b")
+            map.AddRange(0, 0, 100, b)
 
             ranges = map.GetRanges()
             self.assertEquals(len(ranges), 1)
@@ -139,10 +143,10 @@ class AFF4MapTest(unittest.TestCase):
             # single region automatically.
             map.Clear()
 
-            map.AddRange(0, 100, 10, "a")
-            map.AddRange(10, 110, 10, "a")
-            map.AddRange(20, 120, 10, "a")
-            map.AddRange(30, 130, 10, "a")
+            map.AddRange(0, 100, 10, a)
+            map.AddRange(10, 110, 10, a)
+            map.AddRange(20, 120, 10, a)
+            map.AddRange(30, 130, 10, a)
 
             ranges = map.GetRanges()
             self.assertEquals(len(ranges), 1)
@@ -152,8 +156,8 @@ class AFF4MapTest(unittest.TestCase):
             # Writing sparse image.
             map.Clear()
 
-            map.AddRange(0, 100, 10, "a")
-            map.AddRange(30, 130, 10, "a")
+            map.AddRange(0, 100, 10, a)
+            map.AddRange(30, 130, 10, a)
 
             ranges = map.GetRanges()
             self.assertEquals(len(ranges), 2)
@@ -164,7 +168,7 @@ class AFF4MapTest(unittest.TestCase):
             self.assertEquals(ranges[1].target_id, 0)
 
             # Now merge. Adding the missing region makes the image not sparse.
-            map.AddRange(10, 110, 20, "a")
+            map.AddRange(10, 110, 20, a)
             ranges = map.GetRanges()
             self.assertEquals(len(ranges), 1)
             self.assertEquals(ranges[0].length, 40)
@@ -187,19 +191,19 @@ class AFF4MapTest(unittest.TestCase):
     def CheckStremImageURN(self, resolver, image_urn_2):
         with resolver.AFF4FactoryOpen(image_urn_2) as map:
             self.assertEquals(map.Size(), 16)
-            self.assertEquals(map.Read(100), "DDDDAAAA\x00\x00\x00\x00EEEE")
+            self.assertEquals(map.Read(100), b"DDDDAAAA\x00\x00\x00\x00EEEE")
 
         # The data stream should be packed without gaps.
         with resolver.AFF4FactoryOpen(image_urn_2.Append("data")) as image:
-            self.assertEquals(image.Read(100), "DDDDAAAAEEEE")
+            self.assertEquals(image.Read(100), b"DDDDAAAAEEEE")
 
     def CheckImageURN(self, resolver, image_urn):
         with resolver.AFF4FactoryOpen(image_urn) as map:
             map.Seek(50)
-            self.assertEquals(map.Read(2), "50")
+            self.assertEquals(map.Read(2), b"50")
 
             map.Seek(0)
-            self.assertEquals(map.Read(2), "00")
+            self.assertEquals(map.Read(2), b"00")
 
             ranges = map.GetRanges()
             self.assertEquals(len(ranges), 3)
@@ -220,7 +224,7 @@ class AFF4MapTest(unittest.TestCase):
             # Test that reads outside the ranges null pad correctly.
             map.Seek(48)
             read_string = map.Read(4)
-            self.assertEquals(read_string, "\x00\x0050")
+            self.assertEquals(read_string, b"\x00\x0050")
 
 
 if __name__ == '__main__':

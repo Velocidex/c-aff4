@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 # Copyright 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -26,37 +27,42 @@ import io
 
 class DataStoreTest(unittest.TestCase):
     def setUp(self):
+        self.hello_urn = rdfvalue.URN("aff4://hello")
         self.store = data_store.MemoryDataStore()
         self.store.Set(
-            rdfvalue.URN("hello"), rdfvalue.URN("World"),
+            self.hello_urn, rdfvalue.URN(lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY),
             rdfvalue.XSDString("foo"))
 
         self.store.Set(
-            rdfvalue.URN("hello"), rdfvalue.URN(lexicon.AFF4_TYPE),
+            self.hello_urn, rdfvalue.URN(lexicon.AFF4_TYPE),
             rdfvalue.XSDString("bar"))
 
     def testDataStore(self):
-        result = self.store.Get(rdfvalue.URN("hello"), rdfvalue.URN("World"))
+        result = self.store.Get(self.hello_urn, rdfvalue.URN(
+            lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY))
         self.assertEquals(type(result), rdfvalue.XSDString)
 
-        self.assertEquals(result.SerializeToString(), "foo")
+        self.assertEquals(result.SerializeToString(), b"foo")
 
         self.store.Set(
-            rdfvalue.URN("hello"), rdfvalue.URN("World"),
+            self.hello_urn, rdfvalue.URN(lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY),
             rdfvalue.XSDString("bar"))
 
         # In the current implementation a second Set() overwrites the previous
         # value.
         self.assertEquals(
-            self.store.Get(rdfvalue.URN("hello"), rdfvalue.URN("World")),
+            self.store.Get(self.hello_urn, rdfvalue.URN(
+                lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY)),
             rdfvalue.XSDString("bar"))
 
     def testTurtleSerialization(self):
         data = self.store.DumpToTurtle(verbose=True)
         new_store = data_store.MemoryDataStore()
         new_store.LoadFromTurtle(io.BytesIO(data))
-        res = new_store.Get(rdfvalue.URN("hello"), rdfvalue.URN("World"))
-        self.assertEquals(res, "foo")
+        res = new_store.Get(self.hello_urn, rdfvalue.URN(
+            lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY))
+        self.assertEquals(res, b"foo")
+
 
 class AFF4ObjectCacheMock(data_store.AFF4ObjectCache):
     def GetKeys(self):
@@ -82,22 +88,25 @@ class AFF4ObjectCacheTest(unittest.TestCase):
 
         result = cache.GetKeys()
 
-        self.assertEquals(result[0], "file:///c")
-        self.assertEquals(result[1], "file:///b")
-        self.assertEquals(result[2], "file:///a")
+        # Keys are stored as serialized urns.
+        self.assertEquals(result[0], b"file:///c")
+        self.assertEquals(result[1], b"file:///b")
+        self.assertEquals(result[2], b"file:///a")
 
         # This removes the object from the cache and places it in the in_use
         # list.
         self.assertEquals(cache.Get("file:///a"), obj1)
 
+        # Keys are stored as serialized urns.
         result = cache.GetKeys()
         self.assertEquals(len(result), 2)
-        self.assertEquals(result[0], "file:///c")
-        self.assertEquals(result[1], "file:///b")
+        self.assertEquals(result[0], b"file:///c")
+        self.assertEquals(result[1], b"file:///b")
 
+        # Keys are stored as serialized urns.
         in_use = cache.GetInUse()
         self.assertEquals(len(in_use), 1)
-        self.assertEquals(in_use[0], "file:///a")
+        self.assertEquals(in_use[0], b"file:///a")
 
         # Now we return the object. It should now appear in the lru lists.
         cache.Return(obj1)
@@ -105,9 +114,9 @@ class AFF4ObjectCacheTest(unittest.TestCase):
         result = cache.GetKeys()
         self.assertEquals(len(result), 3)
 
-        self.assertEquals(result[0], "file:///a")
-        self.assertEquals(result[1], "file:///c")
-        self.assertEquals(result[2], "file:///b")
+        self.assertEquals(result[0], b"file:///a")
+        self.assertEquals(result[1], b"file:///c")
+        self.assertEquals(result[2], b"file:///b")
 
         in_use = cache.GetInUse()
         self.assertEquals(len(in_use), 0)
@@ -117,9 +126,9 @@ class AFF4ObjectCacheTest(unittest.TestCase):
         result = cache.GetKeys()
         self.assertEquals(len(result), 3)
 
-        self.assertEquals(result[0], "file:///d")
-        self.assertEquals(result[1], "file:///a")
-        self.assertEquals(result[2], "file:///c")
+        self.assertEquals(result[0], b"file:///d")
+        self.assertEquals(result[1], b"file:///a")
+        self.assertEquals(result[2], b"file:///c")
 
         # b is now expired so not in cache.
         self.assertEquals(cache.Get("file:///b"), None)

@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 # Copyright 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -55,7 +56,7 @@ class AFF4ImageTest(unittest.TestCase):
                     image.chunks_per_segment = 3
 
                     for i in range(100):
-                        image.Write("Hello world %02d!" % i)
+                        image.Write(b"Hello world %02d!" % i)
 
                     self.image_urn = image.urn
 
@@ -64,7 +65,7 @@ class AFF4ImageTest(unittest.TestCase):
                 with aff4_image.AFF4Image.NewAFF4Image(
                     resolver, self.image_urn_2, self.volume_urn) as image_2:
                     image_2.compression = lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY
-                    image_2.Write("This is a test")
+                    image_2.Write(b"This is a test")
 
                 # Use streaming API to write image.
                 self.image_urn_3 = self.image_urn.Append("3")
@@ -91,8 +92,8 @@ class AFF4ImageTest(unittest.TestCase):
             self.assertEquals(image.chunk_size, 10)
             self.assertEquals(image.chunks_per_segment, 3)
             self.assertEquals(
-                "Hello world 00!Hello world 01!Hello world 02!Hello world 03!"
-                "Hello world 04!Hello world 05!Hello worl",
+                b"Hello world 00!Hello world 01!Hello world 02!Hello world 03!" +
+                b"Hello world 04!Hello world 05!Hello worl",
                 image.Read(100))
 
             self.assertEquals(1500, image.Size())
@@ -104,15 +105,15 @@ class AFF4ImageTest(unittest.TestCase):
                 lexicon.AFF4_IMAGE_COMPRESSION_SNAPPY)
 
             data = image_2.Read(100)
-            self.assertEquals(data, "This is a test")
+            self.assertEquals(data, b"This is a test")
 
         # Now test streaming API image.
         with resolver.AFF4FactoryOpen(self.image_urn_3) as image_3:
             self.assertEquals(image_3.chunk_size, 10)
             self.assertEquals(image_3.chunks_per_segment, 3)
             self.assertEquals(
-                "Hello world 00!Hello world 01!Hello world 02!Hello world 03!"
-                "Hello world 04!Hello world 05!Hello worl",
+                b"Hello world 00!Hello world 01!Hello world 02!Hello world 03!"+
+                b"Hello world 04!Hello world 05!Hello worl",
                 image_3.Read(100))
 
 if __name__ == '__main__':

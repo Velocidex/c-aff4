@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 # Copyright 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -26,13 +27,13 @@ class StreamTest(unittest.TestCase):
         self.assertEquals(0, stream.Tell())
         self.assertEquals(0, stream.Size())
 
-        stream.Write("hello world")
+        stream.Write(b"hello world")
         self.assertEquals(11, stream.Tell())
 
         stream.Seek(0, 0)
         self.assertEquals(0, stream.Tell())
 
-        self.assertEquals("hello world",
+        self.assertEquals(b"hello world",
                           stream.Read(1000))
 
         self.assertEquals(11, stream.Tell())
@@ -40,30 +41,30 @@ class StreamTest(unittest.TestCase):
         stream.Seek(-5, 2)
         self.assertEquals(6, stream.Tell())
 
-        self.assertEquals("world",
+        self.assertEquals(b"world",
                           stream.Read(1000))
 
         stream.Seek(-5, 2)
         self.assertEquals(6, stream.Tell())
 
-        stream.Write("Cruel world")
+        stream.Write(b"Cruel world")
         stream.Seek(0, 0)
         self.assertEquals(0, stream.Tell())
-        self.assertEquals("hello Cruel world",
+        self.assertEquals(b"hello Cruel world",
                           stream.Read(1000))
 
         self.assertEquals(17, stream.Tell())
 
         stream.Seek(0, 0)
 
-        self.assertEquals("he",
+        self.assertEquals(b"he",
                           stream.Read(2))
 
-        stream.Write("I have %d arms and %#x legs." % (2, 1025))
+        stream.Write(b"I have %d arms and %#x legs." % (2, 1025))
         self.assertEquals(31, stream.Tell())
 
         stream.Seek(0, 0)
-        self.assertEquals("heI have 2 arms and 0x401 legs.",
+        self.assertEquals(b"heI have 2 arms and 0x401 legs.",
                           stream.Read(1000))
 
     def testFileBackedStream(self):

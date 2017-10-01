@@ -1,4 +1,5 @@
 from __future__ import print_function
+from __future__ import unicode_literals
 # Copyright 2014 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -15,8 +16,10 @@ from __future__ import print_function
 
 from builtins import str
 from builtins import object
+import collections
 import logging
 import rdflib
+import six
 
 from pyaff4 import aff4
 from pyaff4 import lexicon
@@ -74,7 +77,7 @@ class AFF4ObjectCache(object):
         max_items = size or self.max_items
         while len(self.lru_map) > max_items:
             older_item = self.lru_list.prev
-            #LOGGER.debug("Trimming %s from cache" % older_item.key)
+            LOGGER.debug("Trimming %s from cache" % older_item.key)
 
             self.lru_map.pop(older_item.key)
             older_item.unlink()
@@ -158,7 +161,7 @@ class AFF4ObjectCache(object):
     def Dump(self):
         # Now dump the objects in use.
         print("Objects in use:")
-        for key, entry in self.in_use.items():
+        for key, entry in list(self.in_use.items()):
             print("%s - %s" % (key, entry.use_count))
 
         print("Objects in cache:")
@@ -197,6 +200,8 @@ class AFF4ObjectCache(object):
 
 
 class MemoryDataStore(object):
+    aff4NS = None
+
     def __init__(self, lex=lexicon.standard):
         self.lexicon = lex
         self.suppressed_rdftypes = dict()
@@ -205,7 +210,7 @@ class MemoryDataStore(object):
         self.suppressed_rdftypes[lexicon.AFF4_ZIP_TYPE] = set((
             lexicon.AFF4_STORED, lexicon.AFF4_TYPE))
 
-        self.store = {}
+        self.store = collections.OrderedDict()
         self.ObjectCache = AFF4ObjectCache(10)
         self.flush_callbacks = {}
 
@@ -237,7 +242,8 @@ class MemoryDataStore(object):
         attribute = rdfvalue.URN(attribute).SerializeToString()
         CHECK(isinstance(value, rdfvalue.RDFValue), "Value must be an RDFValue")
 
-        if attribute not in self.store.setdefault(subject, {}):
+        if attribute not in self.store.setdefault(
+                subject, collections.OrderedDict()):
             self.store.get(subject)[attribute] = value
         else:
             oldvalue = self.store.get(subject)[attribute]
@@ -279,14 +285,14 @@ class MemoryDataStore(object):
 
     def DumpToTurtle(self, stream=None, verbose=False):
         g = rdflib.Graph()
-
         for urn, items in self.store.items():
-            urn = rdflib.URIRef(urn)
-            type = items.get(lexicon.AFF4_TYPE)
+            urn = rdflib.URIRef(utils.SmartUnicode(urn))
+            type = items.get(utils.SmartStr(lexicon.AFF4_TYPE))
             if type is None:
                 continue
 
-            for attr, value in items.items():
+            for attr, value in list(items.items()):
+                attr = utils.SmartUnicode(attr)
                 # We suppress certain facts which can be deduced from the file
                 # format itself. This ensures that we do not have conflicting
                 # data in the data store. The data in the data store is a
@@ -312,17 +318,16 @@ class MemoryDataStore(object):
 
     def LoadFromTurtle(self, stream):
         data = stream.read(1000000)
-        #print data
         g = rdflib.Graph()
         g.parse(data=data, format="turtle")
 
         for urn, attr, value in g:
-            urn = rdfvalue.URN(utils.SmartStr(urn))
-            attr = rdfvalue.URN(utils.SmartStr(attr))
-            serialized_value = utils.SmartStr(value)
+            urn = utils.SmartUnicode(urn)
+            attr = utils.SmartUnicode(attr)
+            serialized_value = value
 
             if isinstance(value, rdflib.URIRef):
-                value = rdfvalue.URN(serialized_value)
+                value = rdfvalue.URN(utils.SmartUnicode(serialized_value))
             elif value.datatype in registry.RDF_TYPE_MAP:
                 dt = value.datatype
                 value = registry.RDF_TYPE_MAP[value.datatype](
@@ -336,9 +341,8 @@ class MemoryDataStore(object):
 
         # look for the AFF4 namespace defined in the turtle
         for (_, b) in g.namespace_manager.namespaces():
-            b = utils.SmartStr(b)
-            if (b == lexicon.AFF4_NAMESPACE or
-                b == lexicon.AFF4_LEGACY_NAMESPACE):
+            if (str(b) == lexicon.AFF4_NAMESPACE or
+                str(b) == lexicon.AFF4_LEGACY_NAMESPACE):
                 self.aff4NS = b
 
     def AFF4FactoryOpen(self, urn):
@@ -417,36 +421,51 @@ class MemoryDataStore(object):
             if subject_regex is not None and subject_regex.match(subject):
                 yield subject
 
-    def QueryPredicateObject(self, predicate, object):
-        for subject, data in self.store.items():
-            for pred, value in data.items():
+    def QueryPredicate(self, predicate):
+        """Yields all subjects which have this predicate."""
+        predicate = utils.SmartStr(predicate)
+        for subject, data in six.iteritems(self.store):
+            for pred, values in six.iteritems(data):
                 if pred == predicate:
-                    if type(value) == type([]):
-                        if object in value:
-                            yield subject
-                    elif object == value:
-                        yield subject
+                    if type(values) != type([]):
+                        values = [values]
+                    for value in values:
+                        yield (rdfvalue.URN().UnSerializeFromString(subject),
+                               rdfvalue.URN().UnSerializeFromString(predicate),
+                               value)
 
-                    elif object == value:
-                        yield subject
+
+    def QueryPredicateObject(self, predicate, object):
+        predicate = utils.SmartStr(predicate)
+        for subject, data in list(self.store.items()):
+            for pred, value in list(data.items()):
+                if pred == predicate:
+                    if type(value) != type([]):
+                        value = [value]
+
+                    if object in value:
+                        yield rdfvalue.URN().UnSerializeFromString(subject)
 
     def QuerySubjectPredicate(self, subject, predicate):
-        for s, data in self.store.items():
+        subject = utils.SmartStr(subject)
+        predicate = utils.SmartStr(predicate)
+        for s, data in six.iteritems(self.store):
             if s == subject:
-                for pred, value in data.items():
+                for pred, value in six.iteritems(data):
                     if pred == predicate:
-                        if type(value) == type([]):
-                            for o in value:
-                                yield o
-                        else:
-                            yield value
+                        if type(value) != type([]):
+                            value = [value]
+
+                        for o in value:
+                            yield o
 
     def SelectSubjectsByPrefix(self, prefix):
+        # Keys are bytes.
         prefix = utils.SmartStr(prefix)
         for subject in self.store:
             if subject.startswith(prefix):
-                yield subject
+                yield rdfvalue.URN().UnSerializeFromString(subject)
 
     def QueryPredicatesBySubject(self, subject):
-        for pred, value in self.store.get(subject, {}).items():
+        for pred, value in list(self.store.get(subject, {}).items()):
             yield pred, value

@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 # Copyright 2015 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -42,7 +43,7 @@ class AFF4DirectoryTest(unittest.TestCase):
 
                 segment_urn = volume.urn.Append(self.segment_name)
                 with volume.CreateMember(segment_urn) as member:
-                    member.Write("Hello world")
+                    member.Write(b"Hello world")
                     resolver.Set(
                         member.urn, lexicon.AFF4_STREAM_ORIGINAL_FILENAME,
                         rdfvalue.XSDString(self.root_path + self.segment_name))
@@ -56,7 +57,7 @@ class AFF4DirectoryTest(unittest.TestCase):
                 # Check for member.
                 child_urn = directory.urn.Append(self.segment_name)
                 with resolver.AFF4FactoryOpen(child_urn) as child:
-                    self.assertEquals(child.Read(10000), "Hello world")
+                    self.assertEquals(child.Read(10000), b"Hello world")
 
                 # Check that the metadata is carried over.
                 filename = resolver.Get(

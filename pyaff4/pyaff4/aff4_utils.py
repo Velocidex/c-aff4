@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 from future import standard_library
 standard_library.install_aliases()
 from builtins import chr
@@ -48,8 +49,11 @@ def member_name_for_urn(member_urn, base_urn=None, slash_ok=True):
 
     return "".join(escaped_filename)
 
+
 def urn_from_member_name(member, base_urn):
     """Returns a URN object from a zip file's member name."""
+    member = utils.SmartUnicode(member)
+
     # Remove %xx escapes.
     member = re.sub(
         "%(..)", lambda x: chr(int("0x" + x.group(1), 0)),
@@ -62,7 +66,8 @@ def urn_from_member_name(member, base_urn):
         # Relative member becomes relative to the volume's URN.
         result = base_urn.Append(member, quote=False)
 
-    return rdfvalue.URN(utils.SmartStr(result))
+    return rdfvalue.URN(result)
+
 
 def MkDir(path):
     try:

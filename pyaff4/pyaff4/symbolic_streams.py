@@ -1,5 +1,6 @@
 from __future__ import division
 from __future__ import absolute_import
+from __future__ import unicode_literals
 # Copyright 2016,2017 Schatz Forensic Pty Ltd. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -24,7 +25,7 @@ import math
 
 class RepeatedStream(aff4.AFF4Stream):
 
-    def __init__(self, resolver=None, urn=None, symbol="\x00"):
+    def __init__(self, resolver=None, urn=None, symbol=b"\x00"):
         super(RepeatedStream, self).__init__(
             resolver=resolver, urn=urn)
         self.symbol = symbol

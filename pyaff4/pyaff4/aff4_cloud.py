@@ -16,6 +16,7 @@
 
 It allows use of cloud buckets as transparent AFF4 images.
 """
+from __future__ import unicode_literals
 from builtins import str
 from builtins import range
 import json

@@ -1,6 +1,8 @@
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import unicode_literals
+
 # Copyright 2016,2017 Schatz Forensic Pty Ltd. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -15,13 +17,16 @@ from __future__ import absolute_import
 # License for the specific language governing permissions and limitations under
 # the License.
 
+from builtins import next
 from builtins import str
 from builtins import range
 from past.utils import old_div
 from builtins import object
 
 import binascii
+import collections
 import hashlib
+import six
 
 from pyaff4 import container
 from pyaff4 import data_store
@@ -50,17 +55,6 @@ hashOrderingMap = { lexicon.HASH_MD5 : 1,
                     lexicon.HASH_SHA256 : 3,
                     lexicon.HASH_SHA512 : 4,
                     lexicon.HASH_BLAKE2B: 5}
-
-def hashLengthComparator(a, b):
-    lengtha = hashOrderingMap[a.blockHashAlgo]
-    lengthb = hashOrderingMap[b.blockHashAlgo]
-
-    if lengtha < lengthb:
-        return -1
-    elif lengtha > lengthb:
-        return 1
-    else:
-        return 0
 
 class ValidationListener(object):
     def __init__(self):
@@ -120,13 +114,14 @@ class Validator(object):
 
             self.delegate.doValidateContainer()
 
-    def validateContainerMultiPart(self, filenamea, filenameb):
-        # in this simple example, we assume that both files passed are members of the Container
-        lex = container.Container.identify(filenamea)
+    def validateContainerMultiPart(self, urn_a, urn_b):
+        # in this simple example, we assume that both files passed are
+        # members of the Container
+        lex = container.Container.identify(urn_a)
         resolver = data_store.MemoryDataStore(lex)
 
-        with zip.ZipFile.NewZipFile(resolver, filenamea) as zip_filea:
-            with zip.ZipFile.NewZipFile(resolver, filenameb) as zip_fileb:
+        with zip.ZipFile.NewZipFile(resolver, urn_a) as zip_filea:
+            with zip.ZipFile.NewZipFile(resolver, urn_b) as zip_fileb:
                 if lex == lexicon.standard:
                     self.delegate = InterimStdValidator(resolver, lex, self.listener)
                 elif lex == lexicon.legacy:
@@ -137,9 +132,8 @@ class Validator(object):
                 self.delegate.doValidateContainer()
 
     def validateBlockMapHash(self, mapStreamURI, imageStreamURI):
-
-        storedHash = next(self.resolver.QuerySubjectPredicate(mapStreamURI,
-                                                             self.lexicon.blockMapHash))
+        storedHash = next(self.resolver.QuerySubjectPredicate(
+            mapStreamURI, self.lexicon.blockMapHash))
         calculalatedHash = self.calculateBlockMapHash(mapStreamURI, imageStreamURI, storedHash.datatype)
 
         if storedHash != calculalatedHash:
@@ -159,29 +153,23 @@ class Validator(object):
         raise Exception
 
     def calculateBlockMapHash(self, mapStreamURI, imageStreamURI, storedHashDataType):
-
-        storedBlockHashesHash = self.getStoredBlockHashes(str(imageStreamURI))
-
-        storedBlockHashesHash = sorted(storedBlockHashesHash, cmp=hashLengthComparator)
+        storedBlockHashesHash = sorted(
+            self.getStoredBlockHashes(str(imageStreamURI)),
+            key=lambda x: hashOrderingMap[x.blockHashAlgo])
 
         calculatedHash = hashes.new(storedHashDataType)
         for hash in storedBlockHashesHash:
             bytes = hash.digest()
             calculatedHash.update(bytes)
 
-        bytes = self.resolver.QuerySubjectPredicate(mapStreamURI, self.lexicon.mapPointHash).next().digest()
-        calculatedHash.update(bytes)
+        for hash in  self.resolver.QuerySubjectPredicate(mapStreamURI, self.lexicon.mapPointHash):
+            calculatedHash.update(hash.digest())
 
-        bytes = self.resolver.QuerySubjectPredicate(mapStreamURI, self.lexicon.mapIdxHash).next().digest()
-        # bytes = self.calculateMapIdxHash(mapStreamURI).digest()
-        calculatedHash.update(bytes)
+        for hash in  self.resolver.QuerySubjectPredicate(mapStreamURI, self.lexicon.mapIdxHash):
+            calculatedHash.update(hash.digest())
 
-        try:
-            bytes = self.resolver.QuerySubjectPredicate(mapStreamURI, self.lexicon.mapPathHash).next().digest()
-            # bytes = self.calculateMapPathHash(mapStreamURI).digest()
-            calculatedHash.update(bytes)
-        except:
-            pass
+        for hash in self.resolver.QuerySubjectPredicate(mapStreamURI, self.lexicon.mapPathHash):
+            calculatedHash.update(hash.digest())
 
         return hashes.newImmutableHash(calculatedHash.hexdigest(), storedHashDataType)
 
@@ -210,7 +198,7 @@ class Validator(object):
 
                     chunkIdx = old_div(offset, imageStream.chunk_size)
                     storedBlockHash = imageStream.readBlockHash(chunkIdx, hashDataType)
-                    if calculatedBlockHash != storedBlockHash.value:
+                    if calculatedBlockHash != storedBlockHash:
                         self.listener.onInvalidBlockHash(
                             calculatedBlockHash,
                             storedBlockHash.value,
@@ -235,18 +223,16 @@ class Validator(object):
 
     def getStoredBlockHashes(self, imageStreamURI):
         hashes = []
-        s =  self.resolver.QuerySubjectPredicate(imageStreamURI, self.lexicon.blockHashesHash)
-        for h in s:
-            blockHashAlgo = h.datatype
-            digest = h.value
-            digestDataType = h.datatype
-            hash = BlockHashesHash(blockHashAlgo, digest, digestDataType)
-            hashes.append(hash)
+        for hash in self.resolver.QuerySubjectPredicate(imageStreamURI, self.lexicon.blockHashesHash):
+            blockHashAlgo = hash.datatype
+            digest = hash.value
+            digestDataType = hash.datatype
+            hashes.append(BlockHashesHash(blockHashAlgo, digest, digestDataType))
+
         return hashes
 
     def validateBlockHashesHash(self, imageStreamURI):
         storedHashes = self.getStoredBlockHashes(imageStreamURI)
-
         calculatedHashes = self.calculateBlockHashesHash(imageStreamURI)
         for i in range(len(storedHashes)):
             a = storedHashes[i]
@@ -256,32 +242,42 @@ class Validator(object):
             else:
                 self.listener.onValidHash("BlockHashesHash", a, imageStreamURI)
 
-    def validateMapIdxHash(self, mapURI):
-        storedHash = next(self.resolver.QuerySubjectPredicate(mapURI, self.lexicon.mapIdxHash))
-        storedHashDataType = storedHash.datatype
-        return self.validateSegmentHash(mapURI, "mapIdxHash", self.calculateMapIdxHash(mapURI, storedHashDataType))
-
+    def validateMapIdxHash(self, map_uri):
+        for stored_hash in self.resolver.QuerySubjectPredicate(
+                map_uri, self.lexicon.mapIdxHash):
+            return self.validateSegmentHash(
+                map_uri, "mapIdxHash", self.calculateMapIdxHash(
+                    map_uri, stored_hash.datatype))
 
     def calculateMapIdxHash(self, mapURI, hashDataType):
         return self.calculateSegmentHash(mapURI, "idx", hashDataType)
 
-
-    def validateMapPointHash(self, mapURI):
-        storedHashDataType = self.resolver.QuerySubjectPredicate(mapURI, self.lexicon.mapPointHash).next().datatype
-        return self.validateSegmentHash(mapURI, "mapPointHash", self.calculateMapPointHash(mapURI, storedHashDataType))
-
+    def validateMapPointHash(self, map_uri):
+        for stored_hash in self.resolver.QuerySubjectPredicate(
+                map_uri, self.lexicon.mapPointHash):
+            return self.validateSegmentHash(
+                map_uri, "mapPointHash", self.calculateMapPointHash(
+                    map_uri, stored_hash.datatype))
 
     def calculateMapPointHash(self, mapURI, storedHashDataType):
         return self.calculateSegmentHash(mapURI, "map", storedHashDataType)
 
-
-    def validateMapPathHash(self, mapURI):
-        storedHashDataType = self.resolver.QuerySubjectPredicate(mapURI, self.lexicon.mapPathHash).next().datatype
-        return self.validateSegmentHash(mapURI, "mapPathHash", self.calculateMapPathHash(mapURI, storedHashDataType))
-
+    def validateMapPathHash(self, map_uri):
+        for stored_hash in self.resolver.QuerySubjectPredicate(
+                map_uri, self.lexicon.mapPathHash):
+            return self.validateSegmentHash(
+                map_uri, "mapPathHash", self.calculateMapPathHash(
+                    map_uri, stored_hash.datatype))
 
     def calculateMapPathHash(self, mapURI, storedHashDataType):
         return self.calculateSegmentHash(mapURI, "mapPath", storedHashDataType)
+
+    def validateMapHash(self, map_uri):
+        for stored_hash in self.resolver.QuerySubjectPredicate(
+                map_uri, self.lexicon.mapHash):
+            return self.validateSegmentHash(
+                map_uri, "mapHash", self.calculateMapHash(
+                    map_uri, stored_hash.datatype))
 
     def calculateMapHash(self, mapURI, storedHashDataType):
         calculatedHash = hashes.new(storedHashDataType)
@@ -295,12 +291,6 @@ class Validator(object):
             pass
 
         return hashes.newImmutableHash(calculatedHash.hexdigest(), storedHashDataType)
-
-    def validateMapHash(self, mapURI):
-        storedHashDataType = self.resolver.QuerySubjectPredicate(mapURI, self.lexicon.mapHash).next().datatype
-        return self.validateSegmentHash(mapURI, "mapHash", self.calculateMapHash(mapURI, storedHashDataType))
-
-
 
     def validateSegmentHash(self, mapURI, hashType, calculatedHash):
         storedHash = next(self.resolver.QuerySubjectPredicate(mapURI, self.lexicon.base + hashType))
@@ -354,7 +344,13 @@ class PreStdValidator(Validator):
         return imageStreamURI
 
     def doValidateContainer(self):
-        imageURI = next(self.resolver.QueryPredicateObject(lexicon.AFF4_TYPE, self.lexicon.Image))
+        types = list(self.resolver.QueryPredicateObject(
+            lexicon.AFF4_TYPE, self.lexicon.Image))
+
+        if not types:
+            return
+
+        imageURI = types[0]
 
         # For block based hashing our starting point is the map
 
@@ -410,78 +406,97 @@ class InterimStdValidator(Validator):
         raise Exception("Illegal State")
 
     def doValidateContainer(self):
-        image = next(self.resolver.QueryPredicateObject(lexicon.AFF4_TYPE, self.lexicon.Image))
-        datastreams = list(self.resolver.QuerySubjectPredicate(image, self.lexicon.dataStream))
+        # FIXME: This should further restrict by container URN since
+        # the same data store may be used for multiple containers with
+        # many images.
+        for image in self.resolver.QueryPredicateObject(
+                lexicon.AFF4_TYPE, self.lexicon.Image):
 
-        calculatedHashes = {}
+            datastreams = list(self.resolver.QuerySubjectPredicate(
+                image, self.lexicon.dataStream))
 
-        for stream in datastreams:
-            if self.isMap(stream):
-                for imageStreamURI in self.resolver.QuerySubjectPredicate(stream, self.lexicon.dependentStream):
-                    parentMap = self.getParentMap(imageStreamURI)
-                    if parentMap == stream:
-                        # only validate the map and stream pair in the same container
-                        self.validateBlockHashesHash(imageStreamURI)
-                        self.validateMapIdxHash(parentMap)
-                        self.validateMapPointHash(parentMap)
-                        self.validateMapPathHash(parentMap)
-                        self.validateMapHash(parentMap)
+            calculated_hashes = collections.OrderedDict()
+            hash_datatype = None
 
-                        calculatedHash = self.validateBlockMapHash(parentMap, imageStreamURI)
-                        calculatedHashes[parentMap] = calculatedHash
+            for stream in datastreams:
+                if self.isMap(stream):
+                    for image_stream_uri in self.resolver.QuerySubjectPredicate(
+                            stream, self.lexicon.dependentStream):
+                        parent_map = self.getParentMap(image_stream_uri)
+                        if parent_map == stream:
+                            # only validate the map and stream pair in the same container
+                            self.validateBlockHashesHash(image_stream_uri)
+                            self.validateMapIdxHash(parent_map)
+                            self.validateMapPointHash(parent_map)
+                            self.validateMapPathHash(parent_map)
+                            self.validateMapHash(parent_map)
 
-        storedHash = next(self.resolver.QuerySubjectPredicate(image, self.lexicon.hash))
+                            calculated_hash = self.validateBlockMapHash(
+                                parent_map, image_stream_uri)
+                            calculated_hashes[parent_map] = calculated_hash
 
-        hasha = ""
-        hashb = ""
-        parentmap = None
+                            # Assume all block hashes are the same type.
+                            if (hash_datatype is not None and
+                                hash_datatype != calculated_hash.datatype):
+                                raise AttributeError(
+                                    "Block hashes are not all the same type.")
+                            else:
+                                hash_datatype = calculated_hash.datatype
 
-        # TODO: handle more cleanly the sematic difference between datatypes
-        if len(list(calculatedHashes.keys())) == 1:
-            # This is a single part image
-            # The single AFF4 hash is just the blockMapHash
+            for stored_hash in self.resolver.QuerySubjectPredicate(
+                    image, self.lexicon.hash):
+                hasha = ""
+                hashb = ""
+                parent_map = None
 
-            parentMap = list(calculatedHashes.keys())[0]
-            calculatedHash = calculatedHashes[parentMap]
+                # TODO: handle more cleanly the sematic difference between datatypes
+                if len(calculated_hashes) == 1:
+                    # This is a single part image
+                    # The single AFF4 hash is just the blockMapHash
+                    parent_map, calculated_hash = calculated_hashes.popitem()
+                    hasha = stored_hash
+                    hashb = calculated_hash
 
-            hasha = storedHash
-            hashb = calculatedHash
+                else:
+                    # This is a multiple part image The single AFF4
+                    # hash is one layer up in the Merkel tree again,
+                    # with the subordinate nodes being the
+                    # blockMapHashes for the map stored in each
+                    # container volume
 
-        else:
-            # This is a multiple part image
-            # The single AFF4 hash is one layer up in the Merkel tree again, with the
-            # subordinate nodes being the blockMapHashes for the map stored in each container volume
+                    # The hash algorithm we use for the single AFF4
+                    # hash is the same algorithm we use for all of the
+                    # Merkel tree inner nodes
+                    current_hash = hashes.new(hash_datatype)
 
-            # The hash algorithm we use for the single AFF4 hash is the same algorithm we
-            # use for all of the Merkel tree inner nodes
-            firstCalculatedHash = calculatedHashes[list(calculatedHashes.keys())[0]]
-            currentHash = hashes.new(firstCalculatedHash.datatype)
+                    # FIXME: This is a flaw in the scheme since there
+                    # is no reasonable order specified. We temporarily
+                    # sort the results to get the test to pass but
+                    # this needs to be properly addressed.
 
-            # We rely on the natural ordering of the map URN's as they are stored in the map
-            # to order the blockMapHashes in the Merkel tree.
-            for parentMap in list(calculatedHashes.keys()):
-                calculatedHash = calculatedHashes[parentMap]
-                bytes = calculatedHash.digest()
-                currentHash.update(bytes)
+                    # We rely on the natural ordering of the map URN's
+                    # as they are stored in the map to order the
+                    # blockMapHashes in the Merkel tree.
+                    for parent_map, calculated_hash in sorted(calculated_hashes.items()):
+                        current_hash.update(calculated_hash.digest())
 
-            hasha = storedHash.value
-            hashb = currentHash.hexdigest()
+                    hasha = stored_hash.value
+                    hashb = current_hash.hexdigest()
 
-        if hasha != hashb:
-            self.listener.onInvalidHash("AFF4Hash", hasha, hashb, parentMap)
-        else:
-            self.listener.onValidHash("AFF4Hash", hasha, parentMap)
+                if hasha != hashb:
+                    self.listener.onInvalidHash("AFF4Hash", hasha, hashb, parent_map)
+                else:
+                    self.listener.onValidHash("AFF4Hash", hasha, parent_map)
 
-    def getStoredBlockHashes(self, imageStreamURI):
+    def getStoredBlockHashes(self, image_stream_uri):
         res = []
 
-        for blockHashURI in self.resolver.SelectSubjectsByPrefix(str(imageStreamURI) + "/blockhash."):
-            hash = next(self.resolver.QuerySubjectPredicate(blockHashURI, self.lexicon.hash))
-            trimOffset = len(str(imageStreamURI) + "/blockhash.")
-            blockHashAlgoShortName = blockHashURI[trimOffset:]
-            blockHashAlgoType = hashes.fromShortName(blockHashAlgoShortName)
-            hash = BlockHashesHash(blockHashAlgoType, hash.value, hash.datatype)
-            res.append(hash)
+        for block_hash_uri in self.resolver.SelectSubjectsByPrefix(str(image_stream_uri) + "/blockhash."):
+            for hash in self.resolver.QuerySubjectPredicate(block_hash_uri, self.lexicon.hash):
+                extension = block_hash_uri.Parse().path.split(".")[-1]
+                block_hash_algo_type = hashes.fromShortName(extension)
+                hash = BlockHashesHash(block_hash_algo_type, hash.value, hash.datatype)
+                res.append(hash)
 
         return res
 

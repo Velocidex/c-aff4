@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+from __future__ import unicode_literals
 # Copyright 2016,2017 Schatz Forensic Pty Ltd. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -67,6 +68,9 @@ class LinearHasher(object):
 
     def doHash(self, mapURI, hashDataType):
         hash = hashes.new(hashDataType)
+        if not self.isMap(mapURI):
+            import pdb; pdb.set_trace()
+
         if self.isMap(mapURI):
             with self.resolver.AFF4FactoryOpen(mapURI) as mapStream:
                 remaining = mapStream.Size()
@@ -84,10 +88,9 @@ class LinearHasher(object):
         raise Exception("IllegalState")
 
     def isMap(self, stream):
-        types = self.resolver.QuerySubjectPredicate(stream, lexicon.AFF4_TYPE)
-        tt = list(types)
-        if self.lexicon.map in tt:
-            return True
+        for type in self.resolver.QuerySubjectPredicate(stream, lexicon.AFF4_TYPE):
+            if self.lexicon.map == type:
+                return True
 
         return False
 

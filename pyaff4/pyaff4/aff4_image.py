@@ -14,6 +14,8 @@
 
 """This module implements the standard AFF4 Image."""
 from __future__ import division
+from __future__ import unicode_literals
+from builtins import range
 from builtins import str
 from past.utils import old_div
 from builtins import object
@@ -110,12 +112,12 @@ class AFF4Image(aff4.AFF4Stream):
         sz = self.resolver.Get(self.urn, self.lexicon.streamSize) or 0
         self.size = int(sz)
 
-        self.compression = str(self.resolver.Get(
+        self.compression = (self.resolver.Get(
             self.urn, self.lexicon.compressionMethod)  or
-                               lexicon.AFF4_IMAGE_COMPRESSION_ZLIB)
+                            lexicon.AFF4_IMAGE_COMPRESSION_ZLIB)
 
         # A buffer for overlapped writes which do not fit into a chunk.
-        self.buffer = ""
+        self.buffer = b""
 
         # Compressed chunks in the bevy.
         self.bevy = []
@@ -230,7 +232,7 @@ class AFF4Image(aff4.AFF4Stream):
             self._write_bevy_index(volume, bevy_urn, self.bevy_index, flush=True)
 
             with volume.CreateMember(bevy_urn) as bevy:
-                bevy.Write("".join(self.bevy))
+                bevy.Write(b"".join(self.bevy))
 
             # We dont need to hold these in memory any more.
             self.resolver.Close(bevy)
@@ -285,7 +287,7 @@ class AFF4Image(aff4.AFF4Stream):
         # We read this many full chunks at once.
         chunks_to_read = final_chunk_id - initial_chunk_id + 1
         chunk_id = initial_chunk_id
-        result = ""
+        result = b""
 
         while chunks_to_read > 0:
             chunks_read, data = self._ReadPartial(chunk_id, chunks_to_read)
@@ -305,7 +307,18 @@ class AFF4Image(aff4.AFF4Stream):
         return result
 
     def _parse_bevy_index(self, bevy):
-        """Read and return the bevy's index."""
+        """Read and return the bevy's index.
+
+        This version deals with pre standard versions in which the
+        index stream consists of a list of chunk offsets:
+
+        - Evimetry uses a 1 based list (so the first entry in the index
+          is the offset of the first chunk (and the 0'th chunk is
+          assumed to start at 0).
+        - Scudette's version always uses 0 for the offset of the first
+          chunk and the last chunk's length is assumed from the total
+          bevy size.
+        """
         bevy_index_urn = bevy.urn.Append("index")
 
         with self.resolver.AFF4FactoryOpen(bevy_index_urn) as bevy_index:
@@ -315,7 +328,14 @@ class AFF4Image(aff4.AFF4Stream):
 
             # Convert the index into standard form:
             # list of (offset, compressed length)
-            result = [(0, chunk_offsets[0])]
+
+            # Evimetry's implementation
+            if chunk_offsets[0] != 0:
+                result = [(0, chunk_offsets[0])]
+            else:
+                # Scudette's implementation.
+                result = []
+
             for i in range(len(chunk_offsets)-1):
                 result.append(
                     (chunk_offsets[i],
@@ -330,7 +350,7 @@ class AFF4Image(aff4.AFF4Stream):
 
     def _ReadPartial(self, chunk_id, chunks_to_read):
         chunks_read = 0
-        result = ""
+        result = b""
 
         while chunks_to_read > 0:
             r = self.cache.get(chunk_id)
@@ -442,17 +462,17 @@ class AFF4SImage(AFF4PreSImage):
 
     def _write_bevy_index(self, volume, bevy_urn, bevy_index, flush=False):
         """Write the index segment for the specified bevy_urn."""
-        bevy_index_urn = rdfvalue.URN(bevy_urn.SerializeToString() + ".index")
+        bevy_index_urn = rdfvalue.URN("%s.index" % bevy_urn)
         with volume.CreateMember(bevy_index_urn) as bevy_index_segment:
-            serialized_index = "".join((struct.pack("<QI", offset, length)
-                                        for offset, length in bevy_index))
+            serialized_index = b"".join((struct.pack("<QI", offset, length)
+                                         for offset, length in bevy_index))
             bevy_index_segment.Write(serialized_index)
 
         if flush:
             self.resolver.Close(bevy_index_segment)
 
     def _parse_bevy_index(self, bevy):
-        bevy_index_urn = rdfvalue.URN(bevy.urn.SerializeToString() + ".index")
+        bevy_index_urn = rdfvalue.URN("%s.index" % bevy.urn)
 
         with self.resolver.AFF4FactoryOpen(bevy_index_urn) as bevy_index:
             bevy_index_data = bevy_index.Read(bevy_index.Size())
@@ -460,7 +480,7 @@ class AFF4SImage(AFF4PreSImage):
             format_string = "<" + "QI" * number_of_entries
             data = struct.unpack(format_string, bevy_index_data)
 
-            return [(data[2*i], data[2*i+1]) for i in xrange(len(data)//2)]
+            return [(data[2*i], data[2*i+1]) for i in range(len(data)//2)]
 
 
 registry.AFF4_TYPE_MAP[lexicon.AFF4_SCUDETTE_IMAGE_TYPE] = AFF4Image

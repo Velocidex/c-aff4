@@ -1,8 +1,12 @@
 """An implementation of a struct parser which is fast and convenient."""
+from __future__ import unicode_literals
 
 from builtins import zip
 from builtins import object
+import six
 import struct
+
+from pyaff4 import utils
 
 format_string_map = dict(
     uint64_t="Q",
@@ -24,7 +28,7 @@ class BaseParser(object):
                 struct.unpack_from(self._format_string, data))
 
         if kwargs:
-            for k, v in kwargs.items():
+            for k, v in list(kwargs.items()):
                 setattr(self, k, v)
 
     def __str__(self):
@@ -83,4 +87,7 @@ def CreateStruct(struct_name, definition):
 
         properties[field] = property(getx, setx)
 
-    return type(struct_name, (BaseParser,), properties)
+    if six.PY2:
+        return type(utils.SmartStr(struct_name), (BaseParser,), properties)
+    else:
+        return type(utils.SmartUnicode(struct_name), (BaseParser,), properties)

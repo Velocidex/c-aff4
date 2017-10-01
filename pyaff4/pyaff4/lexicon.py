@@ -13,6 +13,7 @@
 # the License.
 
 """The AFF4 lexicon."""
+from __future__ import unicode_literals
 # This is the version of the AFF4 specification we support - not the library
 # version itself.
 

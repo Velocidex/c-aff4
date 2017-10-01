@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 
 # Machine Generated - do not edit!
 

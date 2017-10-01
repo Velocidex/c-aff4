@@ -1,4 +1,5 @@
 """Some utility functions."""
+from __future__ import unicode_literals
 __author__ = "Michael Cohen <scudette@gmail.com>"
 
 import six
@@ -13,14 +14,22 @@ def SmartStr(string, encoding="utf8"):
         elif isinstance(string, bytes):
             return string
 
-        return bytes(string)
+        elif hasattr(string, "__bytes__"):
+            return string.__bytes__()
+
+        return str(string).encode(encoding)
 
     if six.PY2:
-        if isinstance(string, str):
+        if type(string) is str:
             return string
 
-    # Encode the result of the __str__ method.
-    return str(string).encode(encoding)
+        elif type(string) is unicode:
+            return string.encode(encoding)
+
+        elif hasattr(string, "__bytes__"):
+            return string.__bytes__()
+
+        return unicode(string).encode(encoding)
 
 
 def SmartUnicode(string, encoding="utf8"):
@@ -56,5 +65,5 @@ def AssertUnicode(string):
             raise RuntimeError("String must be unicode.")
 
     elif six.PY2:
-        if type(string) is not unicode:
+        if type(string) not in (unicode, types.newstr):
             raise RuntimeError("String must be unicode.")

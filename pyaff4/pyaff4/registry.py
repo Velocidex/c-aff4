@@ -13,6 +13,7 @@
 # the License.
 
 """Various registries."""
+from __future__ import unicode_literals
 
 # Global registry for AFF4 object implementations.
 AFF4_TYPE_MAP = {}

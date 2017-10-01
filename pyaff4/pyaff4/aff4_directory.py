@@ -13,6 +13,7 @@
 # the License.
 
 """This module implements the Directory AFF4 Volume."""
+from __future__ import unicode_literals
 import logging
 import os
 
@@ -21,6 +22,7 @@ from pyaff4 import aff4_utils
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
+from pyaff4 import utils
 
 LOGGER = logging.getLogger("pyaff4")
 
@@ -107,7 +109,7 @@ class AFF4Directory(aff4.AFF4Volume):
                     self.storage.Append(
                         lexicon.AFF4_CONTAINER_DESCRIPTION)) as desc:
                 if desc:
-                    urn_string = desc.Read(1000)
+                    urn_string = utils.SmartUnicode(desc.Read(1000))
 
                     if (urn_string and
                             self.urn.SerializeToString() != urn_string):
@@ -133,17 +135,15 @@ class AFF4Directory(aff4.AFF4Volume):
 
                     # Find all the contained objects and adjust their filenames.
                     for subject in self.resolver.SelectSubjectsByPrefix(
-                            self.urn):
+                            utils.SmartUnicode(self.urn)):
 
                         child_filename = self.resolver.Get(
                             subject, lexicon.AFF4_DIRECTORY_CHILD_FILENAME)
                         if child_filename:
                             self.resolver.Set(
                                 subject, lexicon.AFF4_FILE_NAME,
-                                rdfvalue.XSDString(
-                                    self.root_path +
-                                    os.sep +
-                                    child_filename.SerializeToString()))
+                                rdfvalue.XSDString("%s%s%s" % (
+                                    self.root_path, os.sep, child_filename)))
 
         except IOError:
             pass

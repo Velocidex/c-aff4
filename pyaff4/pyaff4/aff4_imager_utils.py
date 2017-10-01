@@ -16,3 +16,4 @@
 
 These are mostly high level utilities used by the command line imager.
 """
+from __future__ import unicode_literals

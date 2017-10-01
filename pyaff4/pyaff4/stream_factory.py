@@ -1,3 +1,4 @@
+from __future__ import unicode_literals
 # Copyright 2016,2017 Schatz Forensic Pty Ltd. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -68,11 +69,11 @@ class PreStdStreamFactory(StreamFactory):
 
         if urn == self.lexicon.base + "Zero":
             return RepeatedStream(resolver=self.resolver, urn=urn,
-                                  symbol="\x00")
+                                  symbol=b"\x00")
 
         if urn == self.lexicon.base + "FF":
             return RepeatedStream(resolver=self.resolver, urn=urn,
-                                  symbol="\xff")
+                                  symbol=b"\xff")
 
         if urn == self.lexicon.base + "UnknownData":
             return RepeatedStringStream(resolver=self.resolver, urn=urn,
@@ -122,7 +123,7 @@ class StdStreamFactory(StreamFactory):
 
         if urn == self.lexicon.base + "Zero":
             return RepeatedStream(resolver=self.resolver, urn=urn,
-                                  symbol="\x00")
+                                  symbol=b"\x00")
 
         if urn == self.lexicon.base + "UnknownData":
             return RepeatedStringStream(
@@ -158,7 +159,7 @@ def GetUnknownString():
     if _UNKNOWN_STRING is not None:
         return _UNKNOWN_STRING
 
-    _UNKNOWN_STRING = _MakeTile("UNKNOWN")
+    _UNKNOWN_STRING = _MakeTile(b"UNKNOWN")
     return _UNKNOWN_STRING
 
 
@@ -169,5 +170,5 @@ def GetUnreadableString():
     if _UNREADABLE_STRING is not None:
         return _UNREADABLE_STRING
 
-    _UNREADABLE_STRING = _MakeTile("UNREADABLEDATA")
+    _UNREADABLE_STRING = _MakeTile(b"UNREADABLEDATA")
     return _UNREADABLE_STRING

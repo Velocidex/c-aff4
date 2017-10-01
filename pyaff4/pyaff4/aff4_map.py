@@ -14,6 +14,7 @@
 
 """This module implements the standard AFF4 Image."""
 from __future__ import print_function
+from __future__ import unicode_literals
 from builtins import str
 from builtins import object
 import collections
@@ -27,7 +28,7 @@ from pyaff4 import aff4_image
 from pyaff4 import lexicon
 from pyaff4 import rdfvalue
 from pyaff4 import registry
-
+from pyaff4 import utils
 
 LOGGER = logging.getLogger("pyaff4")
 
@@ -123,7 +124,7 @@ class _MapStreamHelper(object):
         # This is the data stream of the map we are writing to (i.e. the new
         # image we are creating).
         target = self.destination.GetBackingStream()
-        result = ""
+        result = b""
 
         # Need more data - read more.
         while len(result) < length:
@@ -207,7 +208,8 @@ class AFF4Map(aff4.AFF4Stream):
         # we just start with an empty map.
         try:
             with self.resolver.AFF4FactoryOpen(map_idx_urn) as map_idx:
-                self.targets = map_idx.Read(map_idx.Size()).splitlines()
+                self.targets = [rdfvalue.URN(utils.SmartUnicode(x))
+                                for x in map_idx.Read(map_idx.Size()).splitlines()]
 
             with self.resolver.AFF4FactoryOpen(map_urn) as map_stream:
                 read_length = struct.calcsize(Range.format_str)
@@ -216,7 +218,6 @@ class AFF4Map(aff4.AFF4Stream):
                     if not data:
                         break
                     range = self.deserializeMapPoint(data)
-                    print(str(range))
                     if range.length > 0:
                         self.tree.addi(range.map_offset, range.map_end, range)
 
@@ -225,7 +226,7 @@ class AFF4Map(aff4.AFF4Stream):
             pass
 
     def Read(self, length):
-        result = ""
+        result = b""
         for interval in sorted(self.tree[self.readptr:self.readptr+length]):
             range = interval.data
 
@@ -251,14 +252,12 @@ class AFF4Map(aff4.AFF4Stream):
                     assert len(buffer) == length_to_read_in_target
                     result += buffer
             except IOError:
-                print("*** Stream not found. Substituting zeros. ***")
-                result += "\x00" * length_to_read_in_target
+                LOGGER.debug("*** Stream %s not found. Substituting zeros. ***",
+                             target_stream)
+                result += b"\x00" * length_to_read_in_target
             finally:
                 length -= length_to_read_in_target
                 self.readptr += length_to_read_in_target
-
-
-
 
         if result:
             return result
@@ -270,6 +269,8 @@ class AFF4Map(aff4.AFF4Stream):
 
     def AddRange(self, map_offset, target_offset, length, target):
         """Add a new mapping range."""
+        rdfvalue.AssertURN(target)
+
         self.last_target = target
 
         target_id = self.target_idx_map.get(target)
@@ -347,7 +348,7 @@ class AFF4Map(aff4.AFF4Stream):
 
                 self.resolver.Close(map_stream)
                 with volume.CreateMember(self.urn.Append("idx")) as idx_stream:
-                    idx_stream.Write("\n".join(
+                    idx_stream.Write(b"\n".join(
                         [x.SerializeToString() for x in self.targets]))
 
                 self.resolver.Close(idx_stream)
@@ -449,7 +450,8 @@ class AFF4Map2(AFF4Map):
         # we just start with an empty map.
         try:
             with self.resolver.AFF4FactoryOpen(map_idx_urn) as map_idx:
-                self.targets = map_idx.Read(map_idx.Size()).splitlines()
+                self.targets = [rdfvalue.URN(utils.SmartUnicode(x))
+                                for x in map_idx.Read(map_idx.Size()).splitlines()]
 
             with self.resolver.AFF4FactoryOpen(map_urn) as map_stream:
                 format_str = "<QQQI"
