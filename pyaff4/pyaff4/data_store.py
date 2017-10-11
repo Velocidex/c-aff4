@@ -19,6 +19,7 @@ from builtins import object
 import collections
 import logging
 import rdflib
+import re
 import six
 
 from pyaff4 import aff4
@@ -348,7 +349,7 @@ class MemoryDataStore(object):
     def AFF4FactoryOpen(self, urn):
         urn = rdfvalue.URN(urn)
 
-        # If the object cached?
+        # Is the object cached?
         cached_obj = self.ObjectCache.Get(urn)
         if cached_obj:
             cached_obj.Prepare()
@@ -417,9 +418,10 @@ class MemoryDataStore(object):
             return False
 
     def QuerySubject(self, subject_regex=None):
+        subject_regex = re.compile(utils.SmartStr(subject_regex))
         for subject in self.store:
             if subject_regex is not None and subject_regex.match(subject):
-                yield subject
+                yield rdfvalue.URN().UnSerializeFromString(subject)
 
     def QueryPredicate(self, predicate):
         """Yields all subjects which have this predicate."""
@@ -467,5 +469,6 @@ class MemoryDataStore(object):
                 yield rdfvalue.URN().UnSerializeFromString(subject)
 
     def QueryPredicatesBySubject(self, subject):
+        subject = utils.SmartStr(subject)
         for pred, value in list(self.store.get(subject, {}).items()):
-            yield pred, value
+            yield (rdfvalue.URN().UnSerializeFromString(pred), value)

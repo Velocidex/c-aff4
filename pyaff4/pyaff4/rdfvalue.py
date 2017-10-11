@@ -152,6 +152,9 @@ class XSDInteger(RDFValue):
     def __lt__(self, o):
         return self.value < o
 
+    def __str__(self):
+        return str(self.value)
+
 
 class RDFHash(XSDString):
     # value is the hex encoded digest.

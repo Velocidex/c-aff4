@@ -104,7 +104,7 @@ class CDFileHeader(struct_parser.CreateStruct(
         uint16_t disk_number_start = 0;
         uint16_t internal_file_attr = 0;
         uint32_t external_file_attr = 0o644 << 16L;
-        uint32_t relative_offset_local_header = -1;
+        uint32_t relative_offset_local_header = 0xffffffff;
         """)):
     def IsValid(self):
         return self.magic == 0x2014b50
@@ -158,7 +158,14 @@ class Zip64FileHeaderExtensibleField(object):
     def Pack(self):
         self.data_size = self.sizeof()
         return struct.pack(self.format_string(),
-                           [v for t, _, v in self.fields if v is not None])
+                           *[v for t, _, v in self.fields if v is not None])
+
+    def Get(self, field):
+        for row in self.fields:
+            if row[1] == field:
+                return row[2]
+
+        raise AttributeError("Unknown field %s." % field)
 
     def Set(self, field, value):
         for row in self.fields:
@@ -328,8 +335,9 @@ class ZipInfo(object):
             extra_header_64.Set("compress_size", self.compress_size)
 
         if self.local_header_offset > ZIP32_MAX_SIZE:
-            header.relative_offset_local_header = -1
-            extra_header_64.Set("relative_offset_local_header", self.compress_size)
+            header.relative_offset_local_header = 0xFFFFFFFF
+            extra_header_64.Set("relative_offset_local_header",
+                                self.local_header_offset)
 
         # Only write the extra header if we have to.
         if not extra_header_64.empty():
@@ -339,7 +347,7 @@ class ZipInfo(object):
         backing_store.write(utils.SmartStr(self.filename))
 
         if not extra_header_64.empty():
-            backing_store.Write(extra_header_64.Pack())
+            backing_store.write(extra_header_64.Pack())
 
 
 class FileWrapper(object):
@@ -611,17 +619,18 @@ class ZipFile(aff4.AFF4Volume):
                 if entry.extra_field_len > 0:
                     extrabuf = backing_store.Read(entry.extra_field_len)
 
-                    extra, readbytes = Zip64FileHeaderExtensibleField.FromBuffer(entry, extrabuf)
+                    extra, readbytes = Zip64FileHeaderExtensibleField.FromBuffer(
+                        entry, extrabuf)
                     extrabuf = extrabuf[readbytes:]
 
                     if extra.header_id == 1:
                         if extra.relative_offset_local_header != -1:
                             zip_info.local_header_offset = (
                                 extra.relative_offset_local_header)
-                        if extra.file_size != -1:
-                            zip_info.file_size = extra.file_size
-                        if extra.compress_size != -1:
-                            zip_info.compress_size = extra.compress_size
+                        if extra.Get("file_size") is not None:
+                            zip_info.file_size = extra.Get("file_size")
+                        if extra.Get("compress_size") is not None:
+                            zip_info.compress_size = extra.Get("compress_size")
                             #break
 
                 if zip_info.local_header_offset >= 0:
