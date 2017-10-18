@@ -262,7 +262,7 @@ class AFF4Map(aff4.AFF4Stream):
         if result:
             return result
 
-        return "\x00" * length
+        return b"\x00" * length
 
     def Size(self):
         return self.tree.end()

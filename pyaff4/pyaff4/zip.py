@@ -54,8 +54,8 @@ class EndCentralDirectory(struct_parser.CreateStruct(
         uint16_t disk_with_cd = 0;
         uint16_t total_entries_in_cd_on_disk;
         uint16_t total_entries_in_cd;
-        int32_t size_of_cd = -1;
-        int32_t offset_of_cd = -1;
+        uint32_t size_of_cd = 0xFFFFFFFF;
+        uint32_t offset_of_cd = 0xFFFFFFFF;
         uint16_t comment_len = 0;
         """)):
 
@@ -96,8 +96,8 @@ class CDFileHeader(struct_parser.CreateStruct(
         uint16_t dostime;
         uint16_t dosdate;
         uint32_t crc32;
-        int32_t compress_size = -1;
-        int32_t file_size = -1;
+        uint32_t compress_size = 0xFFFFFFFF;
+        uint32_t file_size = 0xFFFFFFFF;
         uint16_t file_name_length;
         uint16_t extra_field_len = 0;
         uint16_t file_comment_length = 0;
@@ -177,37 +177,32 @@ class Zip64FileHeaderExtensibleField(object):
 
     @classmethod
     def FromBuffer(cls, fileRecord, buffer):
-        o = cls()
-        o.header_id = struct.unpack("H", buffer[0:2])[0]
-        if  o.header_id != 1:
+        result = cls()
+        result.header_id = struct.unpack("H", buffer[0:2])[0]
+        if result.header_id != 1:
             raise IOError("Invalid Zip64 Extended Information Extra Field")
 
-        o.data_size = struct.unpack("H", buffer[2:4])[0]
-
-        # the original zip writer implementation mistakenly dumps all fields to this struct, despite
-        # whether the corresponding fields are flagged
-        # we provide a work around through the following flag to support Pre AFF4 v1 Standard Images
-        legacy_compatible = False
-        if o.data_size == 28:
-            legacy_compatible = True
+        result.data_size = struct.unpack("H", buffer[2:4])[0]
 
         offset = 4
-        if fileRecord.file_size == 0xFFFFFFFF or fileRecord.compress_size == 0xFFFFFFFF or legacy_compatible:
-            o.file_size = struct.unpack("Q", buffer[offset:offset + 8])[0]
-            offset += 8
-            o.compress_size = struct.unpack("Q", buffer[offset:offset + 8])[0]
+        if fileRecord.file_size == 0xFFFFFFFF:
+            result.Set("file_size", struct.unpack("Q", buffer[offset:offset + 8])[0])
             offset += 8
 
-        if fileRecord.relative_offset_local_header == 0xFFFFFFFF or legacy_compatible:
-            o.relative_offset_local_header = struct.unpack("Q", buffer[offset:offset + 8])[0]
+        if fileRecord.compress_size == 0xFFFFFFFF:
+            result.Set("compress_size", struct.unpack("Q", buffer[offset:offset + 8])[0])
             offset += 8
 
-        if fileRecord.disk_number_start == 0xFFFF or legacy_compatible:
-            o.disk_number_start = struct.unpack("I", buffer[offset:offset + 4])[0]
+        if fileRecord.relative_offset_local_header == 0xFFFFFFFF:
+            result.Set("relative_offset_local_header",
+                  struct.unpack("Q", buffer[offset:offset + 8])[0])
+            offset += 8
+
+        if fileRecord.disk_number_start == 0xFFFF:
+            result.Set("disk_number_start", struct.unpack("I", buffer[offset:offset + 4])[0])
             offset += 4
 
-        return (o, offset)
-
+        return (result, offset)
 
 
 class Zip64EndCD(struct_parser.CreateStruct(
@@ -296,11 +291,11 @@ class ZipInfo(object):
 
         extra_header_64 = Zip64FileHeaderExtensibleField()
         if self.file_size > ZIP32_MAX_SIZE:
-            header.file_size = -1
+            header.file_size = 0xFFFFFFFF
             extra_header_64.Set("file_size", self.file_size)
 
         if self.compress_size > ZIP32_MAX_SIZE:
-            header.compress_size = -1
+            header.compress_size = 0xFFFFFFFF
             extra_header_64.Set("compress_size", self.compress_size)
 
         # Only write the extra header if we have to.
@@ -327,11 +322,11 @@ class ZipInfo(object):
 
         extra_header_64 = Zip64FileHeaderExtensibleField()
         if self.file_size > ZIP32_MAX_SIZE:
-            header.file_size = -1
+            header.file_size = 0xFFFFFFFF
             extra_header_64.Set("file_size", self.file_size)
 
         if self.compress_size > ZIP32_MAX_SIZE:
-            header.compress_size = -1
+            header.compress_size = 0xFFFFFFFF
             extra_header_64.Set("compress_size", self.compress_size)
 
         if self.local_header_offset > ZIP32_MAX_SIZE:
@@ -506,7 +501,7 @@ class ZipFile(aff4.AFF4Volume):
                 LOGGER.info("Loaded AFF4 volume URN %s from zip file.",
                             urn_string)
 
-            #if end_cd.size_of_cd == -1:
+            #if end_cd.size_of_cd == 0xFFFFFFFF:
             #    end_cd, buffer_offset = Zip64EndCD.FromBuffer(buffer)
 
 
@@ -624,32 +619,31 @@ class ZipFile(aff4.AFF4Volume):
                     extrabuf = extrabuf[readbytes:]
 
                     if extra.header_id == 1:
-                        if extra.relative_offset_local_header != -1:
+                        if extra.Get("relative_offset_local_header") is not None:
                             zip_info.local_header_offset = (
-                                extra.relative_offset_local_header)
+                                extra.Get("relative_offset_local_header"))
                         if extra.Get("file_size") is not None:
                             zip_info.file_size = extra.Get("file_size")
                         if extra.Get("compress_size") is not None:
                             zip_info.compress_size = extra.Get("compress_size")
                             #break
 
-                if zip_info.local_header_offset >= 0:
-                    LOGGER.info("Found file %s @ %#x", zip_info.filename,
-                                zip_info.local_header_offset)
+                LOGGER.info("Found file %s @ %#x", zip_info.filename,
+                            zip_info.local_header_offset)
 
-                    # Store this information in the resolver. Ths allows
-                    # segments to be directly opened by URN.
-                    member_urn = aff4_utils.urn_from_member_name(
-                        zip_info.filename, self.urn)
+                # Store this information in the resolver. Ths allows
+                # segments to be directly opened by URN.
+                member_urn = aff4_utils.urn_from_member_name(
+                    zip_info.filename, self.urn)
 
-                    self.resolver.Set(
-                        member_urn, lexicon.AFF4_TYPE, rdfvalue.URN(
-                            lexicon.AFF4_ZIP_SEGMENT_TYPE))
+                self.resolver.Set(
+                    member_urn, lexicon.AFF4_TYPE, rdfvalue.URN(
+                        lexicon.AFF4_ZIP_SEGMENT_TYPE))
 
-                    self.resolver.Set(member_urn, lexicon.AFF4_STORED, self.urn)
-                    self.resolver.Set(member_urn, lexicon.AFF4_STREAM_SIZE,
-                                      rdfvalue.XSDInteger(zip_info.file_size))
-                    self.members[member_urn] = zip_info
+                self.resolver.Set(member_urn, lexicon.AFF4_STORED, self.urn)
+                self.resolver.Set(member_urn, lexicon.AFF4_STREAM_SIZE,
+                                  rdfvalue.XSDInteger(zip_info.file_size))
+                self.members[member_urn] = zip_info
 
                 # Go to the next entry.
                 entry_offset += (entry.sizeof() +
