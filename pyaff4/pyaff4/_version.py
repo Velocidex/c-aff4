@@ -12,9 +12,9 @@ def get_versions():
 def raw_versions():
     return json.loads("""
 {
+    "post": "2",
     "rc": "0",
-    "version": "0.26",
-    "post": "1"
+    "version": "0.26"
 }
 """)
 

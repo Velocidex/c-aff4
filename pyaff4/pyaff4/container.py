@@ -103,7 +103,6 @@ class Container(object):
                         with resolver.AFF4FactoryOpen(legacyYamlInfoURI) as fd:
                             txt = fd.read(10000000)
                             dt = yaml.safe_load(txt)
-                            print(txt)
                             try:
                                 CR3 = dt["Registers"]["CR3"]
                                 resolver.Add(res.parent.urn, lexicon.standard.memoryPageTableEntryOffset, rdfvalue.XSDInteger(CR3))
