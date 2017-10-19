@@ -35,11 +35,11 @@ class LinearHasher(object):
             self.listener = listener
         self.delegate = None
 
-    def hash(self, filename, mapURI, hashDataType):
-        lex = container.Container.identify(filename)
+    def hash(self, urn, mapURI, hashDataType):
+        lex = container.Container.identifyURN(urn)
         resolver = data_store.MemoryDataStore(lex)
 
-        with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
+        with zip.ZipFile.NewZipFile(resolver, urn) as zip_file:
             if lex == lexicon.standard:
                 self.delegate = InterimStdLinearHasher(resolver, lex, self.listener)
             elif lex == lexicon.legacy:
@@ -51,12 +51,12 @@ class LinearHasher(object):
 
             return self.delegate.doHash(mapURI, hashDataType)
 
-    def hashMulti(self, filenamea, filenameb, mapURI, hashDataType):
-        lex = container.Container.identify(filenamea)
+    def hashMulti(self, urna, urnb, mapURI, hashDataType):
+        lex = container.Container.identifyURN(urna)
         resolver = data_store.MemoryDataStore(lex)
 
-        with zip.ZipFile.NewZipFile(resolver, filenamea) as zip_filea:
-            with zip.ZipFile.NewZipFile(resolver, filenameb) as zip_fileb:
+        with zip.ZipFile.NewZipFile(resolver, urna) as zip_filea:
+            with zip.ZipFile.NewZipFile(resolver, urnb) as zip_fileb:
                 if lex == lexicon.standard:
                     self.delegate = InterimStdLinearHasher(resolver, lex, self.listener)
                 elif lex == lexicon.legacy:

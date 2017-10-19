@@ -55,6 +55,7 @@ setup(
     packages=['pyaff4'],
     package_dir={"pyaff4": "pyaff4"},
     install_requires=[
+        "future",
         "aff4-snappy == 0.5",
         "rdflib[sparql] == 4.2.2",
         "intervaltree == 2.1.0",

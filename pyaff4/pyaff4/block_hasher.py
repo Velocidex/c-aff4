@@ -100,11 +100,11 @@ class Validator(object):
             self.listener = listener
         self.delegate = None
 
-    def validateContainer(self, filename):
-        lex = container.Container.identify(filename)
+    def validateContainer(self, urn):
+        lex = container.Container.identifyURN(urn)
         resolver = data_store.MemoryDataStore(lex)
 
-        with zip.ZipFile.NewZipFile(resolver, filename) as zip_file:
+        with zip.ZipFile.NewZipFile(resolver, urn) as zip_file:
             if lex == lexicon.standard:
                 self.delegate = InterimStdValidator(resolver, lex, self.listener)
             elif lex == lexicon.legacy:
@@ -117,7 +117,7 @@ class Validator(object):
     def validateContainerMultiPart(self, urn_a, urn_b):
         # in this simple example, we assume that both files passed are
         # members of the Container
-        lex = container.Container.identify(urn_a)
+        lex = container.Container.identifyURN(urn_a)
         resolver = data_store.MemoryDataStore(lex)
 
         with zip.ZipFile.NewZipFile(resolver, urn_a) as zip_filea:
@@ -332,8 +332,8 @@ class PreStdValidator(Validator):
         self.resolver = resolver
         self.lexicon = lex
 
-    def validateContainer(self, filename):
-        with zip.ZipFile.NewZipFile(self.resolver, filename) as zip_file:
+    def validateContainer(self, urn):
+        with zip.ZipFile.NewZipFile(self.resolver, urn) as zip_file:
             self.doValidateContainer()
 
     # pre AFF4 standard Evimetry uses the contains relationship to locate the local
@@ -391,8 +391,8 @@ class InterimStdValidator(Validator):
         self.resolver = resolver
         self.lexicon = lex
 
-    def validateContainer(self, filename):
-        with zip.ZipFile.NewZipFile(self.resolver, filename) as zip_file:
+    def validateContainer(self, urn):
+        with zip.ZipFile.NewZipFile(self.resolver, urn) as zip_file:
             self.doValidateContainer()
 
     def getParentMap(self, imageStreamURI):

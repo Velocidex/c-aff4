@@ -35,7 +35,12 @@ class Container(object):
         pass
 
     @staticmethod
-    def identify(urn):
+    def identify(filename):
+        """Public method to identify a filename as an AFF4 container."""
+        return Container.identifyURN(rdfvalue.URN.FromFileName(filename))
+
+    @staticmethod
+    def identifyURN(urn):
         resolver = data_store.MemoryDataStore(lexicon.standard)
         with zip.ZipFile.NewZipFile(resolver, urn) as zip_file:
             if len(list(zip_file.members.keys())) == 0:
@@ -61,7 +66,12 @@ class Container(object):
         return False
 
     @staticmethod
-    def open(urn):
+    def open(filename):
+        """Public method to open a filename as an AFF4 container."""
+        return Container.openURN(rdfvalue.URN.FromFileName(filename))
+
+    @staticmethod
+    def openURN(urn):
         try:
             cached = localcache[urn]
             return cached

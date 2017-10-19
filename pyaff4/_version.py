@@ -14,7 +14,7 @@ def raw_versions():
 {
     "rc": "0",
     "version": "0.26",
-    "post": "0"
+    "post": "1"
 }
 """)
 
