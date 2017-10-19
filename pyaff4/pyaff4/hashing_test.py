@@ -26,23 +26,23 @@ from pyaff4 import block_hasher
 from pyaff4 import linear_hasher
 
 
-referenceImagesPath = os.path.join(os.path.dirname(__file__), "..",
-                                   "test_images")
-stdLinear = os.path.join(referenceImagesPath, "AFF4Std", "Base-Linear.aff4")
-preStdLinear = os.path.join(referenceImagesPath, "AFF4PreStd/Base-Linear.af4")
-preStdAllocated = os.path.join(referenceImagesPath, "AFF4PreStd",
-                               "Base-Allocated.af4")
-stdLinear = os.path.join(referenceImagesPath, "AFF4Std", "Base-Linear.aff4")
-stdAllocated = os.path.join(referenceImagesPath, "AFF4Std",
-                            "Base-Allocated.aff4")
+referenceImagesPath = os.path.join(os.path.dirname(__file__), u"..",
+                                   u"test_images")
+stdLinear = os.path.join(referenceImagesPath, u"AFF4Std", u"Base-Linear.aff4")
+preStdLinear = os.path.join(referenceImagesPath, u"AFF4PreStd/Base-Linear.af4")
+preStdAllocated = os.path.join(referenceImagesPath, u"AFF4PreStd",
+                               u"Base-Allocated.af4")
+stdLinear = os.path.join(referenceImagesPath, u"AFF4Std", u"Base-Linear.aff4")
+stdAllocated = os.path.join(referenceImagesPath, u"AFF4Std",
+                            u"Base-Allocated.aff4")
 stdLinearAllHashes = os.path.join(referenceImagesPath,
-                                  "AFF4Std", "Base-Linear-AllHashes.aff4")
+                                  u"AFF4Std", u"Base-Linear-AllHashes.aff4")
 stdLinearReadError = os.path.join(referenceImagesPath,
-                                  "AFF4Std", "Base-Linear-ReadError.aff4")
+                                  u"AFF4Std", u"Base-Linear-ReadError.aff4")
 stripedLinearA = os.path.join(referenceImagesPath,
-                              "AFF4Std", "Striped", "Base-Linear_1.aff4")
+                              u"AFF4Std", u"Striped", u"Base-Linear_1.aff4")
 stripedLinearB = os.path.join(referenceImagesPath,
-                              "AFF4Std", "Striped", "Base-Linear_2.aff4")
+                              u"AFF4Std", u"Striped", u"Base-Linear_2.aff4")
 
 def conditional_on_images(f):
     if not os.access(preStdLinear, os.R_OK):
@@ -75,7 +75,7 @@ class ValidatorTest(unittest.TestCase):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
             self.preStdLinearURN,
-            "aff4://085066db-6315-4369-a87e-bdc7bc777d45",
+            u"aff4://085066db-6315-4369-a87e-bdc7bc777d45",
             lexicon.HASH_SHA1)
         print(dir(hash))
         print(hash.value)
@@ -85,7 +85,7 @@ class ValidatorTest(unittest.TestCase):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
             self.preStdAllocatedURN,
-            "aff4://48a85e17-1041-4bcc-8b2b-7fb2cd4f815b", lexicon.HASH_SHA1)
+            u"aff4://48a85e17-1041-4bcc-8b2b-7fb2cd4f815b", lexicon.HASH_SHA1)
         print(dir(hash))
         print(hash.value)
         self.assertEqual(hash.value, "a9f21b04a0a77613a5a34ecdd3af269464984035")
@@ -106,7 +106,7 @@ class ValidatorTest(unittest.TestCase):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
             self.stdLinearURN,
-            "aff4://fcbfdce7-4488-4677-abf6-08bc931e195b", lexicon.HASH_SHA1)
+            u"aff4://fcbfdce7-4488-4677-abf6-08bc931e195b", lexicon.HASH_SHA1)
         print(dir(hash))
         print(hash.value)
         self.assertEqual(hash.value, "7d3d27f667f95f7ec5b9d32121622c0f4b60b48d")
@@ -115,7 +115,7 @@ class ValidatorTest(unittest.TestCase):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
             self.stdLinearReadErrorURN,
-            "aff4://b282d5f4-333a-4f6a-b96f-0e5138bb18c8", lexicon.HASH_SHA1)
+            u"aff4://b282d5f4-333a-4f6a-b96f-0e5138bb18c8", lexicon.HASH_SHA1)
         print(dir(hash))
         print(hash.value)
         self.assertEqual(hash.value, "67e245a640e2784ead30c1ff1a3f8d237b58310f")
@@ -124,7 +124,7 @@ class ValidatorTest(unittest.TestCase):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
             self.stdAllocatedURN,
-            "aff4://e9cd53d3-b682-4f12-8045-86ba50a0239c", lexicon.HASH_SHA1)
+            u"aff4://e9cd53d3-b682-4f12-8045-86ba50a0239c", lexicon.HASH_SHA1)
         self.assertEqual(hash.value, "e8650e89b262cf0b4b73c025312488d5a6317a26")
 
     def testBlockHashStdLinearStriped(self):
@@ -136,7 +136,7 @@ class ValidatorTest(unittest.TestCase):
         validator = linear_hasher.LinearHasher()
         hash = validator.hashMulti(
             self.stripedLinearBURN, self.stripedLinearAURN,
-            "aff4://2dd04819-73c8-40e3-a32b-fdddb0317eac", lexicon.HASH_SHA1)
+            u"aff4://2dd04819-73c8-40e3-a32b-fdddb0317eac", lexicon.HASH_SHA1)
         self.assertEqual(hash.value, "7d3d27f667f95f7ec5b9d32121622c0f4b60b48d")
 
     def testBlockHashStdContainerPartialAllocated(self):
@@ -155,7 +155,7 @@ class ValidatorTest(unittest.TestCase):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
             self.stdLinearAllHashesURN,
-            "aff4://2a497fe5-0221-4156-8b4d-176bebf7163f",
+            u"aff4://2a497fe5-0221-4156-8b4d-176bebf7163f",
             lexicon.HASH_SHA1)
 
         print(dir(hash))
