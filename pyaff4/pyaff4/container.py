@@ -76,7 +76,7 @@ class Container(object):
             cached = localcache[urn]
             return cached
         except:
-            lex = Container.identify(urn)
+            lex = Container.identifyURN(urn)
             resolver = data_store.MemoryDataStore(lex)
             with zip.ZipFile.NewZipFile(resolver, urn) as zip_file:
                 if lex == lexicon.standard:
