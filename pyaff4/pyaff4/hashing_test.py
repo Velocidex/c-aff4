@@ -67,10 +67,12 @@ class ValidatorTest(unittest.TestCase):
     stripedLinearAURN = rdfvalue.URN.FromFileName(stripedLinearA)
     stripedLinearBURN = rdfvalue.URN.FromFileName(stripedLinearB)
 
+    @conditional_on_images
     def testBlockHashPreStdLinearImage(self):
         validator = block_hasher.Validator()
         validator.validateContainer(self.preStdLinearURN)
 
+    @conditional_on_images
     def testLinearHashPreStdLinearImage(self):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
@@ -81,6 +83,7 @@ class ValidatorTest(unittest.TestCase):
         print(hash.value)
         self.assertEqual(hash.value, "5d5f183ae7355b8dc8938b67aab77c0215c29ab4")
 
+    @conditional_on_images
     def testLinearHashPreStdPartialAllocatedImage(self):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
@@ -90,18 +93,22 @@ class ValidatorTest(unittest.TestCase):
         print(hash.value)
         self.assertEqual(hash.value, "a9f21b04a0a77613a5a34ecdd3af269464984035")
 
+    @conditional_on_images
     def testBlockHashPreStdPartialAllocatedImage(self):
         validator = block_hasher.Validator()
         validator.validateContainer(self.preStdAllocatedURN)
 
+    @conditional_on_images
     def testBlockHashStdLinearImage(self):
         validator = block_hasher.Validator()
         validator.validateContainer(self.stdLinearURN)
 
+    @conditional_on_images
     def testBlockHashStdLinearReadError(self):
         validator = block_hasher.Validator()
         validator.validateContainer(self.stdLinearReadErrorURN)
 
+    @conditional_on_images
     def testHashStdLinearImage(self):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
@@ -111,6 +118,7 @@ class ValidatorTest(unittest.TestCase):
         print(hash.value)
         self.assertEqual(hash.value, "7d3d27f667f95f7ec5b9d32121622c0f4b60b48d")
 
+    @conditional_on_images
     def testHashStdLinearReadError(self):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
@@ -120,6 +128,7 @@ class ValidatorTest(unittest.TestCase):
         print(hash.value)
         self.assertEqual(hash.value, "67e245a640e2784ead30c1ff1a3f8d237b58310f")
 
+    @conditional_on_images
     def testHashStdPartialAllocatedImage(self):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
@@ -127,11 +136,13 @@ class ValidatorTest(unittest.TestCase):
             u"aff4://e9cd53d3-b682-4f12-8045-86ba50a0239c", lexicon.HASH_SHA1)
         self.assertEqual(hash.value, "e8650e89b262cf0b4b73c025312488d5a6317a26")
 
+    @conditional_on_images
     def testBlockHashStdLinearStriped(self):
         validator = block_hasher.Validator()
         validator.validateContainerMultiPart(self.stripedLinearBURN,
                                              self.stripedLinearAURN)
 
+    @conditional_on_images
     def testHashStdLinearStriped(self):
         validator = linear_hasher.LinearHasher()
         hash = validator.hashMulti(
@@ -139,18 +150,22 @@ class ValidatorTest(unittest.TestCase):
             u"aff4://2dd04819-73c8-40e3-a32b-fdddb0317eac", lexicon.HASH_SHA1)
         self.assertEqual(hash.value, "7d3d27f667f95f7ec5b9d32121622c0f4b60b48d")
 
+    @conditional_on_images
     def testBlockHashStdContainerPartialAllocated(self):
         validator = block_hasher.Validator()
         validator.validateContainer(self.stdAllocatedURN)
 
+    @conditional_on_images
     def testBlockHashPreStdLinearImage(self):
         validator = block_hasher.Validator()
         validator.validateContainer(self.preStdLinearURN)
 
+    @conditional_on_images
     def testBlockHashStdLinearAllHashesImage(self):
         validator = block_hasher.Validator()
         validator.validateContainer(self.stdLinearAllHashesURN)
 
+    @conditional_on_images
     def testHashStdLinearAllHashesImage(self):
         validator = linear_hasher.LinearHasher()
         hash = validator.hash(
