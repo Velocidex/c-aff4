@@ -177,8 +177,6 @@ class StdLexicon(Lexicon):
     OSXKALSRSlide = base + "OSXKALSRSlide"
     OSXDTBPhysicalOffset = base + "OSXDTBPhysicalOffset"
 
-
-
 class LegacyLexicon(Lexicon):
     base = AFF4_LEGACY_NAMESPACE
     map = base + "map"
@@ -216,3 +214,11 @@ class ScudetteLexicon(Lexicon):
 legacy = LegacyLexicon()
 standard = StdLexicon()
 scudette = ScudetteLexicon()
+
+
+def AutoResolveAttribute(resolver, urn, attribute):
+    """Iterate over all lexicons to autodetect the attribute."""
+    for lexicon in (standard, scudette, legacy):
+        result = resolver.Get(urn, getattr(lexicon, attribute))
+        if result is not None:
+            return result

@@ -103,18 +103,18 @@ class AFF4Image(aff4.AFF4Stream):
 
         self.lexicon = self.resolver.lexicon
 
-        self.chunk_size = int(self.resolver.Get(
-            self.urn, self.lexicon.chunkSize)  or 32*1024)
+        self.chunk_size = int(lexicon.AutoResolveAttribute(
+            self.resolver, self.urn, "chunkSize")  or 32*1024)
 
-        self.chunks_per_segment = int(self.resolver.Get(
-            self.urn, self.lexicon.chunksPerSegment) or 1024)
+        self.chunks_per_segment = int(lexicon.AutoResolveAttribute(
+            self.resolver, self.urn, "chunksPerSegment") or 1024)
 
-        sz = self.resolver.Get(self.urn, self.lexicon.streamSize) or 0
-        self.size = int(sz)
+        self.size = int(lexicon.AutoResolveAttribute(
+            self.resolver, self.urn, "streamSize") or 0)
 
-        self.compression = (self.resolver.Get(
-            self.urn, self.lexicon.compressionMethod)  or
-                            lexicon.AFF4_IMAGE_COMPRESSION_ZLIB)
+        self.compression = (lexicon.AutoResolveAttribute(
+            self.resolver, self.urn, "compressionMethod")  or
+            lexicon.AFF4_IMAGE_COMPRESSION_ZLIB)
 
         # A buffer for overlapped writes which do not fit into a chunk.
         self.buffer = b""
