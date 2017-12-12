@@ -201,8 +201,8 @@ specific language governing permissions and limitations under the License.
 
 
 // Categories describe the general type of an image.
-/*#define AFF4_CATEGORY (AFF4_NAMESPACE "category")
-
+#define AFF4_CATEGORY (AFF4_NAMESPACE "category")
+#define AFF4_MEMORY_NAMESPACE "http://aff4.org/Schema#memory/"
 #define AFF4_MEMORY_PHYSICAL (AFF4_MEMORY_NAMESPACE "physical")
 #define AFF4_MEMORY_VIRTUAL (AFF4_MEMORY_NAMESPACE "virtual")
 #define AFF4_MEMORY_PAGEFILE (AFF4_MEMORY_NAMESPACE "pagefile")
@@ -212,13 +212,11 @@ specific language governing permissions and limitations under the License.
 #define AFF4_DISK_PARTITION (AFF4_DISK_NAMESPACE "partition")
 
 
-
 // The constant stream is a psuedo stream which just returns a constant.
 #define AFF4_CONSTANT_TYPE (AFF4_NAMESPACE "constant")
 
 // The constant to repeat (default 0).
 #define AFF4_CONSTANT_CHAR (AFF4_NAMESPACE "constant_char")
-*/
 
 #define AFF4_DIRECTORY_TYPE (AFF4_NAMESPACE "directory")
 
