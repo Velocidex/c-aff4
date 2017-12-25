@@ -118,8 +118,15 @@ specific language governing permissions and limitations under the License.
 
 /**
  * AFF4 Primary Object Types.
- * The aff4:Image may contain device information, and MUST contain the size and reference to the map (via
- * aff4:dataStream
+ *
+ * Note: These types are abstract entities which refer to a logical
+ * image. They do not say anything about the actual storage methos
+ * used. Instead they refer to the AFF4 stream which stores the data
+ * in their dataStream attribute.
+ *
+ * Since a single AFF4 URN may represent several different types,
+ * these types may also apply to a concrete object, in which case no
+ * aff4:dataStream is needed.
  */
 #define AFF4_IMAGE_TYPE (AFF4_NAMESPACE "Image")
 #define AFF4_DISK_IMAGE_TYPE (AFF4_NAMESPACE "DiskImage")

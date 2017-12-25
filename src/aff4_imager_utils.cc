@@ -9,6 +9,7 @@
 
 //using std::cout;
 
+
 // This will be flipped by the signal handler.
 AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
                        URN output_urn,

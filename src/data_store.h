@@ -320,14 +320,14 @@ class DataStore {
      * @param object
      */
     void Return(AFF4Object* object) {
-    	std::string urn = object->urn.SerializeToString();
-    	// Don't return symbolics.
-		std::unordered_map<std::string, std::shared_ptr<AFF4Stream>>::const_iterator it = SymbolicStreams.find(urn);
-		if (it != SymbolicStreams.end()) {
-			return;
-		}
+        std::string urn = object->urn.SerializeToString();
+        // Don't return symbolics.
+        auto it = SymbolicStreams.find(urn);
+        if (it != SymbolicStreams.end()) {
+            return;
+        }
 
-        LOG(INFO) << "Returning: " << urn;
+        //LOG(INFO) << "Returning: " << urn;
         ObjectCache.Return(object);
     }
 
@@ -372,7 +372,7 @@ class DataStore {
                            RDFValue& value) = 0;
 
     virtual AFF4Status Get(const URN& urn, const URN& attribute,
-    		std::vector<std::shared_ptr<RDFValue>>& values) = 0;
+                std::vector<std::shared_ptr<RDFValue>>& values) = 0;
 
     /**
      * Does the given URN have the given attribute set to the given value.
@@ -493,22 +493,24 @@ class DataStore {
        */
     template<typename T>
     AFF4ScopedPtr<T> AFF4FactoryOpen(const URN& urn) {
+        //LOG(INFO) << "AFF4FactoryOpen : " << urn.SerializeToString();
 
-    	LOG(INFO) << "AFF4FactoryOpen : " << urn.SerializeToString();
-    	// Check the symbolic aff4:ImageStream cache.
+        // Check the symbolic aff4:ImageStream cache.
+        auto it = SymbolicStreams.find(urn.value);
+        if(it != SymbolicStreams.end()){
+            // This is a symbolic stream
+            std::shared_ptr<AFF4Stream> stream = it->second;
+            T *result = dynamic_cast<T*>(stream.get());
+            if (result != nullptr) {
+                return AFF4ScopedPtr<T>(result, this);
+            }
+        }
 
-    	std::unordered_map<std::string, std::shared_ptr<AFF4Stream>>::const_iterator it = SymbolicStreams.find(urn.value);
-    	if(it != SymbolicStreams.end()){
-    		// This is a symbolic stream
-    		std::shared_ptr<AFF4Stream> stream = it->second;
-    		return AFF4ScopedPtr<T>(dynamic_cast<T*>(stream.get()), this);
-    	}
-
-    	// It is in the cache, just return it.
+        // It is in the cache, just return it.
         AFF4Object* cached_obj = ObjectCache.Get(urn);
         if (cached_obj) {
-            LOG(INFO) << "AFF4FactoryOpen (cached): " <<
-                      cached_obj->urn.SerializeToString();
+            //LOG(INFO) << "AFF4FactoryOpen (cached): " <<
+            //          cached_obj->urn.SerializeToString();
 
             cached_obj->Prepare();
             return AFF4ScopedPtr<T>(dynamic_cast<T*>(cached_obj), this);
@@ -516,27 +518,27 @@ class DataStore {
 
         URN type_urn;
         std::unique_ptr<AFF4Object> obj;
+        const uri_components components = urn.Parse();
 
-		const uri_components components = urn.Parse();
+        // Check if there is a resolver triple for it.
+        std::vector<std::shared_ptr<RDFValue>> types;
+        if(Get(urn, AFF4_TYPE, types) == STATUS_OK) {
+            // Try to instantiate all the types until one works.
+            for(auto& v : types) {
+                obj = GetAFF4ClassFactory()->CreateInstance(v->SerializeToString(), this, &urn);
+                if(obj != nullptr) {
+                    type_urn = URN(v->SerializeToString());
+                    break;
+                }
+            }
+        }
 
-		// Check if there is a resolver triple for it.
-		std::vector<std::shared_ptr<RDFValue>> types;
-		if(Get(urn, AFF4_TYPE, types) == STATUS_OK) {
-			for(std::shared_ptr<RDFValue> v : types) {
-				obj = GetAFF4ClassFactory()->CreateInstance(v->SerializeToString(), this, &urn);
-				if(obj != nullptr) {
-					type_urn = URN(v->SerializeToString());
-					break;
-				}
-			}
-		}
-
-		// Check if there is a resolver triple for it.
-		if(!obj) {
-			if (Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
-				obj = GetAFF4ClassFactory()->CreateInstance(type_urn.value, this, &urn);
-			}
-		}
+        // Check if there is a resolver triple for it.
+        if(!obj) {
+            if (Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
+                obj = GetAFF4ClassFactory()->CreateInstance(type_urn.value, this, &urn);
+            }
+        }
 
         // Try to instantiate the handler based on the URN scheme alone.
         if (!obj) {
@@ -561,15 +563,15 @@ class DataStore {
         T* result = dynamic_cast<T*>(obj.get());
 
         if(result == nullptr){
-        	// bad type cast.
-        	return AFF4ScopedPtr<T>();
+                // bad type cast.
+                return AFF4ScopedPtr<T>();
         }
 
         // Store the object in the cache but place it immediate in the in_use list.
         ObjectCache.Put(obj.release(), true);
 
         LOG(INFO) << "AFF4FactoryOpen (new instance): " <<
-                  result->urn.SerializeToString();
+            result->urn.SerializeToString();
 
         result->Prepare();
         return AFF4ScopedPtr<T>(result, this);

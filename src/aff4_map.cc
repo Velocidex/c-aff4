@@ -47,29 +47,11 @@ AFF4ScopedPtr<AFF4Map> AFF4Map::NewAFF4Map(
 
 
 AFF4Status AFF4Map::LoadFromURN() {
-	/*
-	 * We could be type aff4:Image and/or aff4:Map. If we don't have aff4:Map as a type, then
-	 * we are an aff4:Image and need to locate the corresponding aff4:Map via aff4:dataStream.
-	 */
-	URN rdfType (AFF4_MAP_TYPE);
-	URN map_urn = urn;
-	if (resolver->Has(urn, AFF4_TYPE, rdfType) != STATUS_OK) {
-		rdfType = URN(AFF4_LEGACY_MAP_TYPE);
-		if (resolver->Has(urn, AFF4_TYPE, rdfType) != STATUS_OK) {
-			URN dataStream;
-			if (resolver->Get(urn, AFF4_DATASTREAM, dataStream) != STATUS_OK ){
-				LOG(ERROR) << "Image URN doesn't contain reference to dataStream ";
-				return NOT_FOUND;
-			}
-			map_urn = dataStream;
-		}
-	}
-
-    URN map_stream_urn = map_urn.Append("map");
-    URN map_idx_urn = map_urn.Append("idx");
+    URN map_stream_urn = urn.Append("map");
+    URN map_idx_urn = urn.Append("idx");
 
     AFF4ScopedPtr<AFF4Stream> map_idx = resolver->AFF4FactoryOpen<AFF4Stream>(
-                                            map_idx_urn);
+        map_idx_urn);
 
     // Parse the map out of the map stream. If the stream does not exist yet we
     // just start with an empty map.
@@ -78,10 +60,10 @@ AFF4Status AFF4Map::LoadFromURN() {
         std::istringstream f(map_idx->Read(map_idx->Size()));
         std::string line;
         while (std::getline(f, line)) {
-        	// deal with CRLF EOL. (hack).
-        	if(*line.rbegin() == '\r'){
-        		line.erase(line.length()-1, 1);
-        	}
+                // deal with CRLF EOL. (hack).
+                if(*line.rbegin() == '\r'){
+                        line.erase(line.length()-1, 1);
+                }
             target_idx_map[line] = targets.size();
             targets.push_back(line);
         }
@@ -93,7 +75,7 @@ AFF4Status AFF4Map::LoadFromURN() {
             // Clear the map so we start with a fresh map.
             Clear();
         } else {
-        	// Note: The legacy AFF4 version, and AFF4 Standard use the same map format.
+            // Note: The legacy AFF4 version, and AFF4 Standard use the same map format.
             BinaryRange binary_range;
             while (map_stream->ReadIntoBuffer(
                         &binary_range, sizeof(binary_range)) == sizeof(binary_range)) {
@@ -697,7 +679,14 @@ AFF4Status AFF4Map::WriteStream(AFF4Map* source, ProgressContext* progress) {
 static AFF4Registrar<AFF4Map> map1(AFF4_MAP_TYPE);
 static AFF4Registrar<AFF4Map> map2(AFF4_LEGACY_MAP_TYPE);
 // AFF4 Standard
-static AFF4Registrar<AFF4Map> image1(AFF4_IMAGE_TYPE);
+
+// In the AFF4 Standard, AFF4_IMAGE_TYPE is an abstract concept which
+// delegates the data stream implementation to some other AFF4 stream
+// (image or map) via the DataStore attribute.
+
+// TODO: Implement this kind of object for reading.
+
+//static AFF4Registrar<AFF4Map> image1(AFF4_IMAGE_TYPE);
 static AFF4Registrar<AFF4Map> image2(AFF4_DISK_IMAGE_TYPE);
 static AFF4Registrar<AFF4Map> image3(AFF4_VOLUME_IMAGE_TYPE);
 static AFF4Registrar<AFF4Map> image4(AFF4_MEMORY_IMAGE_TYPE);

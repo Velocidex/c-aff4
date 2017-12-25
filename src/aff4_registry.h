@@ -14,11 +14,6 @@
 #include <iostream>
 #include <functional>
 
-//using std::string;
-//using std::unique_ptr;
-//using std::unordered_map;
-//using std::function;
-
 class DataStore;
 class URN;
 

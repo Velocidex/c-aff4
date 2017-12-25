@@ -31,7 +31,7 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
     // Inform the volume that we have a new image stream contained within it.
     volume->children.insert(image_urn.SerializeToString());
 
-    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
+    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE));
     resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
 
     // We need to use the resolver here instead of just making a new object, in
@@ -50,9 +50,9 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
  */
 AFF4Status AFF4Image::LoadFromURN() {
     if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-    	if (resolver->Get(urn, AFF4_LEGACY_STORED, volume_urn) != STATUS_OK) {
-    		return NOT_FOUND;
-    	}
+        if (resolver->Get(urn, AFF4_LEGACY_STORED, volume_urn) != STATUS_OK) {
+                return NOT_FOUND;
+        }
     }
 
     // Determine if this is an AFF4:ImageStream (AFF4 Standard) or
@@ -60,36 +60,35 @@ AFF4Status AFF4Image::LoadFromURN() {
     URN rdfType (AFF4_LEGACY_IMAGESTREAM_TYPE);
     isAFF4Legacy = (resolver->Has(urn, AFF4_TYPE, rdfType) == STATUS_OK);
 
-
     // Configure the stream parameters.
     XSDInteger value;
 
     if(!isAFF4Legacy){
-    	// AFF4 Standard
-		if (resolver->Get(urn, AFF4_STREAM_CHUNK_SIZE, value) == STATUS_OK) {
-			chunk_size = value.value;
-		}
+        // AFF4 Standard
+        if (resolver->Get(urn, AFF4_STREAM_CHUNK_SIZE, value) == STATUS_OK) {
+            chunk_size = value.value;
+        }
 
-		if (resolver->Get(urn, AFF4_STREAM_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
-			chunks_per_segment = value.value;
-		}
+        if (resolver->Get(urn, AFF4_STREAM_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
+            chunks_per_segment = value.value;
+        }
 
-		if (resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
-			size = value.value;
-		}
+        if (resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
+            size = value.value;
+        }
     } else {
-    	// AFF4 Legacy
-    	if (resolver->Get(urn, AFF4_LEGACY_STREAM_CHUNK_SIZE, value) == STATUS_OK) {
-			chunk_size = value.value;
-		}
+        // AFF4 Legacy
+        if (resolver->Get(urn, AFF4_LEGACY_STREAM_CHUNK_SIZE, value) == STATUS_OK) {
+            chunk_size = value.value;
+        }
 
-		if (resolver->Get(urn, AFF4_LEGACY_STREAM_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
-			chunks_per_segment = value.value;
-		}
+        if (resolver->Get(urn, AFF4_LEGACY_STREAM_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
+            chunks_per_segment = value.value;
+        }
 
-		if (resolver->Get(urn, AFF4_LEGACY_STREAM_SIZE, value) == STATUS_OK) {
-			size = value.value;
-		}
+        if (resolver->Get(urn, AFF4_LEGACY_STREAM_SIZE, value) == STATUS_OK) {
+            size = value.value;
+        }
     }
 
     // Load the compression scheme. If it is not set we just default to ZLIB.
@@ -185,7 +184,9 @@ AFF4Status AFF4Image::_FlushBevy() {
  * @return Status.
  */
 AFF4Status AFF4Image::FlushChunk(const char* data, size_t length) {
-    uint32_t bevy_offset = bevy.Tell();
+    uint64_t bevy_offset = bevy.Tell();
+    uint32_t bevy_chunk_length = 0;
+
     std::string output;
 
     AFF4Status result;
@@ -211,8 +212,15 @@ AFF4Status AFF4Image::FlushChunk(const char* data, size_t length) {
             return IO_ERROR;
     }
 
+    // The index contains the offset and the length of each chunk.
     if (bevy_index.Write(
                 reinterpret_cast<char*>(&bevy_offset), sizeof(bevy_offset)) < 0) {
+        return IO_ERROR;
+    }
+
+    bevy_chunk_length = output.size();
+    if (bevy_index.Write(
+                reinterpret_cast<char*>(&bevy_chunk_length), sizeof(bevy_chunk_length)) < 0) {
         return IO_ERROR;
     }
 
@@ -313,7 +321,8 @@ class _CompressorStream: public AFF4Stream {
   public:
     StringIO bevy_index;
     uint32_t chunk_count_in_bevy = 0;
-    uint32_t bevy_length = 0;
+    uint64_t bevy_length = 0;
+    uint32_t chunk_length = 0;
 
     _CompressorStream(DataStore* resolver, AFF4Image* owner, AFF4Stream* stream):
         AFF4Stream(resolver), stream(stream), owner(owner) {}
@@ -366,7 +375,13 @@ class _CompressorStream: public AFF4Stream {
 
         if (result == STATUS_OK) {
             if (bevy_index.Write(
-                        reinterpret_cast<char*>(&bevy_length), sizeof(bevy_length)) < 0) {
+                    reinterpret_cast<char*>(&bevy_length), sizeof(bevy_length)) < 0) {
+                return "";
+            }
+
+            chunk_length = output.size();
+            if (bevy_index.Write(
+                    reinterpret_cast<char*>(&chunk_length), sizeof(chunk_length)) < 0) {
                 return "";
             }
 
@@ -553,33 +568,33 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
         URN bevy_index_urn = (!isAFF4Legacy) ? bevy_urn.value + (".index") : bevy_urn.value + ("/index");
 
         AFF4ScopedPtr<AFF4Stream> bevy_index = resolver->AFF4FactoryOpen
-                                               <AFF4Stream>(bevy_index_urn);
+            <AFF4Stream>(bevy_index_urn);
 
         AFF4ScopedPtr<AFF4Stream> bevy = resolver->AFF4FactoryOpen<AFF4Stream>(
-                                             bevy_urn);
+            bevy_urn);
 
         if (!bevy_index || !bevy) {
             LOG(ERROR) << "Unable to open bevy " <<
-                       bevy_urn.SerializeToString();
+                bevy_urn.SerializeToString();
             return -1;
         }
 
         uint32_t index_size = bevy_index->Size() / sizeof(BevvyIndex);
         std::string bevy_index_data = bevy_index->Read(bevy_index->Size());
 
-		if (isAFF4Legacy) {
-			// Massage the bevvy data format from the old into the new.
-			bevy_index_data = _FixupBevvyData(&bevy_index_data);
-			index_size = bevy_index->Size() / sizeof(uint32_t);
-		}
+        if (isAFF4Legacy) {
+            // Massage the bevvy data format from the old into the new.
+            bevy_index_data = _FixupBevvyData(&bevy_index_data);
+            index_size = bevy_index->Size() / sizeof(uint32_t);
+        }
 
         BevvyIndex* bevy_index_array = reinterpret_cast<BevvyIndex*>(
-                                           const_cast<char*>(bevy_index_data.data()));
+            const_cast<char*>(bevy_index_data.data()));
 
         while (chunks_to_read > 0) {
             // Read a full chunk from the bevy.
             AFF4Status res = _ReadChunkFromBevy(
-                                 result, chunk_id, bevy, bevy_index_array, index_size);
+                result, chunk_id, bevy, bevy_index_array, index_size);
 
             if (res != STATUS_OK) {
                 return res;
@@ -686,21 +701,23 @@ static AFF4Registrar<AFF4Image> r2(AFF4_LEGACY_IMAGESTREAM_TYPE);
 void aff4_image_init() {}
 
 std::string AFF4Image::_FixupBevvyData(std::string* data){
-	uint32_t index_size = data->length() / sizeof(uint32_t);
-	BevvyIndex* bevy_index_array = new BevvyIndex[index_size];
-	uint32_t* bevy_index_data = reinterpret_cast<uint32_t*>(const_cast<char*>(data->data()));
+    uint32_t index_size = data->length() / sizeof(uint32_t);
+    BevvyIndex* bevy_index_array = new BevvyIndex[index_size];
+    uint32_t* bevy_index_data = reinterpret_cast<uint32_t*>(const_cast<char*>(data->data()));
 
-	uint64_t cOffset = 0;
-	uint32_t cLength = 0;
+    uint64_t cOffset = 0;
+    uint32_t cLength = 0;
 
-	for(off_t offset = 0; offset < index_size; offset++){
-		cLength = bevy_index_data[offset];
-		bevy_index_array[offset].offset = cOffset;
-		bevy_index_array[offset].length = cLength - cOffset;
-		cOffset += bevy_index_array[offset].length;
-	}
+    for(off_t offset = 0; offset < index_size; offset++){
+        cLength = bevy_index_data[offset];
+        bevy_index_array[offset].offset = cOffset;
+        bevy_index_array[offset].length = cLength - cOffset;
+        cOffset += bevy_index_array[offset].length;
+    }
 
-	std::string result = std::string(reinterpret_cast<char*>(bevy_index_array), index_size * sizeof(BevvyIndex));
-	delete[] bevy_index_array;
-	return result;
+    std::string result = std::string(
+        reinterpret_cast<char*>(bevy_index_array),
+        index_size * sizeof(BevvyIndex));
+    delete[] bevy_index_array;
+    return result;
 }

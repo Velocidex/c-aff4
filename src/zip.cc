@@ -192,11 +192,11 @@ AFF4Status ZipFile::parse_cd() {
         // The global difference between the zip file offsets and real file
         // offsets. This is non zero when the zip file was appended to another file.
         global_offset = (
-                            // Real ECD offset.
-                            ecd_real_offset - end_cd->size_of_cd -
+            // Real ECD offset.
+            ecd_real_offset - end_cd->size_of_cd -
 
-                            // Claimed CD offset.
-                            directory_offset);
+            // Claimed CD offset.
+            directory_offset);
 
         LOG(INFO)<< "Global offset: " << std::hex << global_offset;
 
@@ -259,7 +259,7 @@ AFF4Status ZipFile::parse_cd() {
 
         if (entry.magic != magic) {
             LOG(INFO)<< "CDFileHeader at offset " << std::hex << entry_offset <<
-                     "invalid.";
+                "invalid.";
 
             return PARSING_ERROR;
         }
@@ -276,41 +276,44 @@ AFF4Status ZipFile::parse_cd() {
         zip_info->lastmodtime = entry.dostime;
 
         // Zip64 local header - parse the extra field.
-        if (zip_info->local_header_offset == 4294967295) {
+        if (entry.relative_offset_local_header == 0xFFFFFFFF) {
             // Parse all the extra field records.
-        	ZipExtraFieldHeader extra;
+            ZipExtraFieldHeader extra;
             aff4_off_t real_end_of_extra = (backing_store->Tell() + entry.extra_field_len);
 
-			while (backing_store->Tell() < real_end_of_extra) {
-				backing_store->ReadIntoBuffer(&extra, 4);
+            while (backing_store->Tell() < real_end_of_extra) {
+                backing_store->ReadIntoBuffer(&extra, 4);
 
-				if (extra.header_id == 1) {
-					uint16_t data_size = extra.data_size;
-					if ((zip_info->file_size == 4294967295) && (data_size >= 8)) {
-						backing_store->ReadIntoBuffer(&(zip_info->file_size), 8);
-						data_size -= 8;
-					}
-					if ((zip_info->compress_size == 4294967295) && (data_size >= 8)) {
-						backing_store->ReadIntoBuffer(&(zip_info->compress_size), 8);
-						data_size -= 8;
-					}
-					if ((zip_info->local_header_offset == 4294967295) && (data_size >= 8)) {
-						backing_store->ReadIntoBuffer(&(zip_info->local_header_offset), 8);
-						data_size -= 8;
-					}
-					if (data_size > 0) {
-						backing_store->Seek(data_size, 1);
-					}
-				} else {
-					// skip the data length going forward.
-					backing_store->Seek(extra.data_size, 1);
-				}
-			}
+                // The following fields are optional so they are only
+                // there if their corresponding memebrs in the
+                // CDFileHeader entry are set to 0xFFFFFFFF.
+                if (extra.header_id == 1) {
+                    uint16_t data_size = extra.data_size;
+                    if ((entry.file_size == 0xFFFFFFFF) && (data_size >= 8)) {
+                        backing_store->ReadIntoBuffer(&(zip_info->file_size), 8);
+                        data_size -= 8;
+                    }
+                    if ((entry.compress_size == 0xFFFFFFFF) && (data_size >= 8)) {
+                        backing_store->ReadIntoBuffer(&(zip_info->compress_size), 8);
+                        data_size -= 8;
+                    }
+                    if ((entry.relative_offset_local_header == 0xFFFFFFFF) && (data_size >= 8)) {
+                        backing_store->ReadIntoBuffer(&(zip_info->local_header_offset), 8);
+                        data_size -= 8;
+                    }
+                    if (data_size > 0) {
+                        backing_store->Seek(data_size, 1);
+                    }
+                } else {
+                    // skip the data length going forward.
+                    backing_store->Seek(extra.data_size, 1);
+                }
+            }
         }
 
         if (zip_info->local_header_offset >= 0) {
             LOG(INFO)<< "Found file " << zip_info->filename.c_str() << " @ " <<
-                     std::hex << zip_info->local_header_offset;
+                std::hex << zip_info->local_header_offset;
 
             // Store this information in the resolver. Ths allows segments to be
             // directly opened by URN.
@@ -323,7 +326,8 @@ AFF4Status ZipFile::parse_cd() {
         }
 
         // Go to the next entry.
-        entry_offset += (sizeof(entry) + entry.file_name_length + entry.extra_field_len + entry.file_comment_length);
+        entry_offset += (sizeof(entry) + entry.file_name_length +
+                         entry.extra_field_len + entry.file_comment_length);
     }
 
     return STATUS_OK;
@@ -420,7 +424,8 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream& backing_store) {
 
     for (auto it = members.begin(); it != members.end(); it++) {
         ZipInfo* zip_info = it->second.get();
-        LOG(INFO)<< "Writing CD entry for " << it->first.c_str();
+        LOG(INFO)<< "Writing CD entry for " << it->first.c_str() << " at "
+                 << cd_stream.Tell();
         zip_info->WriteCDFileHeader(cd_stream);
     }
 
@@ -534,8 +539,9 @@ ZipFileSegment::ZipFileSegment(std::string filename, ZipFile& owner) {
     LoadFromZipFile(owner);
 }
 
-AFF4ScopedPtr<ZipFileSegment> ZipFileSegment::NewZipFileSegment(DataStore* resolver, const URN& segment_urn,
-        const URN& volume_urn) {
+AFF4ScopedPtr<ZipFileSegment> ZipFileSegment::NewZipFileSegment(
+    DataStore* resolver, const URN& segment_urn,
+    const URN& volume_urn) {
     AFF4ScopedPtr<ZipFile> volume = resolver->AFF4FactoryOpen<ZipFile>(volume_urn);
 
     if (!volume) {
@@ -562,7 +568,8 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile& owner) {
     ZipFileHeader file_header;
     uint32_t magic = file_header.magic;
 
-    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(owner.backing_store_urn);
+    AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
+        AFF4Stream>(owner.backing_store_urn);
 
     if (!backing_store) {
         return IO_ERROR;
@@ -573,13 +580,15 @@ AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile& owner) {
 
     backing_store->ReadIntoBuffer(&file_header, sizeof(file_header));
 
-    if (file_header.magic != magic || file_header.compression_method != zip_info->compression_method) {
+    if (file_header.magic != magic ||
+        file_header.compression_method != zip_info->compression_method) {
         LOG(INFO)<< "Local file header invalid!";
         return PARSING_ERROR;
     }
 
     // The filename should be null terminated so we force c_str().
-    std::string file_header_filename = backing_store->Read(file_header.file_name_length).c_str();
+    std::string file_header_filename = backing_store->Read(
+        file_header.file_name_length).c_str();
     if (file_header_filename != zip_info->filename) {
         LOG(INFO)<< "Local filename different from central directory.";
         return PARSING_ERROR;
@@ -660,7 +669,8 @@ int ZipFileSegment::Write(const char* data, int length) {
     // The segment is mapped from the backing store and the user wants to modify
     // it. We need to make a local copy.
     if (_backing_store_start_offset > 0) {
-        AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(_backing_store_urn);
+        AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
+            AFF4Stream>(_backing_store_urn);
 
         if (!backing_store) {
             return 0;
@@ -748,13 +758,15 @@ static unsigned int DecompressBuffer(char* buffer, int length, const std::string
 
 AFF4Status ZipFileSegment::Flush() {
     if (IsDirty()) {
-        AFF4ScopedPtr<ZipFile> owner = resolver->AFF4FactoryOpen<ZipFile>(owner_urn);
+        AFF4ScopedPtr<ZipFile> owner = resolver->AFF4FactoryOpen<
+            ZipFile>(owner_urn);
 
         if (!owner) {
             return GENERIC_ERROR;
         }
 
-        AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(owner->backing_store_urn);
+        AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
+            AFF4Stream>(owner->backing_store_urn);
 
         if (!backing_store) {
             return GENERIC_ERROR;
@@ -769,15 +781,16 @@ AFF4Status ZipFileSegment::Flush() {
         }
 
         // zip_info offsets are relative to the start of the zip file.
-        zip_info->local_header_offset = (backing_store->Tell() - owner->global_offset);
+        zip_info->local_header_offset = (
+            backing_store->Tell() - owner->global_offset);
 
         zip_info->filename = member_name_for_urn(urn, owner->urn, true);
         zip_info->file_size = Size();
 
         zip_info->crc32_cs = crc32(
-                                 zip_info->crc32_cs,
-                                 reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
-                                 buffer.size());
+            zip_info->crc32_cs,
+            reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
+            buffer.size());
 
         if (compression_method == AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE) {
             std::string cdata = CompressBuffer(buffer);
@@ -855,8 +868,8 @@ AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
     struct Zip64FileHeaderExtensibleField zip64header;
 
     header.crc32_cs = crc32_cs;
-    header.compress_size = -1;
-    header.file_size = -1;
+    header.compress_size = 0xFFFFFFFF;
+    header.file_size = 0xFFFFFFFF;
     header.file_name_length = filename.length();
     header.compression_method = compression_method;
     header.lastmodtime = lastmodtime;
@@ -921,10 +934,11 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
         return IO_ERROR;
     }
 
-    LOG(INFO)<< "Writing member %s" << member_urn.SerializeToString().c_str();
-
     // Append member at the end of the file.
     backing_store->Seek(0, SEEK_END);
+
+    LOG(INFO)<< "Writing member " << member_urn.SerializeToString().c_str()
+             << " at " << backing_store->Tell();
 
     // zip_info offsets are relative to the start of the zip file (take
     // global_offset into account).
