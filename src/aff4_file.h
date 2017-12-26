@@ -23,6 +23,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4_utils.h"
 #include "rdf.h"
 
+namespace aff4 {
+
 /*
   Files are AFF4 stream objects backed by a file on the filename.
 
@@ -90,5 +92,7 @@ class AFF4ConstantStream: public AFF4Stream {
 };
 
 extern void aff4_file_init();
+
+} // namespace aff4
 
 #endif  // SRC_AFF4_FILE_H_

@@ -6,7 +6,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 # This is so we can #include <package/foo>
-AM_CPPFLAGS = -I$(top_srcdir)/src 
+AM_CPPFLAGS = -I$(top_srcdir)/src
 
 # On windows we need to specify this to avoid a bug in gcc
 # (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
@@ -42,6 +42,7 @@ libaff4_include_HEADERS = \
     aff4_simple.h \
     config.h \
     lexicon.h \
+    lexicon.inc \
     rdf.h\
 	aff4_errors.h \
 	aff4_init.h \
@@ -82,7 +83,7 @@ libaff4_la_LIBADD =  ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCL
 endif
 
 bin_PROGRAMS = aff4imager
-aff4imager_LDADD = ./.libs/libaff4.a ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${GLOG_LIBS} ${UUID_LIBS} 
+aff4imager_LDADD = libaff4.la ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${GLOG_LIBS} ${UUID_LIBS}
 aff4imager_INCLUDES = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS} ${GLOG_CFLAGS}
 aff4imager_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 aff4imager_SOURCES = aff4imager.cc

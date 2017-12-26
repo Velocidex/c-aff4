@@ -17,6 +17,17 @@ specific language governing permissions and limitations under the License.
 
 #include <unordered_map>
 
+
+namespace aff4 {
+
+#define LEXICON_DEFINE(x, y)                                            \
+    const std::string x = y;
+
+#include "lexicon.inc"
+
+#undef LEXICON_DEFINE
+
+
 std::unordered_map<std::string, Schema> Schema::cache;
 
 
@@ -25,15 +36,17 @@ Schema Schema::GetSchema(std::string object_type) {
     if(cache.size() == 0) {
         // Define all the Schema and attributes.
         Schema AFF4_OBJECT_SCHEMA("object");
-        AFF4_OBJECT_SCHEMA.AddAttribute("type", Attribute(
-                                            RDF_NAMESPACE "type", URNType, "The type of this object."));
+        AFF4_OBJECT_SCHEMA.AddAttribute(
+            "type", Attribute(
+                AFF4_TYPE, URNType, "The type of this object."));
 
         Schema AFF4_STREAM_SCHEMA("generic_stream");
         AFF4_STREAM_SCHEMA.AddParent(AFF4_OBJECT_SCHEMA);
 
-        AFF4_STREAM_SCHEMA.AddAttribute("size", Attribute(
-                                            AFF4_NAMESPACE "size", XSDIntegerType,
-                                            "How large the object is in bytes."));
+        AFF4_STREAM_SCHEMA.AddAttribute(
+            "size", Attribute(
+                AFF4_STREAM_SIZE, XSDIntegerType,
+                "How large the object is in bytes."));
 
         // Volumes contain other objects.
         Schema AFF4_VOLUME_SCHEMA("volume");
@@ -56,3 +69,5 @@ Schema Schema::GetSchema(std::string object_type) {
 
     return Schema();
 }
+
+} // namespace aff4

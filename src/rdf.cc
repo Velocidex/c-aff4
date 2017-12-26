@@ -27,6 +27,8 @@ specific language governing permissions and limitations under the License.
 #include <shlwapi.h>
 #endif
 
+namespace aff4 {
+
 static std::string _NormalizePath(const std::string& component);
 
 std::string RDFBytes::SerializeToString() const {
@@ -96,7 +98,7 @@ AFF4Status XSDString::UnSerializeFromString(const char* data, int length) {
 raptor_term* XSDString::GetRaptorTerm(raptor_world* world) const {
     std::string value_string(SerializeToString());
     raptor_uri* uri = raptor_new_uri(
-                          world, (const unsigned char*)XSD_NAMESPACE "string");
+        world, (const unsigned char*)XSDStringType.c_str());
 
     raptor_term* result= raptor_new_term_from_counted_literal(
                              world,
@@ -443,14 +445,14 @@ AFF4Status XSDInteger::UnSerializeFromString(const char* data, int length) {
 raptor_term* XSDInteger::GetRaptorTerm(raptor_world* world) const {
     std::string value_string(SerializeToString());
     raptor_uri* uri = raptor_new_uri(
-                          world, (const unsigned char*)XSD_NAMESPACE "integer");
+        world, (const unsigned char*)XSDIntegerType.c_str());
 
     raptor_term* result = raptor_new_term_from_counted_literal(
-                              world,
-                              (const unsigned char*)value_string.c_str(),
-                              value_string.size(),
-                              uri,
-                              nullptr, 0);
+        world,
+        (const unsigned char*)value_string.c_str(),
+        value_string.size(),
+        uri,
+        nullptr, 0);
 
     raptor_free_uri(uri);
 
@@ -479,14 +481,14 @@ AFF4Status XSDBoolean::UnSerializeFromString(const char* data, int length) {
 raptor_term* XSDBoolean::GetRaptorTerm(raptor_world* world) const {
     std::string value_string(SerializeToString());
     raptor_uri* uri = raptor_new_uri(
-                          world, (const unsigned char*)XSD_NAMESPACE "boolean");
+        world, (const unsigned char*)XSDBooleanType.c_str());
 
     raptor_term* result = raptor_new_term_from_counted_literal(
-                              world,
-                              (const unsigned char*)value_string.c_str(),
-                              value_string.size(),
-                              uri,
-                              nullptr, 0);
+        world,
+        (const unsigned char*)value_string.c_str(),
+        value_string.size(),
+        uri,
+        nullptr, 0);
 
     raptor_free_uri(uri);
 
@@ -507,3 +509,5 @@ static RDFValueRegistrar<XSDInteger> r3(XSDIntegerType);
 static RDFValueRegistrar<XSDInteger> r4(XSDIntegerTypeInt);
 static RDFValueRegistrar<XSDInteger> r5(XSDIntegerTypeLong);
 static RDFValueRegistrar<XSDBoolean> r6(XSDBooleanType);
+
+} // namespace aff4

@@ -28,10 +28,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4_registry.h"
 #include <uriparser/Uri.h>
 
-//using std::string;
-//using std::shared_ptr;
-//using std::unique_ptr;
-//using std::vector;
+namespace aff4 {
 
 /**
  * @file
@@ -309,16 +306,19 @@ class URN: public XSDString {
     }
 };
 
+} // namespace aff4
+
 // custom specialization of std::hash injected into std namespace.
 namespace std {
-    template<> struct hash<URN> {
+    template<> struct hash<aff4::URN> {
         typedef std::size_t result_type;
-        result_type operator()(URN const& s) const {
-        	result_type const h1 (std::hash<std::string>{}(s.value));
-        	return h1;
+        result_type operator()(aff4::URN const& s) const {
+                result_type const h1 (std::hash<std::string>{}(s.value));
+                return h1;
         }
     };
 }
+
 
 
 #endif  // SRC_RDF_H_

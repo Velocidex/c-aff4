@@ -33,6 +33,8 @@ using std::list;
 #define  ZIP64_LIMIT ((1LL << 31)-1)
 
 
+namespace aff4 {
+
 /** These are ZipFile structures */
 struct EndCentralDirectory {
     uint32_t magic = 0x6054b50;
@@ -56,8 +58,8 @@ struct CDFileHeader {
     uint16_t dostime;
     uint16_t dosdate;
     uint32_t crc32_cs;
-    int32_t compress_size = -1;
-    int32_t file_size = -1;
+    uint32_t compress_size = -1;
+    uint32_t file_size = -1;
     uint16_t file_name_length;
     uint16_t extra_field_len = 32;
     uint16_t file_comment_length = 0;
@@ -93,8 +95,8 @@ struct Zip64FileHeaderExtensibleField {
 } __attribute__((packed));
 
 struct ZipExtraFieldHeader {
-	uint16_t header_id;
-	uint16_t data_size;
+        uint16_t header_id;
+        uint16_t data_size;
 } __attribute__((packed));
 
 struct Zip64EndCD {
@@ -334,5 +336,7 @@ class ZipFile: public AFF4Volume {
     // objects to this must use the member names using _member_name_for_urn(URN).
     std::unordered_map<std::string, std::unique_ptr<ZipInfo>> members;
 };
+
+} // namespace aff4
 
 #endif   // SRC_ZIP_H_

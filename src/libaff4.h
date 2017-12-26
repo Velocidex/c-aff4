@@ -29,6 +29,8 @@ specific language governing permissions and limitations under the License.
 #include "lexicon.h"
 
 
+namespace aff4 {
+
 /* Utility functions. */
 
 /**
@@ -60,7 +62,14 @@ URN urn_from_member_name(const std::string member, const URN base_urn);
 
 
 extern "C" {
-    char* AFF4_version();
+    const char* AFF4_version();
 }
+
+
+aff4_off_t min(size_t x, aff4_off_t y);
+aff4_off_t max(size_t x, aff4_off_t y);
+
+} // namespace aff4
+
 
 #endif    // SRC_LIBAFF4_H_

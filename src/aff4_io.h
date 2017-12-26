@@ -29,14 +29,10 @@ specific language governing permissions and limitations under the License.
 #include "aff4_utils.h"
 #include "rdf.h"
 
-//using std::string;
-//using std::unique_ptr;
-//using std::unordered_map;
-//using std::ofstream;
-//using std::ifstream;
-
 // A constant for various buffers used by the AFF4 library.
 #define AFF4_BUFF_SIZE (32 * 1024)
+
+namespace aff4 {
 
 
 struct AFF4StreamProperties {
@@ -229,5 +225,7 @@ class AFF4Volume: public AFF4Object {
 // so it is only suitable for setting in a signal handler when a single imager
 // is running. To abort a specific imager, call its Abort() method.
 extern bool aff4_abort_signaled;
+
+} // namespace aff4
 
 #endif  // SRC_AFF4_IO_H_

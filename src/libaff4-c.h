@@ -31,7 +31,7 @@ extern "C" {
 /**
  * Get the AFF4 version
  */
-char* AFF4_version();
+const char* AFF4_version();
 
 /**
  * Initialise libaff4.

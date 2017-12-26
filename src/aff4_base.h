@@ -58,6 +58,9 @@ specific language governing permissions and limitations under the License.
 #include <glog/logging.h>
 
 
+namespace aff4 {
+
+
 /**
  * The base class for all AFF4 objects. It is not usually possible to
  * instantiate a plain AFF4 Object since it does not really do anything.
@@ -208,5 +211,7 @@ class AFF4Registrar {
 
 // In the AFF4 library all offsets are 64 bits - even on windows!
 typedef int64_t aff4_off_t;
+
+} // namespace aff4
 
 #endif  // SRC_AFF4_BASE_H_

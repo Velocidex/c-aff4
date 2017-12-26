@@ -24,6 +24,9 @@ specific language governing permissions and limitations under the License.
 #include <sys/stat.h>
 #include <unistd.h>
 
+namespace aff4 {
+
+
 
 AFF4ScopedPtr<AFF4Directory> AFF4Directory::NewAFF4Directory(
     DataStore* resolver, URN root_urn) {
@@ -384,3 +387,5 @@ AFF4Status AFF4Directory::RemoveDirectory(const std::string& path) {
 static AFF4Registrar<AFF4Directory> r1(AFF4_DIRECTORY_TYPE);
 
 void aff4_directory_init() {}
+
+} // namespace aff4

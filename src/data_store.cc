@@ -23,8 +23,12 @@
 #include <iostream>
 #include "aff4_symstream.h"
 
+namespace aff4 {
+
+
 #ifdef AFF4_HAS_LIBYAML_CPP
 # include <yaml-cpp/yaml.h>
+
 
 AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream& output, bool verbose) {
     // Right now this produces crashes on windows. We dont know why exactly.
@@ -161,8 +165,6 @@ DataStore::DataStore() {
     }
 }
 
-DataStore::~DataStore() {
-}
 
 class RaptorSerializer {
 protected:
@@ -383,7 +385,7 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream& output_stream, URN base, bo
             if (!verbose) {
                 if (0 == predicate.value.compare(
                         0,
-                        strlen(AFF4_VOLATILE_NAMESPACE),
+                        AFF4_VOLATILE_NAMESPACE.size(),
                         AFF4_VOLATILE_NAMESPACE)) {
                     continue;
                 }
@@ -880,3 +882,5 @@ AFF4Status AFF4ObjectCache::Remove(AFF4Object* object) {
 
     return FATAL_ERROR;
 }
+
+} // namespace aff4

@@ -29,6 +29,7 @@ specific language governing permissions and limitations under the License.
 #include <iostream>
 #include <iomanip>
 
+namespace aff4 {
 
 // Flip to true to immediately stop operations.
 bool aff4_abort_signaled = false;
@@ -366,9 +367,9 @@ std::string GetLastErrorMessage() {
 
 
 extern "C" {
-    char* AFF4_version() {
-        static char version[] = "libaff4 version " AFF4_VERSION;
-        return version;
+    const char* AFF4_version() {
+        static std::string version = "libaff4 version " + AFF4_VERSION;
+        return version.c_str();
     }
 }
 
@@ -417,7 +418,7 @@ std::string member_name_for_urn(const URN member, const URN base_urn,
     }
 
     // Now escape any chars which are non printable.
-    for (int i = 0; i < filename.size(); i++) {
+    for (unsigned int i = 0; i < filename.size(); i++) {
         char j = filename[i];
         if ((!std::isprint(j) || j == '!' || j == '$' ||
                 j == '\\' || j == ':' || j == '*' || j == '%' ||
@@ -450,7 +451,7 @@ URN urn_from_member_name(const std::string member, const URN base_urn) {
     std::stringstream result;
 
     // Now escape any chars which are non printable.
-    for (int i = 0; i < member.size(); i++) {
+    for (unsigned int i = 0; i < member.size(); i++) {
         if (member[i] == '%') {
             i++;
 
@@ -502,3 +503,15 @@ void aff4_init() {
     aff4_image_init();
     aff4_map_init();
 }
+
+
+aff4_off_t min(size_t x, aff4_off_t y) {
+    return std::min((aff4_off_t)x, y);
+}
+
+aff4_off_t max(size_t x, aff4_off_t y) {
+    return std::max((aff4_off_t)x, y);
+}
+
+
+} // namespace aff4

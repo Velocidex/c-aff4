@@ -15,6 +15,9 @@ specific language governing permissions and limitations under the License.
 #include "lexicon.h"
 #include "aff4_map.h"
 #include "aff4_image.h"
+#include "libaff4.h"
+
+namespace aff4 {
 
 
 std::string Range::SerializeToString() {
@@ -111,15 +114,15 @@ std::string AFF4Map::Read(size_t length) {
         if (length_to_start_of_range > 0) {
             // Null pad it.
             result.resize(result.size() + length_to_start_of_range);
-            length -= length_to_start_of_range;
-            readptr += length_to_start_of_range;
+            length = aff4::max(length - length_to_start_of_range, 0);
+            readptr = aff4::min(readptr + length_to_start_of_range, Size());
             continue;
         }
 
         // The readptr is inside a range.
         URN target = targets[range.target_id];
-        aff4_off_t length_to_read_in_target = std::min(
-                (aff4_off_t)length, range.map_end() - readptr);
+        size_t length_to_read_in_target = std::min(
+                length, range.map_end() - readptr);
 
         aff4_off_t offset_in_target = range.target_offset + (
                                           readptr - range.map_offset);
@@ -133,15 +136,26 @@ std::string AFF4Map::Read(size_t length) {
 
             // Null pad
             result.resize(result.size() + length_to_read_in_target);
-            length -= length_to_read_in_target;
-            readptr += length_to_read_in_target;
+            length = aff4::max(length - length_to_read_in_target, 0);
+            readptr = aff4::min(readptr + length_to_read_in_target, Size());
             continue;
         }
 
         target_stream->Seek(offset_in_target, SEEK_SET);
-        result += target_stream->Read(length_to_read_in_target);
-        readptr += length_to_read_in_target;
-        length -= length_to_read_in_target;
+        {
+            std::string data = target_stream->Read(length_to_read_in_target);
+            if (data.size() < length_to_read_in_target) {
+                LOG(ERROR) << "Map target " <<
+                    target_stream->urn.SerializeToString() <<
+                    " can not produced required " << length_to_read_in_target <<
+                    " bytes. Null padding " <<
+                    length_to_read_in_target - data.size() << " bytes!";
+                data.resize(length_to_read_in_target, 0);
+            };
+            result += data;
+        }
+        readptr = aff4::min(readptr + length_to_read_in_target, Size());
+        length = aff4::max(length - length_to_read_in_target, 0);
     }
 
     return result;
@@ -393,10 +407,10 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
 
         // Old range starts after the begining of this range. This means this
         // subrange is not covered by the old range.
-        if (old_range.map_offset > map_offset) {
+        if (old_range.map_offset > (size_t)map_offset) {
             subrange.length = std::min(
-                                  (aff4_off_t)length,
-                                  (aff4_off_t)old_range.map_offset - map_offset);
+                (aff4_off_t)length,
+                (aff4_off_t)old_range.map_offset - map_offset);
 
             // Subrange is not covered by old range, just add it to the map.
             to_add.push_back(subrange);
@@ -425,7 +439,7 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
         pre_old_range.length = subrange.map_offset - old_range.map_offset;
 
         post_old_range.length = std::min(
-                                    (aff4_off_t)post_old_range.length,
+                                    post_old_range.length,
                                     old_range.map_end() - subrange.map_end());
 
         post_old_range.map_offset = old_range.map_end() - post_old_range.length;
@@ -700,3 +714,5 @@ static AFF4Registrar<AFF4Map> image10(AFF4_LEGACY_CONTIGUOUS_IMAGE_TYPE);
 
 
 void aff4_map_init() {}
+
+} // namespace aff4

@@ -14,20 +14,18 @@
  */
 
 #include <cstring>
-
+#include "lexicon.h"
 #include "libaff4.h"
 #include "libaff4-c.h"
 
 // The application resolver
-static MemoryDataStore* resolver = nullptr;
+static aff4::MemoryDataStore* resolver = nullptr;
 // The map of handles to AFF4 Map instances.
-static std::unordered_map<int, URN> handles;
+static std::unordered_map<int, aff4::URN> handles;
 // The next handle.
 static int nextHandle;
 
 extern "C" {
-
-//void AFF4_init (void) __attribute__((constructor));
 
 void AFF4_init() {
         // Set GLOG to quiet.
@@ -36,7 +34,7 @@ void AFF4_init() {
         google::SetStderrLogging(google::GLOG_ERROR);
 
         nextHandle = 1;
-        resolver = new MemoryDataStore();
+        resolver = new aff4::MemoryDataStore();
 }
 
 int AFF4_open(char* filename) {
@@ -44,29 +42,34 @@ int AFF4_open(char* filename) {
                 AFF4_init();
         }
         int handle = nextHandle++;
-        URN urn = URN::NewURNFromFilename(filename);
-        AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(resolver, urn);
+        aff4::URN urn = aff4::URN::NewURNFromFilename(filename);
+        aff4::AFF4ScopedPtr<aff4::ZipFile> zip = aff4::ZipFile::NewZipFile(
+            resolver, urn);
         if (!zip) {
-                errno = ENOENT;
-                return -1;
+            errno = ENOENT;
+            return -1;
         }
         // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
-        std::shared_ptr<RDFValue> value = std::shared_ptr<RDFValue>(new URN(AFF4_IMAGE_TYPE));
-        std::unordered_set<URN> images = resolver->Query(URN(AFF4_TYPE), value);
+        std::shared_ptr<aff4::RDFValue> value = std::shared_ptr<aff4::RDFValue>(
+            new aff4::URN(aff4::AFF4_IMAGE_TYPE));
+        std::unordered_set<aff4::URN> images = resolver->Query(
+            aff4::URN(aff4::AFF4_TYPE), value);
         if (images.empty()) {
-                value = std::shared_ptr<RDFValue>(new URN(AFF4_LEGACY_IMAGE_TYPE));
-                images = resolver->Query(URN(AFF4_TYPE), value);
-                if (images.empty()) {
-                        resolver->Close(zip);
-                        errno = ENOENT;
-                        return -1;
-                }
-        }
-        AFF4ScopedPtr<AFF4Map> map = resolver->AFF4FactoryOpen<AFF4Map>(*(images.begin()));
-        if (map.get() == nullptr) {
+            value = std::shared_ptr<aff4::RDFValue>(
+                new aff4::URN(aff4::AFF4_LEGACY_IMAGE_TYPE));
+            images = resolver->Query(aff4::URN(aff4::AFF4_TYPE), value);
+            if (images.empty()) {
                 resolver->Close(zip);
                 errno = ENOENT;
                 return -1;
+            }
+        }
+        aff4::AFF4ScopedPtr<aff4::AFF4Map> map = resolver->AFF4FactoryOpen<
+            aff4::AFF4Map>(*(images.begin()));
+        if (map.get() == nullptr) {
+            resolver->Close(zip);
+            errno = ENOENT;
+            return -1;
         }
         handles[handle] = *(images.begin());
         return handle;
@@ -74,12 +77,12 @@ int AFF4_open(char* filename) {
 
 uint64_t AFF4_object_size(int handle) {
         if(resolver == nullptr){
-                AFF4_init();
+            AFF4_init();
         }
-        URN urn = handles[handle];
-        AFF4ScopedPtr<AFF4Map> map = resolver->AFF4FactoryOpen<AFF4Map>(urn);
+        aff4::URN urn = handles[handle];
+        auto map = resolver->AFF4FactoryOpen<aff4::AFF4Map>(urn);
         if (map.get() != nullptr) {
-                return map->Size();
+            return map->Size();
         }
         return 0;
 }
@@ -88,29 +91,29 @@ int AFF4_read(int handle, uint64_t offset, void* buffer, int length) {
         if(resolver == nullptr){
                 AFF4_init();
         }
-        URN urn = handles[handle];
-        AFF4ScopedPtr<AFF4Map> map = resolver->AFF4FactoryOpen<AFF4Map>(urn);
+        aff4::URN urn = handles[handle];
+        auto map = resolver->AFF4FactoryOpen<aff4::AFF4Map>(urn);
         int read = 0;
         if (map.get() != nullptr) {
-                map->Seek(offset, SEEK_SET);
-                std::string result = map->Read(length);
-                read = result.length();
-                std::memcpy(buffer, result.data(), read);
+            map->Seek(offset, SEEK_SET);
+            std::string result = map->Read(length);
+            read = result.length();
+            std::memcpy(buffer, result.data(), read);
         } else {
-                errno = ENOENT;
+            errno = ENOENT;
         }
         return read;
 }
 
 int AFF4_close(int handle) {
         if(resolver == nullptr){
-                AFF4_init();
+            AFF4_init();
         }
-        URN urn = handles[handle];
-        AFF4ScopedPtr<AFF4Map> map = resolver->AFF4FactoryOpen<AFF4Map>(urn);
+        aff4::URN urn = handles[handle];
+        auto map = resolver->AFF4FactoryOpen<aff4::AFF4Map>(urn);
         if (map.get() != nullptr) {
-                resolver->Close(map);
-                handles.erase(handle);
+            resolver->Close(map);
+            handles.erase(handle);
         }
         return 0;
 }

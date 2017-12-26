@@ -14,6 +14,10 @@
 #include <iostream>
 #include <functional>
 
+
+namespace aff4 {
+
+
 class DataStore;
 class URN;
 
@@ -50,3 +54,6 @@ class ClassFactory {
 };
 
 #endif  // SRC_AFF4_REGISTRY_H_
+
+
+} // namespace aff4

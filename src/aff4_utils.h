@@ -23,6 +23,8 @@ specific language governing permissions and limitations under the License.
 #include <string>
 #include <sstream>
 
+namespace aff4 {
+
 #define UNUSED(x) (void)x
 
 std::string aff4_sprintf(std::string fmt, ...);
@@ -36,5 +38,8 @@ inline uint64_t time_from_epoch() {
 std::string GetLastErrorMessage();
 
 std::vector<std::string> split(const std::string& s, char delim);
+
+
+} // namespace aff4
 
 #endif  // SRC_AFF4_UTILS_H_

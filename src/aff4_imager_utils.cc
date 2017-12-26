@@ -7,7 +7,7 @@
 #include <iostream>
 #include <time.h>
 
-//using std::cout;
+namespace aff4 {
 
 
 // This will be flipped by the signal handler.
@@ -520,7 +520,7 @@ std::vector<std::string> BasicImager::GlobFilename(std::string glob_expression) 
         return result;
     }
 
-    for (int i = 0; i < glob_data.gl_pathc; i++) {
+    for (unsigned int i = 0; i < glob_data.gl_pathc; i++) {
         result.push_back(glob_data.gl_pathv[i]);
     }
 
@@ -561,3 +561,5 @@ AFF4Status BasicImager::Initialize() {
 
     return STATUS_OK;
 }
+
+} // namespace aff4

@@ -21,7 +21,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4_imager_utils.h"
 #include <glog/logging.h>
 
-BasicImager imager;
+
+aff4::BasicImager imager;
 
 int main(int argc, char* argv[]) {
     // Initialize Google's logging library.
@@ -30,8 +31,8 @@ int main(int argc, char* argv[]) {
     google::LogToStderr();
     google::SetStderrLogging(google::GLOG_ERROR);
 
-    AFF4Status res = imager.Run(argc, argv);
-    if (res == STATUS_OK || res == CONTINUE) {
+    aff4::AFF4Status res = imager.Run(argc, argv);
+    if (res == aff4::STATUS_OK || res == aff4::CONTINUE) {
         return 0;
     }
 

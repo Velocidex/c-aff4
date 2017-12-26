@@ -29,6 +29,8 @@ specific language governing permissions and limitations under the License.
 #endif
 
 
+namespace aff4 {
+
 /***************************************************************
 FileBackedObject implementation.
 ****************************************************************/
@@ -398,3 +400,5 @@ AFF4FileRegistrer file1("file");
 AFF4Registrar<FileBackedObject> file2(AFF4_FILE_TYPE);
 
 void aff4_file_init() {}
+
+} // namespace aff4

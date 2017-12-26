@@ -18,6 +18,9 @@ specific language governing permissions and limitations under the License.
 
 #include "config.h"
 
+namespace aff4 {
+
+
 /**
  * @file
  * @author scudette <scudette@google.com>
@@ -48,5 +51,6 @@ typedef enum {
     ABORTED = -11
 } AFF4Status;
 
+} // namespace aff4
 
 #endif // AFF4_ERRORS_H

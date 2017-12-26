@@ -15,8 +15,12 @@ specific language governing permissions and limitations under the License.
 
 #include "lexicon.h"
 #include "aff4_image.h"
+#include "libaff4.h"
 #include <zlib.h>
 #include <snappy.h>
+
+
+namespace aff4 {
 
 
 AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
@@ -75,6 +79,9 @@ AFF4Status AFF4Image::LoadFromURN() {
 
         if (resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
             size = value.value;
+        } else {
+            LOG(ERROR) << "ImageStream " << urn.SerializeToString() <<
+                " Does not specify a size. Is this part of a split image set?";
         }
     } else {
         // AFF4 Legacy
@@ -619,7 +626,7 @@ std::string AFF4Image::Read(size_t length) {
         return "";
     }
 
-    length = std::min((aff4_off_t)length, Size() - readptr);
+    length = std::min((aff4_off_t)length, aff4::max(0, Size() - readptr));
 
     int initial_chunk_offset = readptr % chunk_size;
     unsigned int initial_chunk_id = readptr / chunk_size;
@@ -650,7 +657,7 @@ std::string AFF4Image::Read(size_t length) {
     }
 
     result.resize(length);
-    readptr += length;
+    readptr = aff4::min(readptr + length, Size());
 
     return result;
 }
@@ -721,3 +728,5 @@ std::string AFF4Image::_FixupBevvyData(std::string* data){
     delete[] bevy_index_array;
     return result;
 }
+
+} // namespace aff4

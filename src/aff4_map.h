@@ -21,6 +21,9 @@ specific language governing permissions and limitations under the License.
 #include "aff4_io.h"
 #include <map>
 
+
+namespace aff4 {
+
 class AFF4Map;
 
 
@@ -38,11 +41,11 @@ class Range: public BinaryRange {
     explicit Range(BinaryRange range): BinaryRange(range) {}
     Range(): BinaryRange() {}
 
-    aff4_off_t map_end() {
+    uint64_t map_end() {
         return map_offset + length;
     }
 
-    aff4_off_t target_end() {
+    uint64_t target_end() {
         return target_offset + length;
     }
 
@@ -99,5 +102,7 @@ class AFF4Map: public AFF4Stream {
 };
 
 extern void aff4_map_init();
+
+} // namespace aff4
 
 #endif  // SRC_AFF4_MAP_H_

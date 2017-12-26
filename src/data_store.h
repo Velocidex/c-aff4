@@ -32,9 +32,7 @@ specific language governing permissions and limitations under the License.
 
 #include "rdf.h"
 
-//using std::string;
-//using std::unordered_map;
-//using std::unordered_set;
+namespace aff4 {
 
 // Forward declerations for basic AFF4 types.
 class AFF4Object;
@@ -348,7 +346,7 @@ class DataStore {
 
   public:
     DataStore();
-    virtual ~DataStore();
+    virtual ~DataStore() {}
 
     /// You can add new namespaces here for turtle serialization.
     std::vector<std::pair<std::string, std::string>> namespaces;
@@ -641,5 +639,7 @@ class MemoryDataStore: public DataStore {
     virtual AFF4Status Clear();
     virtual AFF4Status Flush();
 };
+
+} // namespace aff4
 
 #endif  //  SRC_DATA_STORE_H_

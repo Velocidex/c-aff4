@@ -27,6 +27,8 @@ specific language governing permissions and limitations under the License.
 #include <string.h>
 
 
+namespace aff4 {
+
 class AFF4Directory: public AFF4Volume {
   public:
     // Where we are stored.
@@ -65,5 +67,7 @@ class AFF4Directory: public AFF4Volume {
 };
 
 void aff4_directory_init();
+
+} // namespace aff4
 
 #endif    // SRC_AFF4_DIRECTORY_H_

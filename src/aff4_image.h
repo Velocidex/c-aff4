@@ -17,8 +17,10 @@ specific language governing permissions and limitations under the License.
 #define SRC_AFF4_IMAGE_H_
 
 #include "config.h"
-
 #include "aff4_io.h"
+
+namespace aff4 {
+
 
 /**
  * An AFF4Image is an object which stores an image inside an AFF4Volume.
@@ -169,5 +171,8 @@ class AFF4Image: public AFF4Stream {
 };
 
 extern void aff4_image_init();
+
+} // namespace aff4
+
 
 #endif  // SRC_AFF4_IMAGE_H_

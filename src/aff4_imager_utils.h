@@ -34,6 +34,9 @@ specific language governing permissions and limitations under the License.
 #include <set>
 #include <list>
 
+namespace aff4 {
+
+
 /**
  * A Convenience method to add a vector of input URNs to a volume created on an
  * output URN.
@@ -240,5 +243,7 @@ class BasicImager {
     virtual void Abort();
     virtual ~BasicImager() {}
 };
+
+} // namespace aff4
 
 #endif  // SRC_AFF4_IMAGER_UTILS_H_

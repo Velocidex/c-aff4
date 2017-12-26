@@ -32,6 +32,9 @@
 #include "lexicon.h"
 #include "libaff4.h"
 
+
+namespace aff4 {
+
 ZipFile::ZipFile(DataStore* resolver) :
     AFF4Volume(resolver) {
 
@@ -78,9 +81,9 @@ AFF4ScopedPtr<ZipFile> ZipFile::NewZipFile(DataStore* resolver, URN backing_stor
         if (!ver) {
             return result;
         } else {
-            ver->Write("major=" AFF4_VERSION_MAJOR "\n");
-            ver->Write("minor=" AFF4_VERSION_MINOR "\n");
-            ver->Write("tool=" AFF4_TOOL " " PACKAGE_VERSION "\n");
+            ver->Write("major=" + AFF4_VERSION_MAJOR + "\n");
+            ver->Write("minor=" + AFF4_VERSION_MINOR + "\n");
+            ver->Write("tool=" + AFF4_TOOL + " " + PACKAGE_VERSION + "\n");
             ver->Flush();
         }
     }
@@ -635,7 +638,7 @@ std::string ZipFileSegment::Read(size_t length) {
     }
 
     AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(_backing_store_urn);
-    if (!backing_store || readptr > _backing_store_length) {
+    if (!backing_store || (size_t)readptr > _backing_store_length) {
         return "";
     }
 
@@ -1071,3 +1074,5 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
 // Register ZipFile as an AFF4 object.
 static AFF4Registrar<ZipFile> r1(AFF4_ZIP_TYPE);
 static AFF4Registrar<ZipFileSegment> r2(AFF4_ZIP_SEGMENT_TYPE);
+
+} // namespace aff4
