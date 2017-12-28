@@ -80,8 +80,9 @@ AFF4Status AFF4Image::LoadFromURN() {
         if (resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
             size = value.value;
         } else {
-            LOG(ERROR) << "ImageStream " << urn.SerializeToString() <<
-                " Does not specify a size. Is this part of a split image set?";
+            resolver->logger->error(
+                "ImageStream {} does not specify a size. Is this part of a split image set?",
+                urn.SerializeToString());
         }
     } else {
         // AFF4 Legacy
@@ -103,17 +104,17 @@ AFF4Status AFF4Image::LoadFromURN() {
     if (STATUS_OK == resolver->Get(urn, AFF4_IMAGE_COMPRESSION, compression_urn)) {
         compression = CompressionMethodFromURN(compression_urn);
         if (compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
-            LOG(ERROR) << "Compression method " <<
-                       compression_urn.SerializeToString().c_str() <<
-                       " is not supported by this implementation.";
+            resolver->logger->error(
+                "Compression method {} is not supported by this implementation.",
+                compression_urn.SerializeToString());
             return NOT_IMPLEMENTED;
         }
     } else if (STATUS_OK == resolver->Get(urn, AFF4_LEGACY_IMAGE_COMPRESSION, compression_urn)) {
         compression = CompressionMethodFromURN(compression_urn);
         if (compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
-            LOG(ERROR) << "Compression method " <<
-                       compression_urn.SerializeToString().c_str() <<
-                       " is not supported by this implementation.";
+            resolver->logger->error(
+                "Compression method {} is not supported by this implementation.",
+                compression_urn.SerializeToString());
             return NOT_IMPLEMENTED;
         }
     }
@@ -126,7 +127,7 @@ AFF4Status AFF4Image::LoadFromURN() {
 AFF4Status AFF4Image::_FlushBevy() {
     // If the bevy is empty nothing else to do.
     if (bevy.Size() == 0) {
-        LOG(INFO) << urn.SerializeToString() << "Bevy is empty.";
+        resolver->logger->info("Bevy {} is empty.", urn.SerializeToString());
         return STATUS_OK;
     }
 
@@ -148,7 +149,8 @@ AFF4Status AFF4Image::_FlushBevy() {
     AFF4ScopedPtr<AFF4Stream> bevy_stream = volume->CreateMember(bevy_urn);
 
     if (!bevy_index_stream || !bevy_stream) {
-        LOG(ERROR) << "Unable to create bevy URN";
+        resolver->logger->error("Unable to create bevy URN {}",
+                               bevy_urn.SerializeToString());
         return IO_ERROR;
     }
 
@@ -221,18 +223,37 @@ AFF4Status AFF4Image::FlushChunk(const char* data, size_t length) {
 
     // The index contains the offset and the length of each chunk.
     if (bevy_index.Write(
-                reinterpret_cast<char*>(&bevy_offset), sizeof(bevy_offset)) < 0) {
+            reinterpret_cast<char*>(&bevy_offset), sizeof(bevy_offset)) < 0) {
         return IO_ERROR;
     }
 
+    // If by attempting to compress the chunk, we actually made it
+    // bigger, we just store the chunk uncompressed. The decompressor
+    // can figure that this is uncompressed by comparing the chunk
+    // size to the compressed chunk size.
     bevy_chunk_length = output.size();
-    if (bevy_index.Write(
-                reinterpret_cast<char*>(&bevy_chunk_length), sizeof(bevy_chunk_length)) < 0) {
-        return IO_ERROR;
-    }
+    if (bevy_chunk_length >= length) {
+        bevy_chunk_length = length;
+        if (bevy_index.Write(
+                reinterpret_cast<char*>(&bevy_chunk_length),
+                sizeof(bevy_chunk_length)) < 0) {
+            return IO_ERROR;
+        }
 
-    if (bevy.Write(output) < 0) {
-        return IO_ERROR;
+        if (bevy.Write(data, length) < 0) {
+            return IO_ERROR;
+        }
+
+    } else {
+        if (bevy_index.Write(
+                reinterpret_cast<char*>(&bevy_chunk_length),
+                sizeof(bevy_chunk_length)) < 0) {
+            return IO_ERROR;
+        }
+
+        if (bevy.Write(output) < 0) {
+            return IO_ERROR;
+        }
     }
 
     chunk_count_in_bevy++;
@@ -376,7 +397,8 @@ class _CompressorStream: public AFF4Stream {
             // Should never happen because the object should never accept this
             // compression URN.
             default:
-                LOG(FATAL) << "Unexpected compression type set";
+                resolver->logger->critical("Unexpected compression type set {}",
+                                          owner->compression);
                 result = NOT_IMPLEMENTED;
         }
 
@@ -413,8 +435,8 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
     }
 
     if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-        LOG(ERROR) << "Unable to find storage for urn " <<
-                   urn.SerializeToString().c_str();
+        resolver->logger->error("Unable to find storage for urn {}",
+                               urn.SerializeToString());
         return NOT_FOUND;
     }
 
@@ -439,8 +461,8 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
         {
             AFF4ScopedPtr<AFF4Stream> bevy = volume->CreateMember(bevy_urn);
             if (!bevy) {
-                LOG(ERROR) << "Unable to create bevy " <<
-                           bevy_urn.SerializeToString().c_str();
+                resolver->logger->error("Unable to create bevy {}",
+                                       bevy_urn.SerializeToString());
                 return IO_ERROR;
             }
 
@@ -461,8 +483,8 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
                     bevy_index_urn);
 
             if (!bevy_index) {
-                LOG(ERROR) << "Unable to create bevy_index " <<
-                           bevy_index_urn.SerializeToString().c_str();
+                resolver->logger->error("Unable to create bevy_index {}",
+                                       bevy_index_urn.SerializeToString());
                 return IO_ERROR;
             }
 
@@ -499,20 +521,19 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
 AFF4Status AFF4Image::_ReadChunkFromBevy(
     std::string& result, unsigned int chunk_id, AFF4ScopedPtr<AFF4Stream>& bevy,
     BevvyIndex bevy_index[], uint32_t index_size) {
-
     unsigned int chunk_id_in_bevy = chunk_id % chunks_per_segment;
     BevvyIndex entry;
 
     if (index_size == 0) {
-        LOG(ERROR) << "Index empty in " <<
-                   urn.SerializeToString() << ":" << chunk_id;
+        resolver->logger->error("Index empty in {} : chunk {}",
+                               urn.SerializeToString(), chunk_id);
         return IO_ERROR;
     }
 
     // The segment is not completely full.
     if (chunk_id_in_bevy >= index_size) {
-        LOG(ERROR) << "Bevy index too short in " <<
-                   urn.SerializeToString() << ":" << chunk_id;
+        resolver->logger->error("Bevy index too short in {} : {}",
+                               urn.SerializeToString(), chunk_id);
         return IO_ERROR;
 
     } else {
@@ -534,30 +555,30 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
         res = STATUS_OK;
     } else {
         switch (compression) {
-            case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB:
-                res = DeCompressZlib_(cbuffer.data(), cbuffer.length(), &buffer);
-                break;
+        case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB:
+            res = DeCompressZlib_(cbuffer.data(), cbuffer.length(), &buffer);
+            break;
 
-            case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:
-                res = DeCompressSnappy_(cbuffer.data(), cbuffer.length(), &buffer);
-                break;
+        case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:
+            res = DeCompressSnappy_(cbuffer.data(), cbuffer.length(), &buffer);
+            break;
 
-            case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
-                buffer = cbuffer;
-                res = STATUS_OK;
-                break;
+        case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
+            buffer = cbuffer;
+            res = STATUS_OK;
+            break;
 
             // Should never happen because the object should never accept this
             // compression URN.
-            default:
-                LOG(FATAL) << "Unexpected compression type set";
-                res = NOT_IMPLEMENTED;
+        default:
+            resolver->logger->critical("Unexpected compression type set");
+            res = NOT_IMPLEMENTED;
         }
     }
 
     if (res != STATUS_OK) {
-        LOG(ERROR) << urn.SerializeToString() <<
-                   ": Unable to uncompress chunk " << chunk_id;
+        resolver->logger->error(" {} : Unable to uncompress chunk {}",
+                                urn.SerializeToString(), chunk_id);
         return res;
     }
 
@@ -581,8 +602,8 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
             bevy_urn);
 
         if (!bevy_index || !bevy) {
-            LOG(ERROR) << "Unable to open bevy " <<
-                bevy_urn.SerializeToString();
+            resolver->logger->error("Unable to open bevy {}",
+                                   bevy_urn.SerializeToString());
             return -1;
         }
 

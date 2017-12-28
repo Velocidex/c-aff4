@@ -55,8 +55,6 @@ specific language governing permissions and limitations under the License.
 #include "lexicon.h"
 #include "aff4_errors.h"
 #include "rdf.h"
-#include <glog/logging.h>
-
 
 namespace aff4 {
 

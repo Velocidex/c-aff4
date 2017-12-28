@@ -22,6 +22,7 @@ specific language governing permissions and limitations under the License.
 #include <unistd.h>
 #include <uriparser/Uri.h>
 #include <cerrno>
+#include <spdlog/fmt/ostr.h>
 
 #ifdef _WIN32
 #include <shlwapi.h>
@@ -72,6 +73,11 @@ AFF4Status RDFBytes::UnSerializeFromString(const char* data, int length) {
     return STATUS_OK;
 }
 
+
+std::ostream& operator<<(std::ostream& os, const RDFValue& c) {
+    return os << c.SerializeToString();
+}
+
 raptor_term* RDFBytes::GetRaptorTerm(raptor_world* world) const {
     std::string value_string(SerializeToString());
 
@@ -98,7 +104,7 @@ AFF4Status XSDString::UnSerializeFromString(const char* data, int length) {
 raptor_term* XSDString::GetRaptorTerm(raptor_world* world) const {
     std::string value_string(SerializeToString());
     raptor_uri* uri = raptor_new_uri(
-        world, (const unsigned char*)XSDStringType.c_str());
+        world, (const unsigned char*)XSDStringType);
 
     raptor_term* result= raptor_new_term_from_counted_literal(
                              world,
@@ -121,7 +127,7 @@ uri_components URN::Parse() const {
     state.uri = &uri;
 
     if(uriParseUriA(&state, value.c_str()) != URI_SUCCESS) {
-        LOG(INFO) << "Failed to parse " << value << " as a URN";
+        //LOG(INFO) << "Failed to parse " << value << " as a URN";
     } else {
         result.scheme.assign(
             uri.scheme.first, uri.scheme.afterLast - uri.scheme.first);
@@ -149,7 +155,7 @@ URN::URN(const char* data): URN() {
     state.uri = &uri;
 
     if(uriParseUriA(&state, data) != URI_SUCCESS) {
-        LOG(INFO) << "Failed to parse " << data << " as a URN";
+        //LOG(INFO) << "Failed to parse " << data << " as a URN";
     };
 
     // No scheme specified - assume this is a filename.
@@ -159,19 +165,23 @@ URN::URN(const char* data): URN() {
     };
 
     if (uriNormalizeSyntaxA(&uri) != URI_SUCCESS) {
-        LOG(INFO) << "Failed to normalize";
+        //LOG(INFO) << "Failed to normalize";
     }
 
     int charsRequired;
     if (uriToStringCharsRequiredA(&uri, &charsRequired) == URI_SUCCESS) {
         charsRequired++;
 
-        char* tmp = new char[charsRequired * sizeof(char)];
+        char* tmp = new char[charsRequired * sizeof(char) + 10];
+        memset(tmp, 0, charsRequired * sizeof(char) + 10);
+
         if (uriToStringA(tmp, &uri, charsRequired, nullptr) != URI_SUCCESS) {
-            LOG(INFO) << "Failed";
+            printf("Failed\n");
+            //LOG(INFO) << "Failed";
         };
 
-        value = (std::string(tmp));
+        tmp[charsRequired * sizeof(char) + 1] = 0;
+        value = tmp;
         delete[] tmp;
     };
 
@@ -291,7 +301,7 @@ std::string URN::ToFilename() const {
 
     res = PathCreateFromUrl(value.c_str(), path, &path_length, 0);
     if (res == S_FALSE || res == S_OK) {
-        LOG(INFO) << "Converted " << value << " into " << path;
+        //LOG(INFO) << "Converted " << value << " into " << path;
         return path;
 
         // Failing the MS API we fallback to the urlparser.
@@ -334,7 +344,8 @@ static std::string abspath(std::string path) {
         }
 
         // Remove . and .. sequences.
-        return _NormalizePath(std::string(cwd.get()) + URN_PATH_SEPARATOR + path);
+        return _NormalizePath(
+            std::string(cwd.get()) + URN_PATH_SEPARATOR + path);
     }
 }
 
@@ -445,7 +456,7 @@ AFF4Status XSDInteger::UnSerializeFromString(const char* data, int length) {
 raptor_term* XSDInteger::GetRaptorTerm(raptor_world* world) const {
     std::string value_string(SerializeToString());
     raptor_uri* uri = raptor_new_uri(
-        world, (const unsigned char*)XSDIntegerType.c_str());
+        world, (const unsigned char*)XSDIntegerType);
 
     raptor_term* result = raptor_new_term_from_counted_literal(
         world,
@@ -481,7 +492,7 @@ AFF4Status XSDBoolean::UnSerializeFromString(const char* data, int length) {
 raptor_term* XSDBoolean::GetRaptorTerm(raptor_world* world) const {
     std::string value_string(SerializeToString());
     raptor_uri* uri = raptor_new_uri(
-        world, (const unsigned char*)XSDBooleanType.c_str());
+        world, (const unsigned char*)XSDBooleanType);
 
     raptor_term* result = raptor_new_term_from_counted_literal(
         world,

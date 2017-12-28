@@ -19,24 +19,17 @@ specific language governing permissions and limitations under the License.
 */
 #include "libaff4.h"
 #include "aff4_imager_utils.h"
-#include <glog/logging.h>
 
 
 aff4::BasicImager imager;
 
 int main(int argc, char* argv[]) {
-    // Initialize Google's logging library.
-    google::InitGoogleLogging(argv[0]);
-
-    google::LogToStderr();
-    google::SetStderrLogging(google::GLOG_ERROR);
-
     aff4::AFF4Status res = imager.Run(argc, argv);
     if (res == aff4::STATUS_OK || res == aff4::CONTINUE) {
         return 0;
     }
 
-    LOG(ERROR) << "Imaging failed with error: " << res;
+    imager.resolver.logger->error("Imaging failed with error: {}", res);
 
     return res;
 }

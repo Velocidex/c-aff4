@@ -21,8 +21,6 @@ specific language governing permissions and limitations under the License.
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <glog/logging.h>
-
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -48,7 +46,8 @@ static std::string _GetFilename(DataStore* resolver, const URN& urn) {
 }
 
 // Recursively create intermediate directories.
-AFF4Status _CreateIntermediateDirectories(std::vector<std::string> components) {
+AFF4Status _CreateIntermediateDirectories(
+    DataStore *resolver, std::vector<std::string> components) {
     std::string path = PATH_SEP_STR;
 
 #ifdef _WIN32
@@ -58,27 +57,29 @@ AFF4Status _CreateIntermediateDirectories(std::vector<std::string> components) {
 
     for (auto component : components) {
         path = path + component + PATH_SEP_STR;
-        LOG(INFO) << "Creating intermediate directories " << path;
+        resolver->logger->info("Creating intermediate directories {}",
+                               path);
 
         if (AFF4Directory::IsDirectory(path)) {
             continue;
         }
 
         // Directory does not exist - Try to make it.
-        if (AFF4Directory::MkDir(path) == STATUS_OK) {
+        if (AFF4Directory::MkDir(resolver, path) == STATUS_OK) {
             continue;
         }
 
-        LOG(ERROR) << "Unable to create intermediate directory: " <<
-                   GetLastErrorMessage();
+        resolver->logger->error(
+            "Unable to create intermediate directory: {}",
+            GetLastErrorMessage());
         return IO_ERROR;
     }
 
     return STATUS_OK;
 }
 
-AFF4Status _CreateIntermediateDirectories(std::string dir_name) {
-    return _CreateIntermediateDirectories(split(dir_name, PATH_SEP));
+AFF4Status _CreateIntermediateDirectories(DataStore *resolver, std::string dir_name) {
+    return _CreateIntermediateDirectories(resolver, split(dir_name, PATH_SEP));
 }
 
 
@@ -98,7 +99,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
         return INVALID_INPUT;
     }
 
-    LOG(INFO) << "Opening file " << filename;
+    resolver->logger->info("Opening file {}", filename);
 
     vector<string> directory_components = split(filename, PATH_SEP);
     directory_components.pop_back();
@@ -115,7 +116,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
         properties.writable = true;
 
         // Only create directories if we are allowed to.
-        AFF4Status res = _CreateIntermediateDirectories(directory_components);
+        AFF4Status res = _CreateIntermediateDirectories(resolver, directory_components);
         if (res != STATUS_OK) {
             return res;
         }
@@ -126,7 +127,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
         properties.writable = true;
 
         // Only create directories if we are allowed to.
-        AFF4Status res = _CreateIntermediateDirectories(directory_components);
+        AFF4Status res = _CreateIntermediateDirectories(resolver, directory_components);
         if (res != STATUS_OK) {
             return res;
         }
@@ -141,8 +142,9 @@ AFF4Status FileBackedObject::LoadFromURN() {
                     nullptr);
 
     if (fd == INVALID_HANDLE_VALUE) {
-        LOG(ERROR) << "Can not open file " << filename << " :" <<
-                   GetLastErrorMessage();
+        resolver->logger->error(
+            "Can not open file {} : {}", filename,
+            GetLastErrorMessage());
 
         return IO_ERROR;
     }
@@ -185,13 +187,13 @@ string FileBackedObject::Read(size_t length) {
         LARGE_INTEGER tmp;
         tmp.QuadPart = readptr;
         if (!SetFilePointerEx(fd, tmp, &tmp, FILE_BEGIN)) {
-            LOG(INFO) << "Failed to seek:" << GetLastErrorMessage();
+            resolver->logger->info("Failed to seek: {}", GetLastErrorMessage());
         }
     }
 
     if (!ReadFile(fd, result.get(), buffer_size, &buffer_size, nullptr)) {
-        LOG(INFO) << "Reading failed " << readptr << ": " <<
-                  GetLastErrorMessage();
+        resolver->logger->error("Reading failed at {:x}: {}", readptr,
+                                GetLastErrorMessage());
 
         return "";
     }
@@ -277,7 +279,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
         properties.writable = true;
 
         // Only create directories if we are allowed to.
-        AFF4Status res = _CreateIntermediateDirectories(directory_components);
+        AFF4Status res = _CreateIntermediateDirectories(resolver, directory_components);
         if (res != STATUS_OK) {
             return res;
         }
@@ -287,20 +289,20 @@ AFF4Status FileBackedObject::LoadFromURN() {
         properties.writable = true;
 
         // Only create directories if we are allowed to.
-        AFF4Status res = _CreateIntermediateDirectories(directory_components);
+        AFF4Status res = _CreateIntermediateDirectories(resolver, directory_components);
         if (res != STATUS_OK) {
             return res;
         }
     }
 
-    LOG(INFO) << "Opening file " << filename;
+    resolver->logger->info("Opening file {}", filename);
 
     fd = open(filename.c_str(), flags,
               S_IRWXU | S_IRWXG | S_IRWXO);
 
     if (fd < 0) {
-        LOG(ERROR) << "Can not open file " << filename << " :" <<
-                   GetLastErrorMessage();
+        resolver->logger->error("Can not open file {}: {}", filename,
+                                GetLastErrorMessage());
         return IO_ERROR;
     }
 

@@ -73,7 +73,6 @@ AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
 
 class BasicImager {
   protected:
-    MemoryDataStore resolver;
     URN volume_URN;
 
     URN output_volume_urn;
@@ -108,7 +107,7 @@ class BasicImager {
 
     std::unique_ptr<TCLAP::CmdLine> cmd;
 
-    virtual AFF4Status handle_Debug();
+    virtual AFF4Status handle_logging();
     virtual AFF4Status handle_aff4_volumes();
     virtual AFF4Status handle_view();
     virtual AFF4Status parse_input();
@@ -156,7 +155,8 @@ class BasicImager {
             }
         }
 
-        LOG(FATAL) << "Parameter " << name << " not known";
+        resolver.logger->critical("Parameter {} not known", name);
+        abort();
     }
 
     template<typename T>
@@ -176,6 +176,8 @@ class BasicImager {
     std::vector<std::string> GlobFilename(std::string glob) const;
 
   public:
+    MemoryDataStore resolver;
+
     /**
      * This should be overloaded for imagers that need to do something before they
      * start. The method is called during the imager's initialization routine.
@@ -188,8 +190,9 @@ class BasicImager {
 
     virtual AFF4Status RegisterArgs() {
         AddArg(new TCLAP::SwitchArg("V", "view", "View AFF4 metadata", false));
-        AddArg(new TCLAP::SwitchArg("d", "debug", "Display debugging logging",
-                                    false));
+        AddArg(new TCLAP::MultiSwitchArg(
+                   "d", "debug", "Display debugging logging (repeat for more info)",
+                   false));
 
         AddArg(new TCLAP::SwitchArg(
                    "v", "verbose", "Display more verbose information", false));

@@ -20,7 +20,7 @@ AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
 
     // We are allowed to write on the output file.
     if (truncate) {
-        LOG(INFO) << "Truncating output file: " << output_urn.value.c_str();
+        resolver.logger->info("Truncating output file: {}", output_urn.value);
         resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
     } else {
         resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
@@ -30,8 +30,7 @@ AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
                                            output_urn);
 
     if (!output) {
-        LOG(ERROR) << "Failed to create output file: " << output_urn.value.c_str()
-                   << ".\n";
+        resolver.logger->error("Failed to create output file: {}.", output_urn.value);
         return IO_ERROR;
     }
 
@@ -41,14 +40,13 @@ AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
     }
 
     for (URN input_urn : input_urns) {
-        std::cout << "Adding " << input_urn.value.c_str() << "\n";
+        std::cerr << "Adding " << input_urn.value.c_str() << "\n";
 
         AFF4ScopedPtr<AFF4Stream> input = resolver.AFF4FactoryOpen<AFF4Stream>(
                                               input_urn);
 
         if (!input) {
-            LOG(ERROR) << "Failed to open input file: " << input_urn.value.c_str()
-                       << ".\n";
+            resolver.logger->error("Failed to open input file: {}", input_urn.value);
             result = IO_ERROR;
             continue;
         }
@@ -83,7 +81,7 @@ AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
     UNUSED(buffer_size);
     // We are allowed to write on the output file.
     if (truncate) {
-        LOG(INFO) << "Truncating output file: " << output_urn.value.c_str();
+        resolver.logger->info("Truncating output file: {}", output_urn.value);
         resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
     } else {
         resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
@@ -95,14 +93,14 @@ AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
                                            output_urn);
 
     if (!input) {
-        LOG(ERROR) << "Failed to open input stream. " <<
-                   input_urn.SerializeToString() << "\n";
+        resolver.logger->error("Failed to open input stream {}",
+                               input_urn.SerializeToString());
         return IO_ERROR;
     }
 
     if (!output) {
-        LOG(ERROR) << "Failed to create output file: " <<
-                   output_urn.SerializeToString() << "\n";
+        resolver.logger->error("Failed to create output file: {}",
+                               output_urn.SerializeToString());
         return IO_ERROR;
     }
 
@@ -132,7 +130,7 @@ AFF4Status BasicImager::Run(int argc, char** argv)  {
         cmd.parse(argc, argv);
         res =  ParseArgs();
     } catch(const TCLAP::ArgException& e) {
-        LOG(ERROR) << e.error() << " " << e.argId();
+        resolver.logger->error("Error {} {}", e.error(), e.argId());
         return GENERIC_ERROR;
     }
 
@@ -144,12 +142,13 @@ AFF4Status BasicImager::Run(int argc, char** argv)  {
 }
 
 AFF4Status BasicImager::ParseArgs() {
-    AFF4Status result = CONTINUE;
+    AFF4Status result = handle_logging();
 
     // Check for incompatible commands.
     if (Get("export")->isSet() && Get("input")->isSet()) {
-        std::cout << "--export and --input are incompatible. "
-                  "Please select only one.\n";
+        resolver.logger->critical(
+            "The --export and --input flags are incompatible. "
+            "Please select only one.");
         return INCOMPATIBLE_TYPES;
     }
 
@@ -159,10 +158,6 @@ AFF4Status BasicImager::ParseArgs() {
 
     if (result == CONTINUE && Get("compression")->isSet()) {
         result = handle_compression();
-    }
-
-    if (result == CONTINUE && Get("debug")->isSet()) {
-        result = handle_Debug();
     }
 
     if (result == CONTINUE && Get("aff4_volumes")->isSet()) {
@@ -191,19 +186,39 @@ AFF4Status BasicImager::ProcessArgs() {
 }
 
 
-AFF4Status BasicImager::handle_Debug() {
-    google::SetStderrLogging(google::GLOG_INFO);
+AFF4Status BasicImager::handle_logging() {
+    int level = GetArg<TCLAP::MultiSwitchArg>("debug")->getValue();
+    switch(level) {
+    case 0:
+        resolver.logger->set_level(spdlog::level::err);
+        break;
+
+    case 1:
+        resolver.logger->set_level(spdlog::level::info);
+        break;
+
+    case 2:
+        resolver.logger->set_level(spdlog::level::debug);
+        break;
+
+    default:
+        resolver.logger->set_level(spdlog::level::trace);
+        break;
+    }
+
+
+    resolver.logger->set_pattern("%T %L %v");
 
     return CONTINUE;
 }
 
 AFF4Status BasicImager::handle_aff4_volumes() {
     std::vector<std::string> v = GetArg<TCLAP::UnlabeledMultiArg<std::string>>(
-                                     "aff4_volumes")->getValue();
+        "aff4_volumes")->getValue();
 
     for (unsigned int i = 0; i < v.size(); i++) {
         URN urn = URN::NewURNFromFilename(v[i]);
-        LOG(INFO) << "Preloading AFF4 Volume: " << urn.SerializeToString();
+        resolver.logger->info("Preloading AFF4 Volume: {}", urn.SerializeToString());
 
         // Currently we support AFF4Directory and ZipFile:
         if (AFF4Directory::IsDirectory(urn)) {
@@ -211,8 +226,8 @@ AFF4Status BasicImager::handle_aff4_volumes() {
                     &resolver, urn);
 
             if (!volume) {
-                LOG(ERROR) << "Directory " << v[i] << " does not appear to be "
-                           "a valid AFF4 volume.";
+                resolver.logger->error("Directory {}  does not appear to be "
+                                       "a valid AFF4 volume.", v[i]);
                 return IO_ERROR;
             }
 
@@ -220,8 +235,8 @@ AFF4Status BasicImager::handle_aff4_volumes() {
         } else {
             AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
             if (zip.get() == nullptr || zip->members.size() == 0) {
-                LOG(ERROR) << "Unable to load " << v[i]
-                           << " as an existing AFF4 Volume.";
+                resolver.logger->error(
+                    "Unable to load {} as an existing AFF4 Volume.", v[i]);
                 return IO_ERROR;
             }
 
@@ -261,8 +276,8 @@ AFF4Status BasicImager::process_input() {
         for (std::string input : GlobFilename(glob)) {
             URN input_urn(URN::NewURNFromFilename(input, false));
 
-            std::cout << "Adding " << input.c_str() << " as " <<
-                      input_urn.SerializeToString() << "\n";
+            std::cerr << "Adding " << input.c_str() << " as " <<
+                input_urn.SerializeToString() << "\n";
 
             // Try to open the input.
             AFF4ScopedPtr<AFF4Stream> input_stream = resolver.AFF4FactoryOpen<
@@ -270,7 +285,7 @@ AFF4Status BasicImager::process_input() {
 
             // Not valid - skip it.
             if (!input_stream) {
-                LOG(ERROR) << "Unable to find " << input_urn.SerializeToString();
+                resolver.logger->error("Unable to find {}", input_urn.SerializeToString());
                 res = CONTINUE;
                 continue;
             }
@@ -339,7 +354,8 @@ AFF4Status BasicImager::process_input() {
 
 AFF4Status BasicImager::handle_export() {
     if (!Get("output")->isSet()) {
-        std::cout << "ERROR: Can not specify an export without an output\n";
+        resolver.logger->error(
+            "Can not specify an export without an output");
         return INVALID_INPUT;
     }
 
@@ -352,8 +368,8 @@ AFF4Status BasicImager::handle_export() {
     // must come from the image.
     if (volume_URN.value.size() > 0 &&
             export_urn.Scheme() == "file") {
-        LOG(INFO) << "Interpreting export URN as relative to volume " <<
-                  volume_URN.value;
+        resolver.logger->info("Interpreting export URN as relative to volume {}",
+                              volume_URN.value);
 
         export_urn = volume_URN.Append(export_);
     }
@@ -367,12 +383,12 @@ AFF4Status BasicImager::handle_export() {
                                             volume_URN);
 
     if (!volume) {
-        LOG(ERROR) << "Unable to open volume " << volume_URN.SerializeToString();
+        resolver.logger->error("Unable to open volume {}", volume_URN.SerializeToString());
         return IO_ERROR;
     }
 
-    std::cout << "Extracting " << export_urn.value << " into " <<
-              output_urn.value << "\n";
+    std::cerr << "Extracting " << export_urn.value << " into " <<
+        output_urn.value << "\n";
     AFF4Status res = ExtractStream(
                          resolver, export_urn, output_urn, Get("truncate")->isSet());
 
@@ -400,9 +416,7 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
 
     // We are allowed to write on the output file.
     if (Get("truncate")->isSet()) {
-        std::cout << "Output file " << output_urn.SerializeToString() <<
-                  " will be truncated.\n";;
-
+        resolver.logger->warn("Output file {} will be truncated.",  output_urn);
         resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
     } else {
         resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
@@ -420,7 +434,7 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
         volume_urn = volume->urn;
         output_volume_urn = volume->urn;
 
-        std::cout << "Creating output AFF4 Directory structure.\n";
+        resolver.logger->info("Creating output AFF4 Directory structure.");
         return STATUS_OK;
     }
 
@@ -429,8 +443,9 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
             <AFF4Stream>(output_urn);
 
     if (!output_stream) {
-        LOG(ERROR) << "Failed to create output file: " <<
-                   output_urn.SerializeToString() << ":" << GetLastErrorMessage();
+        resolver.logger->error("Failed to create output file: {}: {}",
+                               output_urn.SerializeToString(),
+                               GetLastErrorMessage());
 
         return IO_ERROR;
     }
@@ -445,7 +460,7 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
     volume_urn = zip->urn;
     output_volume_urn = zip->urn;
 
-    std::cout << "Creating output AFF4 ZipFile.\n";
+    resolver.logger->info("Creating output AFF4 ZipFile.");
 
     return STATUS_OK;
 }
@@ -464,11 +479,11 @@ AFF4Status BasicImager::handle_compression() {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
 
     } else {
-        LOG(ERROR) << "Unknown compression scheme " << compression;
+        resolver.logger->error("Unknown compression scheme {}", compression);
         return INVALID_INPUT;
     }
 
-    std::cout << "Setting compression " << compression_setting.c_str() << "\n";
+    resolver.logger->info("Setting compression {}", compression_setting);
 
     return CONTINUE;
 }
@@ -552,8 +567,8 @@ void sigint_handler(int s) {
 AFF4Status BasicImager::Initialize() {
 #ifdef _WIN32
     if (!SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler, true)) {
-        LOG(ERROR) << "Unable to set interrupt handler: " <<
-                   GetLastErrorMessage();
+        resolver.logger->error("Unable to set interrupt handler: {}",
+                               GetLastErrorMessage());
     }
 #else
     signal(SIGINT, sigint_handler);

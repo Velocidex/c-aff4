@@ -19,7 +19,7 @@ specific language governing permissions and limitations under the License.
 #include "config.h"
 
 #include "aff4_base.h"
-#include <glog/logging.h>
+#include "spdlog/spdlog.h"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -70,8 +70,9 @@ struct AFF4ObjectCacheEntry {
 
     void append(AFF4ObjectCacheEntry* entry) {
         // The entry must not exist on the list already.
-        CHECK_EQ(entry->next, entry->prev) <<
-                                           "Appending an element alredy in the list";
+        if (entry->next != entry->prev) {
+            abort();
+        }
 
         entry->next = next;
         next->prev = entry;
@@ -105,6 +106,7 @@ class AFF4ObjectCache {
 
   protected:
     AFF4ObjectCacheEntry lru_list;
+    std::shared_ptr<spdlog::logger> logger;
 
     // When objects are returned from Get() they are placed on this map. This
     // ensures that they can not be deleted while in use. When objects are
@@ -124,10 +126,10 @@ class AFF4ObjectCache {
   public:
     bool trimming_disabled = false;
 
-    AFF4ObjectCache() {}
-
-    explicit AFF4ObjectCache(int max_items):
-        max_items(max_items) {}
+    explicit AFF4ObjectCache(
+        const std::shared_ptr<spdlog::logger>& logger,
+        int max_items = 10000)
+        : logger(logger), max_items(max_items) {}
 
     virtual ~AFF4ObjectCache() {
         Flush();
@@ -205,8 +207,8 @@ class AFF4ScopedPtr {
   public:
     AFF4ScopedPtr(): ptr_(0), resolver_(nullptr) {}
     explicit AFF4ScopedPtr(AFF4ObjectType* p, DataStore* resolver):
-        ptr_(p), resolver_(resolver) {
-        CHECK(resolver != nullptr);
+    ptr_(p), resolver_(resolver) {
+        if (resolver == nullptr) abort();
     }
 
     ~AFF4ScopedPtr() {
@@ -222,7 +224,7 @@ class AFF4ScopedPtr {
     }
 
     AFF4ObjectType* operator->() const {
-        CHECK(ptr_ != nullptr);
+        if(ptr_ == nullptr) abort();
         return ptr_;
     }
 
@@ -310,43 +312,13 @@ class AFF4ScopedPtr {
 class DataStore {
     friend class AFF4Object;
 
-  protected:
-    /**
-     * Returns the AFF4 object to the cache.
-     *
-     *
-     * @param object
-     */
-    void Return(AFF4Object* object) {
-        std::string urn = object->urn.SerializeToString();
-        // Don't return symbolics.
-        auto it = SymbolicStreams.find(urn);
-        if (it != SymbolicStreams.end()) {
-            return;
-        }
-
-        //LOG(INFO) << "Returning: " << urn;
-        ObjectCache.Return(object);
-    }
-
-    /**
-     * An object cache for objects created via the AFF4FactoryOpen()
-     * interface. Note that the cache owns all objects at all times.
-     *
-     */
-    AFF4ObjectCache ObjectCache;
-
-    /**
-     * Collection of Symbolic AFF4 Streams.
-     */
-    std::unordered_map<std::string, std::shared_ptr<AFF4Stream>> SymbolicStreams;
-
-    /// These types will not be dumped * to turtle files.
-    std::unordered_map<std::string, std::unordered_set<std::string>> suppressed_rdftypes;
-
   public:
     DataStore();
     virtual ~DataStore() {}
+
+    // All logging directives go through this handle. It can be
+    // replaced with a different handler if needed.
+    std::shared_ptr<spdlog::logger> logger;
 
     /// You can add new namespaces here for turtle serialization.
     std::vector<std::pair<std::string, std::string>> namespaces;
@@ -491,7 +463,7 @@ class DataStore {
        */
     template<typename T>
     AFF4ScopedPtr<T> AFF4FactoryOpen(const URN& urn) {
-        //LOG(INFO) << "AFF4FactoryOpen : " << urn.SerializeToString();
+        logger->debug("AFF4FactoryOpen : {}", urn);
 
         // Check the symbolic aff4:ImageStream cache.
         auto it = SymbolicStreams.find(urn.value);
@@ -507,8 +479,7 @@ class DataStore {
         // It is in the cache, just return it.
         AFF4Object* cached_obj = ObjectCache.Get(urn);
         if (cached_obj) {
-            //LOG(INFO) << "AFF4FactoryOpen (cached): " <<
-            //          cached_obj->urn.SerializeToString();
+            logger->debug("AFF4FactoryOpen (cached): {}", cached_obj->urn);
 
             cached_obj->Prepare();
             return AFF4ScopedPtr<T>(dynamic_cast<T*>(cached_obj), this);
@@ -523,7 +494,8 @@ class DataStore {
         if(Get(urn, AFF4_TYPE, types) == STATUS_OK) {
             // Try to instantiate all the types until one works.
             for(auto& v : types) {
-                obj = GetAFF4ClassFactory()->CreateInstance(v->SerializeToString(), this, &urn);
+                obj = GetAFF4ClassFactory()->CreateInstance(v->SerializeToString(),
+                                                            this, &urn);
                 if(obj != nullptr) {
                     type_urn = URN(v->SerializeToString());
                     break;
@@ -551,9 +523,7 @@ class DataStore {
         // Have the object load and initialize itself.
         obj->urn = urn;
         if (obj->LoadFromURN() != STATUS_OK) {
-            LOG(WARNING) << "Failed to load " << urn.value << " as " <<
-                         type_urn.value;
-
+            logger->debug("Failed to load {} as {}", urn, type_urn);
             return AFF4ScopedPtr<T>();
         }
 
@@ -568,8 +538,7 @@ class DataStore {
         // Store the object in the cache but place it immediate in the in_use list.
         ObjectCache.Put(obj.release(), true);
 
-        LOG(INFO) << "AFF4FactoryOpen (new instance): " <<
-            result->urn.SerializeToString();
+        logger->debug("AFF4FactoryOpen (new instance): {}", result->urn);
 
         result->Prepare();
         return AFF4ScopedPtr<T>(result, this);
@@ -581,10 +550,45 @@ class DataStore {
     AFF4Status Close(AFF4ScopedPtr<T>& object) {
         URN tmp_urn = object->urn;
         AFF4Status res = ObjectCache.Remove(object.release());
-        LOG(INFO) << "Closing object " << tmp_urn.value << " " << res << "\n";
+        logger->debug("Closing object {} {}", tmp_urn, res);
 
         return res;
     }
+
+  protected:
+    /**
+     * Returns the AFF4 object to the cache.
+     *
+     *
+     * @param object
+     */
+    void Return(AFF4Object* object) {
+        std::string urn = object->urn.SerializeToString();
+        // Don't return symbolics.
+        auto it = SymbolicStreams.find(urn);
+        if (it != SymbolicStreams.end()) {
+            return;
+        }
+
+        logger->debug("Returning: {}", urn);
+        ObjectCache.Return(object);
+    }
+
+    /**
+     * An object cache for objects created via the AFF4FactoryOpen()
+     * interface. Note that the cache owns all objects at all times.
+     *
+     */
+    AFF4ObjectCache ObjectCache;
+
+    /**
+     * Collection of Symbolic AFF4 Streams.
+     */
+    std::unordered_map<std::string, std::shared_ptr<AFF4Stream>> SymbolicStreams;
+
+    /// These types will not be dumped * to turtle files.
+    std::unordered_map<std::string, std::unordered_set<std::string>> suppressed_rdftypes;
+
 };
 
 

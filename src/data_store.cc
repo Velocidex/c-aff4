@@ -19,11 +19,13 @@
 #include "data_store.h"
 #include "libaff4.h"
 #include <raptor2/raptor2.h>
-#include <glog/logging.h>
+#include <spdlog/spdlog.h>
 #include <iostream>
 #include "aff4_symstream.h"
 
 namespace aff4 {
+
+void aff4_init();
 
 
 #ifdef AFF4_HAS_LIBYAML_CPP
@@ -60,16 +62,11 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream& output, bool verbose) {
                     0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
                 continue;
             }
-
-            LOG(ERROR) << attr_it.first << " : " <<
-                attr_it.second->SerializeToString();
             subject_node[attr_it.first] = attr_it.second->SerializeToString();
             emitted_statements++;
         }
 
         if (emitted_statements) {
-            LOG(ERROR) << "Node : " << subject.SerializeToString() <<
-                subject_node.size();
             node[subject.SerializeToString()] = subject_node;
             subject_statements++;
         }
@@ -79,8 +76,6 @@ AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream& output, bool verbose) {
     if (subject_statements) {
         out << node;
         output.Write(out.c_str());
-
-        LOG(ERROR) << "Yaml output: " << out.c_str();
     }
 
     return STATUS_OK;
@@ -93,7 +88,9 @@ AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream& stream) {
 
 #endif
 
-DataStore::DataStore() {
+DataStore::DataStore()
+    : logger(spdlog::stderr_logger_mt("console", true)),
+      ObjectCache(logger) {
     // By default suppress ZipFileSegment objects since all their metadata comes
     // directly from the ZIP container. This keeps the turtle files a bit cleaner.
     suppressed_rdftypes[AFF4_ZIP_SEGMENT_TYPE].insert(AFF4_TYPE);
@@ -146,20 +143,18 @@ DataStore::DataStore() {
 
     // Create streams for all possible symbols.
     for (int i = 0; i < 256; i++) {
-        std::string urn = AFF4_IMAGESTREAM_SYMBOLIC_PREFIX;
-        char v[3]; // Include NULL pointer
-        std::snprintf(v, 3, "%02X", i);
-        urn += std::string(v);
+        std::string urn = aff4_sprintf(
+            "%s%02X", AFF4_IMAGESTREAM_SYMBOLIC_PREFIX, i);
+
         SymbolicStreams[urn] = std::shared_ptr<AFF4Stream>(
             new AFF4SymbolicStream(this, URN(urn), i));
     }
 
     // Legacy Versions of above.
     for (int i = 0; i < 256; i++) {
-        std::string urn = AFF4_LEGACY_IMAGESTREAM_SYMBOLIC_PREFIX;
-        char v[3]; // Include NULL pointer
-        std::snprintf(v, 3, "%02x", i);
-        urn += std::string(v);
+        std::string urn = aff4_sprintf(
+            "%s%02X", AFF4_LEGACY_IMAGESTREAM_SYMBOLIC_PREFIX, i);
+
         SymbolicStreams[urn] = std::shared_ptr<AFF4Stream>(
             new AFF4SymbolicStream(this, URN(urn), i));
     }
@@ -251,7 +246,6 @@ static std::unique_ptr<RDFValue> RDFValueFromRaptorTerm(DataStore* resolver, rap
                 RDFValueRegistry.CreateInstance(uri, resolver);
             // If we do not know how to handle this type we skip it.
             if (!result) {
-                LOG(INFO)<< "Unable to handle RDF type " << uri;
                 raptor_free_memory(uri);
                 return nullptr;
             }
@@ -263,7 +257,6 @@ static std::unique_ptr<RDFValue> RDFValueFromRaptorTerm(DataStore* resolver, rap
                 term->value.literal.string_len);
 
             if (result->UnSerializeFromString(value_string) != STATUS_OK) {
-                LOG(ERROR)<< "Unable to parse " << value_string.c_str();
                 return nullptr;
             }
 
@@ -335,7 +328,6 @@ public:
             result->world, (const unsigned char*) ".");
 
         if (raptor_parser_parse_start(result->parser, uri)) {
-            LOG(ERROR)<< "Unable to initialize the parser.";
             return nullptr;
         }
 
@@ -346,7 +338,7 @@ public:
 
     AFF4Status Parse(std::string buffer) {
         if (raptor_parser_parse_chunk(
-                parser, (const unsigned char*) buffer.data(),
+                parser, (const unsigned char*) buffer.c_str(),
                 buffer.size(), 1)) {
             return PARSING_ERROR;
         }
@@ -385,7 +377,7 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream& output_stream, URN base, bo
             if (!verbose) {
                 if (0 == predicate.value.compare(
                         0,
-                        AFF4_VOLATILE_NAMESPACE.size(),
+                        strlen(AFF4_VOLATILE_NAMESPACE),
                         AFF4_VOLATILE_NAMESPACE)) {
                     continue;
                 }
@@ -435,7 +427,7 @@ AFF4Status MemoryDataStore::LoadFromTurtle(AFF4Stream& stream) {
 }
 
 void MemoryDataStore::Set(const URN& urn, const URN& attribute, RDFValue* value) {
-    CHECK(value != nullptr) << "RDF value is NULL";
+    if (value == nullptr) abort();
     std::shared_ptr<RDFValue> unique_value(value);
     Set(urn, attribute, unique_value);
 }
@@ -659,7 +651,7 @@ AFF4Status AFF4ObjectCache::Flush() {
         // called and this sometimes happen. The output volume is incomplete but at
         // least we make it somewhat readable.
         Dump();
-        LOG(ERROR)<< "ObjectCache flushed while some objects in use!";
+        logger->error("ObjectCache flushed while some objects in use!");
 #endif
 
         for (auto it : in_use) {
@@ -759,9 +751,13 @@ AFF4Status AFF4ObjectCache::Put(AFF4Object* object, bool in_use_state) {
     URN urn = object->urn;
     std::string key = urn.SerializeToString();
 
-    CHECK(in_use.find(key) == in_use.end()) << "Object " << key << " Put in cache while already in use.";
+    if (in_use.find(key) != in_use.end()) {
+        logger->critical("Object {} put in cache while already in use.", key);
+    }
 
-    CHECK(lru_map.find(key) == lru_map.end()) << "Object " << key << " Put in cache while already in cache.";
+    if (lru_map.find(key) != lru_map.end()) {
+        logger->critical("Object {} put in cache while already in cache.", key);
+    }
 
     AFF4ObjectCacheEntry* entry = new AFF4ObjectCacheEntry(key, object);
     // Do we need to immediately put it in the in-use list? This should only be
@@ -788,8 +784,6 @@ AFF4Object* AFF4ObjectCache::Get(const URN urn) {
     // it because it may be convenient but it is not generally recommended.
     auto in_use_itr = in_use.find(key);
     if (in_use_itr != in_use.end()) {
-        //LOG(INFO)<< "URN " << key << " is already in use.";
-
         in_use_itr->second->use_count++;
 
         return in_use_itr->second->object;
@@ -821,13 +815,15 @@ void AFF4ObjectCache::Return(AFF4Object* object) {
 
     // This should never happen - Only objects obtained from Get() should be
     // Returnable.
-    CHECK(it != in_use.end()) <<
-        "Object " << key << " Returned to cache, but it is not in use!";
+    if (it == in_use.end()) {
+        logger->critical("Object {} returned to cache, but it is not in use!", key);
+    }
 
     AFF4ObjectCacheEntry* entry = it->second;
 
-    CHECK_GT(entry->use_count, 0)<<
-        "Returned object is not used.";
+    if (entry->use_count <= 0) {
+        logger->critical("Returned object {} is not used.", key);
+    }
 
     // Decrease the object's reference count.
     entry->use_count--;
@@ -877,8 +873,8 @@ AFF4Status AFF4ObjectCache::Remove(AFF4Object* object) {
     }
 
     // This is a fatal error.
-    LOG(FATAL)<< "Object " << key <<
-        " removed from cache, but was never there.";
+    logger->critical(
+        "Object {} removed from cache, but was never there.", key);
 
     return FATAL_ERROR;
 }

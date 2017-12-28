@@ -181,6 +181,11 @@ class ZipFileSegment: public StringIO {
         AFF4Stream* source, ProgressContext* progress = nullptr);
 
     using AFF4Stream::Write;
+
+ private:
+    std::string CompressBuffer(const std::string& buffer);
+    unsigned int DecompressBuffer(
+        char* buffer, int length, const std::string& c_buffer);
 };
 
 

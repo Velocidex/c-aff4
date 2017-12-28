@@ -6,8 +6,6 @@
 
 #include "config.h"
 
-#include <glog/logging.h>
-
 #include <unordered_map>
 #include <memory>
 #include <string>

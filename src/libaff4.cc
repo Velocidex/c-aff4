@@ -48,11 +48,13 @@ ProgressContext empty_progress;
  */
 AFF4Object::AFF4Object(DataStore* resolver): resolver(resolver) {
     uuid_t uuid;
-    std::vector<char> buffer(100);
+    char buffer[100];
+
+    memset(buffer, 0, 100);
 
     uuid_generate(uuid);
-    uuid_unparse(uuid, buffer.data());
-    urn.Set(AFF4_PREFIX + std::string(buffer.data()));
+    uuid_unparse(uuid, buffer);
+    urn.Set(AFF4_PREFIX + std::string(buffer));
 }
 
 // On windows we use native GUID generation.
@@ -164,22 +166,22 @@ bool DefaultProgress::Report(aff4_off_t readptr) {
                      (now - last_time) * 1000000 / 1024/1024;
 
         if (length > 0) {
-            std::cout << " Reading 0x" << std::hex << readptr << "  " <<
+            std::cerr << " Reading 0x" << std::hex << readptr << "  " <<
                       std::dec << (readptr - start)/1024/1024 << "MiB / " <<
                       length/1024/1024 << "MiB " << rate << "MiB/s\r\n";
         } else {
-            std::cout << " Reading 0x" << std::hex << readptr << "  " <<
+            std::cerr << " Reading 0x" << std::hex << readptr << "  " <<
                       std::dec << (readptr - start)/1024/1024 << "MiB " <<
                       rate << "MiB/s\r\n";
         }
-        std::cout.flush();
+        std::cerr.flush();
 
         last_time = now;
         last_offset = readptr;
     }
 
     if (aff4_abort_signaled) {
-        std::cout << "\n\nAborted!\n";
+        std::cerr << "\n\nAborted!\n";
         return false;
     }
 
@@ -368,7 +370,7 @@ std::string GetLastErrorMessage() {
 
 extern "C" {
     const char* AFF4_version() {
-        static std::string version = "libaff4 version " + AFF4_VERSION;
+        static std::string version = std::string("libaff4 version ") + AFF4_VERSION;
         return version.c_str();
     }
 }
@@ -447,7 +449,7 @@ std::string member_name_for_urn(const URN member, const URN base_urn,
     return result.str();
 }
 
-URN urn_from_member_name(const std::string member, const URN base_urn) {
+URN urn_from_member_name(const std::string& member, const URN base_urn) {
     std::stringstream result;
 
     // Now escape any chars which are non printable.
@@ -497,11 +499,19 @@ std::vector<std::string> split(const std::string& s, char delim) {
 
 // Run all the initialization functions. This will force the object files to
 // link in a more reliable way than specifying --whole-archive.
+class _InitHelper {
+public:
+    _InitHelper() {
+        aff4_lexicon_init();
+        aff4_file_init();
+        aff4_directory_init();
+        aff4_image_init();
+        aff4_map_init();
+    }
+};
+
 void aff4_init() {
-    aff4_file_init();
-    aff4_directory_init();
-    aff4_image_init();
-    aff4_map_init();
+    static _InitHelper init;
 }
 
 

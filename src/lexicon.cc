@@ -21,7 +21,7 @@ specific language governing permissions and limitations under the License.
 namespace aff4 {
 
 #define LEXICON_DEFINE(x, y)                                            \
-    const std::string x = y;
+    const char  x[] = y
 
 #include "lexicon.inc"
 
@@ -69,5 +69,7 @@ Schema Schema::GetSchema(std::string object_type) {
 
     return Schema();
 }
+
+void aff4_lexicon_init() {};
 
 } // namespace aff4

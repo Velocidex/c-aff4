@@ -32,11 +32,10 @@ specific language governing permissions and limitations under the License.
 
 #include "rdf.h"
 
-
 namespace aff4 {
 
 #define LEXICON_DEFINE(x, y)                    \
-    extern const std::string x;
+    extern const char x[]
 
 #include "lexicon.inc"
 
@@ -121,6 +120,8 @@ class Schema {
 
     static Schema GetSchema(std::string object_type);
 };
+
+void aff4_lexicon_init();
 
 } // namespace aff4
 

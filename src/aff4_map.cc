@@ -74,7 +74,7 @@ AFF4Status AFF4Map::LoadFromURN() {
         AFF4ScopedPtr<AFF4Stream> map_stream = resolver->AFF4FactoryOpen
                                                <AFF4Stream>(map_stream_urn);
         if (!map_stream) {
-            LOG(INFO) << "Unable to open map data.";
+            resolver->logger->info("Unable to open map data.");
             // Clear the map so we start with a fresh map.
             Clear();
         } else {
@@ -131,9 +131,9 @@ std::string AFF4Map::Read(size_t length) {
                 AFF4Stream>(target);
 
         if (!target_stream) {
-            LOG(INFO) << "Unable to open target stream " << target.value <<
-                      " For map " << urn.value << " (Offset " << readptr << " )";
-
+            resolver->logger->info("Unable to open target stream {} "
+                                   " For map {}  (Offset {:x})",
+                                   target.value, urn.value, readptr);
             // Null pad
             result.resize(result.size() + length_to_read_in_target);
             length = aff4::max(length - length_to_read_in_target, 0);
@@ -145,11 +145,10 @@ std::string AFF4Map::Read(size_t length) {
         {
             std::string data = target_stream->Read(length_to_read_in_target);
             if (data.size() < length_to_read_in_target) {
-                LOG(ERROR) << "Map target " <<
-                    target_stream->urn.SerializeToString() <<
-                    " can not produced required " << length_to_read_in_target <<
-                    " bytes. Null padding " <<
-                    length_to_read_in_target - data.size() << " bytes!";
+                resolver->logger->error(
+                    "Map target {} can not produced required {} bytes. Null padding "
+                    "{} bytes!", target_stream->urn.SerializeToString(),
+                    length_to_read_in_target, length_to_read_in_target - data.size());
                 data.resize(length_to_read_in_target, 0);
             };
             result += data;
@@ -270,8 +269,8 @@ class _MapStreamHelper: public AFF4Stream {
                                                    source_urn);
 
             if (!source) {
-                LOG(ERROR) << "Unable to open URN " <<
-                           source_urn.SerializeToString().c_str();
+                resolver->logger->error("Unable to open URN {}",
+                                        source_urn.SerializeToString());
                 break;
             }
 
@@ -538,9 +537,9 @@ AFF4Status AFF4Map::Flush() {
 
 void AFF4Map::Dump() {
     for (auto it : map) {
-        LOG(INFO) << "Key:" << it.first << " map_offset=" << it.second.map_offset <<
-                  " target_offset=" << it.second.target_offset << " length=" <<
-                  it.second.length << " target_id=" << it.second.target_id;
+        resolver->logger->info("Key: {}  map_offset={:x} target_offset={:x} length={:x} target_id={} ",
+                               it.first, it.second.map_offset, it.second.target_offset,
+                               it.second.length, it.second.target_id);
     }
 }
 
@@ -585,7 +584,7 @@ AFF4Status AFF4Map::GetBackingStream(URN& target) {
     // Get the containing volume.
     URN volume_urn;
     if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-        LOG(INFO) << "Map not stored in a volume.";
+        resolver->logger->info("Map not stored in a volume.");
         return IO_ERROR;
     }
 
@@ -594,8 +593,8 @@ AFF4Status AFF4Map::GetBackingStream(URN& target) {
     AFF4_IMAGE_COMPRESSION_ENUM compression = CompressionMethodFromURN(
                 compression_urn);
 
-    LOG(INFO) << "Stream will be compressed with " <<
-              compression_urn.SerializeToString();
+    resolver->logger->info("Stream will be compressed with {}",
+                           compression_urn.SerializeToString());
 
     // If the stream should not be compressed, it is more efficient to use a
     // native volume member (e.g. ZipFileSegment or FileBackedObjects) than

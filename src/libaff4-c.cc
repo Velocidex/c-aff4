@@ -28,13 +28,7 @@ static int nextHandle;
 extern "C" {
 
 void AFF4_init() {
-        // Set GLOG to quiet.
-        google::InitGoogleLogging("libaff4");
-        google::LogToStderr();
-        google::SetStderrLogging(google::GLOG_ERROR);
-
-        nextHandle = 1;
-        resolver = new aff4::MemoryDataStore();
+    resolver = new aff4::MemoryDataStore();
 }
 
 int AFF4_open(char* filename) {

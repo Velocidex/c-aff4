@@ -27,6 +27,8 @@ specific language governing permissions and limitations under the License.
 #include <raptor2/raptor2.h>
 #include "aff4_registry.h"
 #include <uriparser/Uri.h>
+#include <spdlog/fmt/ostr.h>
+
 
 namespace aff4 {
 
@@ -57,6 +59,7 @@ class RDFValue {
   public:
     explicit RDFValue(DataStore* resolver): resolver(resolver) {}
     RDFValue(): resolver(nullptr) {}
+    virtual ~RDFValue() {}
 
     virtual raptor_term* GetRaptorTerm(raptor_world* world) const {
         UNUSED(world);
@@ -81,10 +84,11 @@ class RDFValue {
     AFF4Status Set(const std::string data) {
         return UnSerializeFromString(data.c_str(), data.size());
     }
-
-    virtual ~RDFValue() {}
 };
 
+
+// Support direct logging of RDFValues (like URNs etc.)
+std::ostream& operator<<(std::ostream& os, const RDFValue& c);
 
 // A Global Registry for RDFValue. This factory will provide the correct
 // RDFValue instance based on the turtle type URN. For example xsd:integer ->
@@ -118,7 +122,7 @@ class RDFBytes: public RDFValue {
     std::string value;
 
     explicit RDFBytes(std::string data):
-        RDFBytes(data.c_str(), data.size()) {}
+        RDFValue(), value(data) {}
 
     RDFBytes(const char* data, unsigned int length):
         RDFValue(), value(data, length) {}
@@ -264,7 +268,7 @@ class URN: public XSDString {
     std::string ToFilename() const;
 
     URN(const char* data);
-    URN(const std::string data): URN(data.c_str()) {};
+    URN(const std::string& data): URN(data.c_str()) {};
     explicit URN(DataStore* resolver): URN() {
         UNUSED(resolver);
     };
@@ -302,6 +306,11 @@ class URN: public XSDString {
 
     AFF4Status Set(const URN data) {
         value = data.SerializeToString();
+        return STATUS_OK;
+    }
+
+    AFF4Status Set(const std::string& data) {
+        value = data;
         return STATUS_OK;
     }
 };

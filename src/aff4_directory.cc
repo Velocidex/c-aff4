@@ -16,7 +16,6 @@ specific language governing permissions and limitations under the License.
 #include "config.h"
 #include "libaff4.h"
 
-#include <glog/logging.h>
 #include "aff4_directory.h"
 
 #include <sys/types.h>
@@ -40,18 +39,19 @@ AFF4ScopedPtr<AFF4Directory> AFF4Directory::NewAFF4Directory(
 
     // If mode is truncate we need to clear the directory.
     if (mode == "truncate") {
-        RemoveDirectory(root_path.c_str());
+        RemoveDirectory(resolver, root_path.c_str());
     }
 
     if (stat(root_path.c_str(), &s) < 0) {
         if (mode == "truncate" || mode == "append") {
             // Path does not exist. Try to create it.
-            if (MkDir(root_path.c_str()) != STATUS_OK) {
+            if (MkDir(resolver, root_path.c_str()) != STATUS_OK) {
                 return AFF4ScopedPtr<AFF4Directory>();
             }
         } else {
-            LOG(ERROR) << "Directory " << root_path << " does not exist, and "
-                       "AFF4_STREAM_WRITE_MODE is not truncate";
+            resolver->logger->error(
+                "Directory {} does not exist, and "
+                "AFF4_STREAM_WRITE_MODE is not truncate", root_path);
 
             return AFF4ScopedPtr<AFF4Directory>();
         }
@@ -105,8 +105,8 @@ AFF4ScopedPtr<AFF4Stream> AFF4Directory::CreateMember(URN child) {
 
 AFF4Status AFF4Directory::LoadFromURN() {
     if (resolver->Get(urn, AFF4_STORED, storage) != STATUS_OK) {
-        LOG(ERROR) << "Unable to find storage for AFF4Directory " <<
-                   urn.SerializeToString();
+        resolver->logger->error(
+            "Unable to find storage for AFF4Directory {}", urn);
 
         return NOT_FOUND;
     }
@@ -126,8 +126,7 @@ AFF4Status AFF4Directory::LoadFromURN() {
             resolver->Set(urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE));
             resolver->Set(urn, AFF4_STORED, new URN(storage));
 
-            LOG(INFO) << "AFF4Directory volume found: " <<
-                      urn.SerializeToString();
+            resolver->logger->info("AFF4Directory volume found: {}", urn);
         }
     }
 
@@ -146,8 +145,7 @@ AFF4Status AFF4Directory::LoadFromURN() {
     AFF4Status res = resolver->LoadFromTurtle(*turtle_stream);
 
     if (res != STATUS_OK) {
-        LOG(ERROR) << "Unable to parse " <<
-                   turtle_stream->urn.SerializeToString();
+        resolver->logger->error("Unable to parse {} ", turtle_stream->urn);
         return IO_ERROR;
     }
 
@@ -158,7 +156,8 @@ AFF4Status AFF4Directory::LoadFromURN() {
         if (resolver->Get(subject, AFF4_DIRECTORY_CHILD_FILENAME,
                           child_filename) == STATUS_OK) {
             resolver->Set(subject, AFF4_FILE_NAME, new XSDString(
-                              root_path + PATH_SEP_STR + child_filename.SerializeToString()));
+                              root_path + PATH_SEP_STR +
+                              child_filename.SerializeToString()));
         }
     }
 
@@ -229,7 +228,7 @@ bool AFF4Directory::IsDirectory(const URN& urn) {
 //   path: Absolute path of the directory that will be deleted
 
 //   The path must not be terminated with a path separator.
-AFF4Status AFF4Directory::RemoveDirectory(const string& path) {
+AFF4Status AFF4Directory::RemoveDirectory(DataStore *resolver, const string& path) {
     WIN32_FIND_DATA ffd;
     string search_str = path + PATH_SEP_STR + "*";
     HANDLE hFind = INVALID_HANDLE_VALUE;
@@ -248,23 +247,23 @@ AFF4Status AFF4Directory::RemoveDirectory(const string& path) {
 
             // Recurse into the subdir.
             AFF4Status result = AFF4Directory::RemoveDirectory(
-                                    path + PATH_SEP_STR + ffd.cFileName);
+                resolver, path + PATH_SEP_STR + ffd.cFileName);
             if (result != STATUS_OK) {
                 return result;
             }
         } else {
             string filename = path + PATH_SEP_STR + ffd.cFileName;
-            LOG(INFO) << "Deleting file " << filename;
+            resolver->logger->info("Deleting file {}", filename);
             if (!::DeleteFile(filename.c_str())) {
-                LOG(ERROR) << "Failed: " << GetLastErrorMessage();
+                resolver->logger->error("Failed: {}", GetLastErrorMessage());
                 return IO_ERROR;
             }
         }
     } while (FindNextFile(hFind, &ffd) != 0);
 
-    LOG(INFO) << "Deleting directory " << path;
+    resolver->logger->info("Deleting directory {}", path);
     if (!::RemoveDirectory(path.c_str())) {
-        LOG(ERROR) << "Failed: " << GetLastErrorMessage();
+        resolver->logger->error("Failed: {}", GetLastErrorMessage());
         FindClose(hFind);
         return IO_ERROR;
     }
@@ -273,8 +272,8 @@ AFF4Status AFF4Directory::RemoveDirectory(const string& path) {
     return STATUS_OK;
 }
 
-AFF4Status AFF4Directory::MkDir(const string& path) {
-    LOG(INFO) << "MkDir " << path;
+AFF4Status AFF4Directory::MkDir(DataStore* resolver, const string& path) {
+    resolver->logger->info("MkDir {}", path);
 
     if (!CreateDirectory(path.c_str(), nullptr)) {
         DWORD res = GetLastError();
@@ -282,8 +281,8 @@ AFF4Status AFF4Directory::MkDir(const string& path) {
             return STATUS_OK;
         }
 
-        LOG(ERROR) << "Cant create directory " << path << ": " <<
-                   GetLastErrorMessage();
+        resolver->logger->error("Cant create directory {}: {}", path,
+                                GetLastErrorMessage());
         return IO_ERROR;
     }
 
@@ -301,17 +300,17 @@ bool AFF4Directory::IsDirectory(const string& filename) {
     char last = *(filename.rbegin());
     result |= (last == '/' || last == '\\');
 
-    LOG(INFO) << "IsDirectory " << filename << ": " << result;
+    resolver->logger->info("IsDirectory {}: {}", filename, result);
 
     return result;
 }
 
 #else
 
-AFF4Status AFF4Directory::MkDir(const std::string& path) {
+AFF4Status AFF4Directory::MkDir(DataStore *resolver, const std::string& path) {
     if (mkdir(path.c_str(), 0777) < 0) {
-        LOG(ERROR) << "Failed to create directory " << path.c_str() <<
-                   " : " << GetLastErrorMessage();
+        resolver->logger->error("Failed to create directory {}: {}", path,
+                                GetLastErrorMessage());
         return IO_ERROR;
     }
     return STATUS_OK;
@@ -335,7 +334,7 @@ bool AFF4Directory::IsDirectory(const std::string& filename) {
 
 
 // Recursively remove all files and subdirectories in the directory.
-AFF4Status AFF4Directory::RemoveDirectory(const std::string& path) {
+AFF4Status AFF4Directory::RemoveDirectory(DataStore *resolver, const std::string& path) {
     DIR* dir;
     std::string dirname = path;
 
@@ -358,14 +357,14 @@ AFF4Status AFF4Directory::RemoveDirectory(const std::string& path) {
 
             switch (ent->d_type) {
                 case DT_REG: {
-                    LOG(INFO) << "Removing file " << full_path.c_str();
+                    resolver->logger->info("Removing file {}", full_path);
                     unlink(full_path.c_str());
                 }
                 break;
 
                 case DT_DIR: {
-                    AFF4Status result = AFF4Directory::RemoveDirectory(full_path);
-                    LOG(INFO) << "Removing directory " << full_path;
+                    AFF4Status result = AFF4Directory::RemoveDirectory(resolver, full_path);
+                    resolver->logger->info("Removing directory {}", full_path);
                     rmdir(full_path.c_str());
                     closedir(dir);
                     return result;
