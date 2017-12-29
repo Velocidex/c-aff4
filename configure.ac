@@ -58,7 +58,7 @@ fi
 
 # Checks for libraries.
 PKG_CHECK_MODULES([RAPTOR2], [raptor2], [], [AC_MSG_ERROR([raptor RDF library (libraptor2-dev) not found])])
-PKG_CHECK_MODULES([UUID], [uuid], [AC_DEFINE([HAVE_LIBUUID], [1], ["Have UUID"])], [AC_MSG_ERROR([uuid library (uuid-dev) not found])])
+
 PKG_CHECK_MODULES([ZLIB], [zlib], [], [AC_MSG_ERROR([zlib library (zlib1g-dev) not found])])
 AC_CHECK_LIB([pcre++], [main], [], [AC_MSG_ERROR([pcre++ library (libpcre++-dev) not found])])
 AC_CHECK_LIB([snappy], [main], [], [AC_MSG_ERROR([Google Snappy Compression library (libsnappy-dev) not found])])
@@ -99,6 +99,14 @@ fi
 AM_CONDITIONAL([GCC], test "$GCC" = yes)   # let the Makefile know if we're gcc
 AM_CONDITIONAL([STATIC_BUILD], [test x$enable_static_binaries = xyes])
 AM_CONDITIONAL([WIN32_NATIVE_HOST], [test x$mingw_cv_win32_host = xyes])
+
+# UUID support is not required on windows but mandatory on unix.
+if test "x$mingw_cv_win32_host" = "xno"; then
+   PKG_CHECK_MODULES(
+        [UUID], [uuid], [AC_DEFINE([HAVE_LIBUUID], [1], ["Have UUID"])],
+        [AC_MSG_ERROR([uuid library (uuid-dev) not found])])
+fi
+
 
 AC_SUBST(LIBTOOL_DEPS)
 AC_SUBST(SO_VERSION)

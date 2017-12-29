@@ -34,10 +34,6 @@ namespace aff4 {
 // Flip to true to immediately stop operations.
 bool aff4_abort_signaled = false;
 
-// The empty progress renderer is always available.
-ProgressContext empty_progress;
-
-
 #if defined(HAVE_LIBUUID)
 #include <uuid/uuid.h>
 
@@ -73,7 +69,7 @@ AFF4Object::AFF4Object(DataStore* resolver): resolver(resolver) {
     unsigned char* buffer;
     UuidToString(&newId, &buffer);
 
-    urn.Set(AFF4_PREFIX + string(reinterpret_cast<char*>(buffer)));
+    urn.Set(AFF4_PREFIX + std::string(reinterpret_cast<char*>(buffer)));
 }
 
 #endif
@@ -166,22 +162,21 @@ bool DefaultProgress::Report(aff4_off_t readptr) {
                      (now - last_time) * 1000000 / 1024/1024;
 
         if (length > 0) {
-            std::cerr << " Reading 0x" << std::hex << readptr << "  " <<
-                      std::dec << (readptr - start)/1024/1024 << "MiB / " <<
-                      length/1024/1024 << "MiB " << rate << "MiB/s\r\n";
+            resolver->logger->info(
+                " Reading {:x} {} MiB / {} ({} MiB/s)",
+                readptr, (readptr - start)/1024/1024,
+                length/1024/1024, rate);
         } else {
-            std::cerr << " Reading 0x" << std::hex << readptr << "  " <<
-                      std::dec << (readptr - start)/1024/1024 << "MiB " <<
-                      rate << "MiB/s\r\n";
+            resolver->logger->info(
+                " Reading {:x} {} MiB ({} MiB/s)", readptr,
+                (readptr - start)/1024/1024, rate);
         }
-        std::cerr.flush();
-
         last_time = now;
         last_offset = readptr;
     }
 
     if (aff4_abort_signaled) {
-        std::cerr << "\n\nAborted!\n";
+        resolver->logger->critical("Aborted!");
         return false;
     }
 
@@ -191,7 +186,7 @@ bool DefaultProgress::Report(aff4_off_t readptr) {
 AFF4Status AFF4Stream::CopyToStream(
     AFF4Stream& output, aff4_off_t length,
     ProgressContext* progress, size_t buffer_size) {
-    DefaultProgress default_progress;
+    DefaultProgress default_progress(resolver);
     if (!progress) {
         progress = &default_progress;
     }
@@ -220,7 +215,7 @@ AFF4Status AFF4Stream::CopyToStream(
 
 AFF4Status AFF4Stream::WriteStream(AFF4Stream* source,
                                    ProgressContext* progress) {
-    DefaultProgress default_progress;
+    DefaultProgress default_progress(resolver);
     if (!progress) {
         progress = &default_progress;
     }
@@ -341,7 +336,7 @@ ClassFactory<AFF4Object>* GetAFF4ClassFactory() {
 
 #ifdef _WIN32
 
-string GetLastErrorMessage() {
+std::string GetLastErrorMessage() {
     LPTSTR lpMsgBuf;
     DWORD dw = GetLastError();
 

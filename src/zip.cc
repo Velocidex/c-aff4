@@ -54,7 +54,8 @@ AFF4ScopedPtr<ZipFile> ZipFile::NewZipFile(DataStore* resolver, URN backing_stor
     // We need to create an empty temporary object to get a new URN.
     std::unique_ptr<ZipFile> self(new ZipFile(resolver));
 
-    resolver->Set(self->urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE));
+    resolver->Set(self->urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE),
+                  /* replace = */ false);
     resolver->Set(self->urn, AFF4_STORED, new URN(backing_store_urn));
 
     AFF4ScopedPtr<ZipFile> result = resolver->AFF4FactoryOpen<ZipFile>(self->urn);
@@ -192,7 +193,8 @@ AFF4Status ZipFile::parse_cd() {
             urn.Set(urn_string);
 
             // Set these triples so we know how to open the zip file again.
-            resolver->Set(urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE));
+            resolver->Set(urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE),
+                          /*replace =*/ false);
             resolver->Set(urn, AFF4_STORED, new URN(backing_store_urn));
             resolver->Set(backing_store_urn, AFF4_CONTAINS, new URN(urn));
         }
@@ -347,16 +349,33 @@ AFF4Status ZipFile::parse_cd() {
 AFF4Status ZipFile::Flush() {
     // If the zip file was changed, re-write the central directory.
     if (IsDirty()) {
-        // First Flush all our children, but only if they are still in the cache.
-        for (auto it : children) {
-            AFF4ScopedPtr<AFF4Object> obj = resolver->CacheGet<AFF4Object>(it);
-            if (obj.get()) {
-                obj->Flush();
+        int number_of_flushes;
+
+        do {
+            // Take a copy of the set because it may be modified by
+            // flushing.
+            std::vector<std::string> local_children(
+                children.begin(), children.end());
+            number_of_flushes = 0;
+
+            // First Flush all our children, but only if they are
+            // still in the cache. Note that flushing children may
+            // write new ZipFileSegment which will add to the
+            // children. So we keep going until there are no more
+            // dirty children before we can finalize this volume.
+            for (auto it : local_children) {
+                AFF4ScopedPtr<AFF4Object> obj = resolver->CacheGet<AFF4Object>(it);
+                if (obj.get() && obj->IsDirty()) {
+                    resolver->logger->debug("Flushing child {}", it);
+                    obj->Flush();
+                    number_of_flushes++;
+                }
             }
-        }
+        } while(number_of_flushes > 0);
 
         // Mark the container with its URN
-        AFF4ScopedPtr<AFF4Stream> desc = CreateMember(urn.Append(AFF4_CONTAINER_DESCRIPTION));
+        AFF4ScopedPtr<AFF4Stream> desc = CreateMember(
+            urn.Append(AFF4_CONTAINER_DESCRIPTION));
 
         if (!desc) {
             return IO_ERROR;
@@ -368,7 +387,8 @@ AFF4Status ZipFile::Flush() {
 
         // Update the resolver into the zip file.
         {
-            AFF4ScopedPtr<ZipFileSegment> turtle_segment = CreateZipSegment("information.turtle");
+            AFF4ScopedPtr<ZipFileSegment> turtle_segment = CreateZipSegment(
+                "information.turtle");
 
             if (!turtle_segment) {
                 return IO_ERROR;
@@ -432,6 +452,8 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream& backing_store) {
     aff4_off_t ecd_real_offset = backing_store.Tell();
 
     int total_entries = members.size();
+    resolver->logger->info("Writing Centeral Directory for {} members.",
+                           total_entries);
 
     for (auto it = members.begin(); it != members.end(); it++) {
         ZipInfo* zip_info = it->second.get();
@@ -470,7 +492,7 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream& backing_store) {
     cd_stream.Seek(0, SEEK_SET);
 
     // Deliberately suppress the progress.
-    ProgressContext progress;
+    ProgressContext progress(resolver);
 
     return cd_stream.CopyToStream(backing_store, cd_stream.Size(), &progress);
 }
@@ -930,6 +952,7 @@ AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream& output) {
 //-------------------------------------------------------------------------
 AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int compression_method,
                                     ProgressContext* progress) {
+    ProgressContext empty_progress(resolver);
     if (!progress) {
         progress = &empty_progress;
     }

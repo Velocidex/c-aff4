@@ -88,8 +88,15 @@ AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream& stream) {
 
 #endif
 
+
+std::shared_ptr<spdlog::logger> make_logger() {
+    static std::string name = "console";
+    name += "_";
+    return spdlog::stderr_color_mt(name);
+}
+
 DataStore::DataStore()
-    : logger(spdlog::stderr_logger_mt("console", true)),
+    : logger(make_logger()),
       ObjectCache(logger) {
     // By default suppress ZipFileSegment objects since all their metadata comes
     // directly from the ZIP container. This keeps the turtle files a bit cleaner.
@@ -289,7 +296,8 @@ static void statement_handler(void* user_data, raptor_statement* statement) {
             RDFValueFromRaptorTerm(resolver, statement->object));
 
         if (object.get()) {
-            resolver->Set(URN(subject), URN(predicate), std::move(object));
+            resolver->Set(URN(subject), URN(predicate), std::move(object),
+                          /* replace = */ false);
         }
 
         raptor_free_memory(subject);
@@ -426,19 +434,24 @@ AFF4Status MemoryDataStore::LoadFromTurtle(AFF4Stream& stream) {
     return STATUS_OK;
 }
 
-void MemoryDataStore::Set(const URN& urn, const URN& attribute, RDFValue* value) {
+void MemoryDataStore::Set(const URN& urn, const URN& attribute, RDFValue* value,
+                          bool replace) {
     if (value == nullptr) abort();
     std::shared_ptr<RDFValue> unique_value(value);
-    Set(urn, attribute, unique_value);
+    Set(urn, attribute, unique_value, replace);
 }
 
-void MemoryDataStore::Set(const URN& urn, const URN& attribute, std::shared_ptr<RDFValue> value) {
+void MemoryDataStore::Set(const URN& urn, const URN& attribute,
+                          std::shared_ptr<RDFValue> value, bool replace) {
     // Automatically create needed keys.
     std::vector<std::shared_ptr<RDFValue>> values = store[urn.SerializeToString()][
         attribute.SerializeToString()];
+
+    if (replace) values.clear();
+
     values.push_back(std::move(value));
-    store[urn.SerializeToString()][
-        attribute.SerializeToString()] = values;
+
+    store[urn.SerializeToString()][attribute.SerializeToString()] = values;
 }
 
 AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute, RDFValue& value) {

@@ -42,7 +42,8 @@ AFF4ScopedPtr<AFF4Map> AFF4Map::NewAFF4Map(
     // Inform the volume that we have a new image stream contained within it.
     volume->children.insert(object_urn.value);
 
-    resolver->Set(object_urn, AFF4_TYPE, new URN(AFF4_MAP_TYPE));
+    resolver->Set(object_urn, AFF4_TYPE, new URN(AFF4_MAP_TYPE),
+                  /* replace= */ false);
     resolver->Set(object_urn, AFF4_STORED, new URN(volume_urn));
 
     return resolver->AFF4FactoryOpen<AFF4Map>(object_urn);
@@ -121,7 +122,7 @@ std::string AFF4Map::Read(size_t length) {
 
         // The readptr is inside a range.
         URN target = targets[range.target_id];
-        size_t length_to_read_in_target = std::min(
+        size_t length_to_read_in_target = aff4::min(
                 length, range.map_end() - readptr);
 
         aff4_off_t offset_in_target = range.target_offset + (

@@ -35,8 +35,12 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
     // Inform the volume that we have a new image stream contained within it.
     volume->children.insert(image_urn.SerializeToString());
 
-    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE));
+    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
+                  /* replace = */ false);
     resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
+    if(resolver->Has(image_urn, AFF4_STREAM_SIZE) != STATUS_OK) {
+        resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
+    }
 
     // We need to use the resolver here instead of just making a new object, in
     // case the object already exists. If it is already known we will get the
@@ -79,10 +83,11 @@ AFF4Status AFF4Image::LoadFromURN() {
 
         if (resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
             size = value.value;
+
         } else {
             resolver->logger->error(
-                "ImageStream {} does not specify a size. Is this part of a split image set?",
-                urn.SerializeToString());
+                "ImageStream {} does not specify a size. "
+                "Is this part of a split image set?", urn);
         }
     } else {
         // AFF4 Legacy
@@ -106,7 +111,7 @@ AFF4Status AFF4Image::LoadFromURN() {
         if (compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
             resolver->logger->error(
                 "Compression method {} is not supported by this implementation.",
-                compression_urn.SerializeToString());
+                compression_urn);
             return NOT_IMPLEMENTED;
         }
     } else if (STATUS_OK == resolver->Get(urn, AFF4_LEGACY_IMAGE_COMPRESSION, compression_urn)) {
@@ -114,7 +119,7 @@ AFF4Status AFF4Image::LoadFromURN() {
         if (compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
             resolver->logger->error(
                 "Compression method {} is not supported by this implementation.",
-                compression_urn.SerializeToString());
+                compression_urn);
             return NOT_IMPLEMENTED;
         }
     }
@@ -127,7 +132,7 @@ AFF4Status AFF4Image::LoadFromURN() {
 AFF4Status AFF4Image::_FlushBevy() {
     // If the bevy is empty nothing else to do.
     if (bevy.Size() == 0) {
-        resolver->logger->info("Bevy {} is empty.", urn.SerializeToString());
+        resolver->logger->info("Bevy {} is empty.", urn);
         return STATUS_OK;
     }
 
@@ -149,8 +154,7 @@ AFF4Status AFF4Image::_FlushBevy() {
     AFF4ScopedPtr<AFF4Stream> bevy_stream = volume->CreateMember(bevy_urn);
 
     if (!bevy_index_stream || !bevy_stream) {
-        resolver->logger->error("Unable to create bevy URN {}",
-                               bevy_urn.SerializeToString());
+        resolver->logger->error("Unable to create bevy URN {}", bevy_urn);
         return IO_ERROR;
     }
 
@@ -429,14 +433,13 @@ class _CompressorStream: public AFF4Stream {
 AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
                                   ProgressContext* progress) {
     URN volume_urn;
-    DefaultProgress default_progress;
+    DefaultProgress default_progress(resolver);
     if (!progress) {
         progress = &default_progress;
     }
 
     if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-        resolver->logger->error("Unable to find storage for urn {}",
-                               urn.SerializeToString());
+        resolver->logger->error("Unable to find storage for urn {}", urn);
         return NOT_FOUND;
     }
 
@@ -461,8 +464,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
         {
             AFF4ScopedPtr<AFF4Stream> bevy = volume->CreateMember(bevy_urn);
             if (!bevy) {
-                resolver->logger->error("Unable to create bevy {}",
-                                       bevy_urn.SerializeToString());
+                resolver->logger->error("Unable to create bevy {}", bevy_urn);
                 return IO_ERROR;
             }
 
@@ -484,7 +486,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
 
             if (!bevy_index) {
                 resolver->logger->error("Unable to create bevy_index {}",
-                                       bevy_index_urn.SerializeToString());
+                                       bevy_index_urn);
                 return IO_ERROR;
             }
 
@@ -526,14 +528,14 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
 
     if (index_size == 0) {
         resolver->logger->error("Index empty in {} : chunk {}",
-                               urn.SerializeToString(), chunk_id);
+                               urn, chunk_id);
         return IO_ERROR;
     }
 
     // The segment is not completely full.
     if (chunk_id_in_bevy >= index_size) {
         resolver->logger->error("Bevy index too short in {} : {}",
-                               urn.SerializeToString(), chunk_id);
+                               urn, chunk_id);
         return IO_ERROR;
 
     } else {
@@ -578,7 +580,7 @@ AFF4Status AFF4Image::_ReadChunkFromBevy(
 
     if (res != STATUS_OK) {
         resolver->logger->error(" {} : Unable to uncompress chunk {}",
-                                urn.SerializeToString(), chunk_id);
+                                urn, chunk_id);
         return res;
     }
 
@@ -602,8 +604,7 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
             bevy_urn);
 
         if (!bevy_index || !bevy) {
-            resolver->logger->error("Unable to open bevy {}",
-                                   bevy_urn.SerializeToString());
+            resolver->logger->error("Unable to open bevy {}", bevy_urn);
             return -1;
         }
 
@@ -684,7 +685,8 @@ std::string AFF4Image::Read(size_t length) {
 }
 
 AFF4Status AFF4Image::_write_metadata() {
-    resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE));
+    resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+                  /* replace = */ false);
 
     resolver->Set(urn, AFF4_STORED, new URN(volume_urn));
 

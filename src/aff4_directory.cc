@@ -57,7 +57,8 @@ AFF4ScopedPtr<AFF4Directory> AFF4Directory::NewAFF4Directory(
         }
     }
 
-    resolver->Set(result->urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE));
+    resolver->Set(result->urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE),
+                  /* replace= */ false);
     resolver->Set(result->urn, AFF4_STORED, new URN(root_urn));
 
     if (result) {
@@ -123,7 +124,8 @@ AFF4Status AFF4Directory::LoadFromURN() {
             urn.Set(urn_string);
 
             // Set these triples with the new URN so we know how to open it.
-            resolver->Set(urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE));
+            resolver->Set(urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE),
+                          /* replace= */ false);
             resolver->Set(urn, AFF4_STORED, new URN(storage));
 
             resolver->logger->info("AFF4Directory volume found: {}", urn);
@@ -228,9 +230,10 @@ bool AFF4Directory::IsDirectory(const URN& urn) {
 //   path: Absolute path of the directory that will be deleted
 
 //   The path must not be terminated with a path separator.
-AFF4Status AFF4Directory::RemoveDirectory(DataStore *resolver, const string& path) {
+AFF4Status AFF4Directory::RemoveDirectory(DataStore *resolver,
+                                          const std::string& path) {
     WIN32_FIND_DATA ffd;
-    string search_str = path + PATH_SEP_STR + "*";
+    std::string search_str = path + PATH_SEP_STR + "*";
     HANDLE hFind = INVALID_HANDLE_VALUE;
 
     hFind = FindFirstFile(search_str.c_str(), &ffd);
@@ -252,7 +255,7 @@ AFF4Status AFF4Directory::RemoveDirectory(DataStore *resolver, const string& pat
                 return result;
             }
         } else {
-            string filename = path + PATH_SEP_STR + ffd.cFileName;
+            std::string filename = path + PATH_SEP_STR + ffd.cFileName;
             resolver->logger->info("Deleting file {}", filename);
             if (!::DeleteFile(filename.c_str())) {
                 resolver->logger->error("Failed: {}", GetLastErrorMessage());
@@ -272,7 +275,7 @@ AFF4Status AFF4Directory::RemoveDirectory(DataStore *resolver, const string& pat
     return STATUS_OK;
 }
 
-AFF4Status AFF4Directory::MkDir(DataStore* resolver, const string& path) {
+AFF4Status AFF4Directory::MkDir(DataStore* resolver, const std::string& path) {
     resolver->logger->info("MkDir {}", path);
 
     if (!CreateDirectory(path.c_str(), nullptr)) {
@@ -289,7 +292,7 @@ AFF4Status AFF4Directory::MkDir(DataStore* resolver, const string& path) {
     return STATUS_OK;
 }
 
-bool AFF4Directory::IsDirectory(const string& filename) {
+bool AFF4Directory::IsDirectory(const std::string& filename) {
     DWORD dwAttrib = GetFileAttributes(filename.c_str());
 
     bool result = (dwAttrib != INVALID_FILE_ATTRIBUTES &&
@@ -299,8 +302,6 @@ bool AFF4Directory::IsDirectory(const string& filename) {
     // directory.
     char last = *(filename.rbegin());
     result |= (last == '/' || last == '\\');
-
-    resolver->logger->info("IsDirectory {}: {}", filename, result);
 
     return result;
 }

@@ -336,10 +336,10 @@ class DataStore {
     }
 
     virtual void Set(const URN& urn, const URN& attribute,
-                     RDFValue* value) = 0;
+                     RDFValue* value, bool replace = true) = 0;
 
     virtual AFF4Status Get(const URN& urn, const URN& attribute,
-                           RDFValue& value) = 0;
+                           RDFValue& value ) = 0;
 
     virtual AFF4Status Get(const URN& urn, const URN& attribute,
                 std::vector<std::shared_ptr<RDFValue>>& values) = 0;
@@ -358,7 +358,9 @@ class DataStore {
      */
     virtual AFF4Status Has(const URN& urn) = 0;
 
-    virtual void Set(const URN& urn, const URN& attribute, std::shared_ptr<RDFValue> value) = 0;
+    virtual void Set(const URN& urn, const URN& attribute,
+                     std::shared_ptr<RDFValue> value,
+                     bool replace = true) = 0;
 
     virtual AFF4Status DeleteSubject(const URN& urn) = 0;
 
@@ -613,8 +615,11 @@ class MemoryDataStore: public DataStore {
      * @param attribute: The attribute to set.
      * @param value: The value.
      */
-    virtual void Set(const URN& urn, const URN& attribute, RDFValue* value);
-    virtual void Set(const URN& urn, const URN& attribute, std::shared_ptr<RDFValue> value);
+    virtual void Set(const URN& urn, const URN& attribute, RDFValue* value,
+                     bool replace = true);
+
+    virtual void Set(const URN& urn, const URN& attribute,
+                     std::shared_ptr<RDFValue> value, bool replace = true);
 
     AFF4Status Get(const URN& urn, const URN& attribute, RDFValue& value);
     AFF4Status Get(const URN& urn, const URN& attribute, std::vector<std::shared_ptr<RDFValue>>& value);

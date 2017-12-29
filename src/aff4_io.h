@@ -81,7 +81,14 @@ class ProgressContext {
         UNUSED(readptr);
         return true;
     }
+
+    explicit ProgressContext(DataStore *resolver)
+        : resolver(resolver) {}
+
     virtual ~ProgressContext() {}
+
+ protected:
+    DataStore *resolver;
 };
 
 // The empty progress renderer is always available.
@@ -90,6 +97,8 @@ extern ProgressContext empty_progress;
 
 // Some default progress functions that come out of the box.
 class DefaultProgress: public ProgressContext {
+ public:
+    explicit DefaultProgress(DataStore *resolver): ProgressContext(resolver) {}
     virtual bool Report(aff4_off_t readptr);
 };
 
@@ -218,6 +227,14 @@ class AFF4Volume: public AFF4Object {
     // should be able to just open it with the factory - so this is only for
     // creating new members.
     virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
+
+    // This is used to notify the volume of a stream which is
+    // contained within it. The container will ensure the dependent
+    // stream is flushed *before* the volume is closed. For example,
+    // a map stream is stored in the volume.
+    void AddDependency(URN urn) {
+        children.insert(urn.SerializeToString());
+    }
 };
 
 

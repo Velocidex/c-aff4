@@ -11,7 +11,7 @@ namespace aff4 {
 
 
 // This will be flipped by the signal handler.
-AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
+AFF4Status ImageStream(DataStore& resolver, const std::vector<URN>& input_urns,
                        URN output_urn,
                        bool truncate,
                        size_t buffer_size) {
@@ -40,7 +40,7 @@ AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
     }
 
     for (URN input_urn : input_urns) {
-        std::cerr << "Adding " << input_urn.value.c_str() << "\n";
+        resolver.logger->info("Adding {}", input_urn);
 
         AFF4ScopedPtr<AFF4Stream> input = resolver.AFF4FactoryOpen<AFF4Stream>(
                                               input_urn);
@@ -61,7 +61,7 @@ AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
             return IO_ERROR;
         }
 
-        DefaultProgress progress;
+        DefaultProgress progress(&resolver);
         progress.length = input->Size();
 
         AFF4Status res = image->WriteStream(input.get(), &progress);
@@ -104,7 +104,7 @@ AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
         return IO_ERROR;
     }
 
-    DefaultProgress progress;
+    DefaultProgress progress(&resolver);
     progress.length = input->Size();
 
     AFF4Status res = output->WriteStream(input.get(), &progress);
@@ -194,10 +194,14 @@ AFF4Status BasicImager::handle_logging() {
         break;
 
     case 1:
-        resolver.logger->set_level(spdlog::level::info);
+        resolver.logger->set_level(spdlog::level::warn);
         break;
 
     case 2:
+        resolver.logger->set_level(spdlog::level::info);
+        break;
+
+    case 3:
         resolver.logger->set_level(spdlog::level::debug);
         break;
 
@@ -207,7 +211,7 @@ AFF4Status BasicImager::handle_logging() {
     }
 
 
-    resolver.logger->set_pattern("%T %L %v");
+    resolver.logger->set_pattern("%Y-%m-%d %T %L %v");
 
     return CONTINUE;
 }
@@ -275,9 +279,7 @@ AFF4Status BasicImager::process_input() {
     for (std::string glob : inputs) {
         for (std::string input : GlobFilename(glob)) {
             URN input_urn(URN::NewURNFromFilename(input, false));
-
-            std::cerr << "Adding " << input.c_str() << " as " <<
-                input_urn.SerializeToString() << "\n";
+            resolver.logger->info("Adding {} as {}", input, input_urn);
 
             // Try to open the input.
             AFF4ScopedPtr<AFF4Stream> input_stream = resolver.AFF4FactoryOpen<
@@ -285,7 +287,7 @@ AFF4Status BasicImager::process_input() {
 
             // Not valid - skip it.
             if (!input_stream) {
-                resolver.logger->error("Unable to find {}", input_urn.SerializeToString());
+                resolver.logger->error("Unable to find {}", input_urn);
                 res = CONTINUE;
                 continue;
             }
@@ -313,6 +315,7 @@ AFF4Status BasicImager::process_input() {
                 image_stream->compression_method = compression;
 
                 // Copy the input stream to the output stream.
+                ProgressContext empty_progress(&resolver);
                 res = image_stream->WriteStream(input_stream.get(), &empty_progress);
                 if (res != STATUS_OK) {
                     return res;
@@ -336,7 +339,7 @@ AFF4Status BasicImager::process_input() {
                 // Set the output compression according to the user's wishes.
                 image_stream->compression = compression;
 
-                DefaultProgress progress;
+                DefaultProgress progress(&resolver);
                 progress.length = input_stream->Size();
 
                 // Copy the input stream to the output stream.
@@ -387,10 +390,9 @@ AFF4Status BasicImager::handle_export() {
         return IO_ERROR;
     }
 
-    std::cerr << "Extracting " << export_urn.value << " into " <<
-        output_urn.value << "\n";
+    resolver.logger->info("Extracting {} into {}", export_urn, output_urn);
     AFF4Status res = ExtractStream(
-                         resolver, export_urn, output_urn, Get("truncate")->isSet());
+        resolver, export_urn, output_urn, Get("truncate")->isSet());
 
     if (res == STATUS_OK) {
         actions_run.insert("export");
@@ -491,14 +493,14 @@ AFF4Status BasicImager::handle_compression() {
 
 #ifdef _WIN32
 // We only allow a wild card in the last component.
-vector<string> BasicImager::GlobFilename(string glob) const {
-    vector<string> result;
+std::vector<std::string> BasicImager::GlobFilename(std::string glob) const {
+    std::vector<std::string> result;
     WIN32_FIND_DATA ffd;
     unsigned int found = glob.find_last_of("/\\");
-    string path = "";
+    std::string path = "";
 
     // The path before the last PATH_SEP
-    if (found != string::npos) {
+    if (found != std::string::npos) {
         path = glob.substr(0, found);
     }
 
@@ -552,6 +554,7 @@ void BasicImager::Abort() {
 
 #ifdef _WIN32
 BOOL sigint_handler(DWORD dwCtrlType) {
+    UNUSED(dwCtrlType);
     aff4_abort_signaled = true;
 
     return TRUE;

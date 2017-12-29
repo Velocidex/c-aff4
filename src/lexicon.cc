@@ -70,6 +70,6 @@ Schema Schema::GetSchema(std::string object_type) {
     return Schema();
 }
 
-void aff4_lexicon_init() {};
+void aff4_lexicon_init() {}
 
 } // namespace aff4

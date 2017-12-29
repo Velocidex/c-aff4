@@ -101,7 +101,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
 
     resolver->logger->info("Opening file {}", filename);
 
-    vector<string> directory_components = split(filename, PATH_SEP);
+    std::vector<std::string> directory_components = split(filename, PATH_SEP);
     directory_components.pop_back();
 
     // Attribute is optional so if it is not there we just go with false.
@@ -179,9 +179,9 @@ AFF4Status FileBackedObject::LoadFromURN() {
     return STATUS_OK;
 }
 
-string FileBackedObject::Read(size_t length) {
+std::string FileBackedObject::Read(size_t length) {
     DWORD buffer_size = length;
-    unique_ptr<char[]> result(new char[length]);
+    std::unique_ptr<char[]> result(new char[length]);
 
     if (properties.seekable) {
         LARGE_INTEGER tmp;
@@ -200,7 +200,7 @@ string FileBackedObject::Read(size_t length) {
 
     readptr += buffer_size;
 
-    return string(result.get(), buffer_size);
+    return std::string(result.get(), buffer_size);
 }
 
 

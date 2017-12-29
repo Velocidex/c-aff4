@@ -274,9 +274,9 @@ static std::string abspath(std::string path) {
     // The windows version of this function is somewhat simpler.
     DWORD buffer_len = GetFullPathName(path.c_str(), 0, NULL, NULL);
     if (buffer_len > 0) {
-        char buffer[buffer_len];
-        GetFullPathName(path.c_str(), buffer_len, buffer, NULL);
-        return buffer;
+        auto buffer = std::unique_ptr<char>(new char[buffer_len]);
+        GetFullPathName(path.c_str(), buffer_len, buffer.get(), NULL);
+        return std::string(buffer.get());
     }
 
     return path;
@@ -295,23 +295,22 @@ std::string URN::ToFilename() const {
     }
 
     const int bytesNeeded = std::max(value.size() + 1, (size_t)MAX_PATH);
-    char path[bytesNeeded];
-    DWORD path_length = sizeof(path);
+    auto path = std::unique_ptr<char>(new char[bytesNeeded]);
+    DWORD path_length = bytesNeeded;
     HRESULT res;
 
-    res = PathCreateFromUrl(value.c_str(), path, &path_length, 0);
+    res = PathCreateFromUrl(value.c_str(), path.get(), &path_length, 0);
     if (res == S_FALSE || res == S_OK) {
-        //LOG(INFO) << "Converted " << value << " into " << path;
-        return path;
+        return std::string(path.get());
 
         // Failing the MS API we fallback to the urlparser.
     } else {
-        if (uriUriStringToWindowsFilenameA(value.c_str(), path) !=
-                URI_SUCCESS) {
+        if (uriUriStringToWindowsFilenameA(value.c_str(), path.get()) !=
+            URI_SUCCESS) {
             return "";
         }
 
-        return path;
+        return std::string(path.get());
     }
 }
 
