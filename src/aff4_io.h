@@ -121,9 +121,9 @@ class AFF4Stream: public AFF4Object {
         AFF4Object(result), readptr(0), size(0) {}
 
     // Convenience methods.
-    int Write(const std::unique_ptr<std::string>& data);
-    int Write(const std::string& data);
-    int Write(const char data[]);
+    AFF4Status Write(const std::unique_ptr<std::string>& data);
+    AFF4Status Write(const std::string& data);
+    AFF4Status Write(const char data[]);
     int sprintf(std::string fmt, ...);
 
     // Read a null terminated string.
@@ -145,7 +145,7 @@ class AFF4Stream: public AFF4Object {
     // The following should be overriden by derived classes.
     virtual AFF4Status Seek(aff4_off_t offset, int whence);
     virtual std::string Read(size_t length);
-    virtual int Write(const char* data, int length);
+    virtual AFF4Status Write(const char* data, int length);
     virtual aff4_off_t Tell();
     virtual aff4_off_t Size();
 
@@ -187,7 +187,7 @@ class StringIO: public AFF4Stream {
     }
 
     virtual std::string Read(size_t length);
-    virtual int Write(const char* data, int length);
+    virtual AFF4Status Write(const char* data, int length);
 
     virtual AFF4Status Truncate();
     virtual aff4_off_t Size();

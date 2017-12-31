@@ -2,6 +2,9 @@
 #include <libaff4.h>
 #include <iostream>
 
+namespace aff4 {
+
+
 void URNVerifySerialization(std::string url) {
   URN test(url);
   EXPECT_EQ(test.SerializeToString(), url);
@@ -9,7 +12,7 @@ void URNVerifySerialization(std::string url) {
 
 
 TEST(URNTest, SerializeURN) {
-	std::string url = "http://www.google.com/path/to/element#hash_data";
+        std::string url = "http://www.google.com/path/to/element#hash_data";
   uri_components components = URN(url).Parse();
 
   EXPECT_EQ(components.scheme, "http");
@@ -53,7 +56,7 @@ TEST(URNTest, SerializeURN) {
       cwd_string = cwd;
 
     EXPECT_EQ(URN("etc/passwd").SerializeToString(),
-    		std::string("file://") + cwd_string + "/etc/passwd");
+                std::string("file://") + cwd_string + "/etc/passwd");
   };
   components = URN("http:www.google.com").Parse();
 }
@@ -113,3 +116,6 @@ TEST(XSDIntegerTest, SerializeToString) {
 
   EXPECT_EQ(value.value, 0xfff880000000000);
 }
+
+
+} // namespace aff4

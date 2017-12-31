@@ -3,11 +3,15 @@
 #include <unistd.h>
 #include <glog/logging.h>
 
+
+namespace aff4 {
+
+
 class AFF4MapTest: public ::testing::Test {
  protected:
-	std::string filename = "/tmp/aff4_test.zip";
-	std::string source_filename = "/tmp/source.txt";
-	std::string image_name = "image.dd";
+        std::string filename = "/tmp/aff4_test.zip";
+        std::string source_filename = "/tmp/source.txt";
+        std::string image_name = "image.dd";
 
   URN volume_urn;
   URN image_urn;
@@ -243,3 +247,5 @@ TEST_F(AFF4MapTest, CreateMapStream) {
     EXPECT_STREQ(read_string.c_str(), "DDDDAAAAEEEE");
   }
 }
+
+} // namespace aff4

@@ -2,27 +2,29 @@
 #include <libaff4.h>
 #include <iostream>
 
+namespace aff4 {
+
 class MemoryDataStoreTest: public ::testing::Test {
  protected:
   MemoryDataStore store;
-
-  virtual void SetUp() {
-    store.Set(URN("hello"), URN("World"), new XSDString("foo"));
-  };
 };
 
 
 TEST_F(MemoryDataStoreTest, IncompatibleGet) {
   RDFBytes result;
 
+  store.Set(URN("hello"), URN("World"), new XSDString("foo"));
+
   // This should fail since the value is the wrong type.
-  EXPECT_EQ(INCOMPATIBLE_TYPES,
+  EXPECT_EQ(NOT_FOUND,
             store.Get(URN("hello"), URN("World"), result));
 }
 
 
 TEST_F(MemoryDataStoreTest, StorageTest) {
   XSDString result;
+
+  store.Set(URN("hello"), URN("World"), new XSDString("foo"));
 
   EXPECT_EQ(STATUS_OK,
             store.Get(URN("hello"), URN("World"), result));
@@ -43,6 +45,7 @@ TEST_F(MemoryDataStoreTest, StorageTest) {
 TEST_F(MemoryDataStoreTest, YamlSerializationTest) {
   MemoryDataStore new_store;
   unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
+  store.Set(URN("hello"), URN("World"), new XSDString("foo"));
 
   store.DumpToYaml(*output);
   output->Seek(0, 0);
@@ -55,10 +58,10 @@ TEST_F(MemoryDataStoreTest, YamlSerializationTest) {
 #endif
 
 TEST_F(MemoryDataStoreTest, TurtleSerializationTest) {
+  store.Set(URN("hello"), URN("World"), new XSDString("foo"));
+
   MemoryDataStore new_store;
   std::unique_ptr<AFF4Stream> output = StringIO::NewStringIO();
-  XSDString result;
-
   store.DumpToTurtle(*output, "");
   output->Seek(0, 0);
 
@@ -66,6 +69,7 @@ TEST_F(MemoryDataStoreTest, TurtleSerializationTest) {
   EXPECT_EQ(STATUS_OK,
             new_store.LoadFromTurtle(*output));
 
+  XSDString result;
   EXPECT_EQ(STATUS_OK,
             store.Get(URN("hello"), URN("World"), result));
 
@@ -76,10 +80,12 @@ TEST_F(MemoryDataStoreTest, TurtleSerializationTest) {
 // Add a method to inspect protected internal state.
 class AFF4ObjectCacheMock: public AFF4ObjectCache {
  public:
-  AFF4ObjectCacheMock(size_t size): AFF4ObjectCache(size) {};
+    AFF4ObjectCacheMock(const std::shared_ptr<spdlog::logger>& logger,
+                        int max_items) : AFF4ObjectCache(logger, max_items) {}
+
 
   std::vector<std::string> GetKeys() {
-	  std::vector<std::string> result;
+          std::vector<std::string> result;
     for (AFF4ObjectCacheEntry *it=lru_list.next; it!=&lru_list; it=it->next) {
       result.push_back(it->key);
     };
@@ -88,7 +94,7 @@ class AFF4ObjectCacheMock: public AFF4ObjectCache {
   };
 
   std::vector<std::string> GetInUse() {
-	  std::vector<std::string> result;
+          std::vector<std::string> result;
     for(auto it: in_use) {
       result.push_back(it.first);
     };
@@ -98,7 +104,7 @@ class AFF4ObjectCacheMock: public AFF4ObjectCache {
 };
 
 TEST(AFF4ObjectCacheTest, TestLRU) {
-  AFF4ObjectCacheMock cache(3);
+  AFF4ObjectCacheMock cache(get_logger(), 3);
   MemoryDataStore resolver;
   URN a = URN::NewURNFromFilename("a");
   URN b = URN::NewURNFromFilename("b");
@@ -115,7 +121,7 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   cache.Put(obj3);
 
   {
-	  std::vector<std::string> result = cache.GetKeys();
+          std::vector<std::string> result = cache.GetKeys();
 
     EXPECT_EQ(result[0], c.SerializeToString());
     EXPECT_EQ(result[1], b.SerializeToString());
@@ -126,7 +132,7 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   // list.
   EXPECT_EQ(cache.Get(a), obj1);
   {
-	  std::vector<std::string> result = cache.GetKeys();
+          std::vector<std::string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 2);
     EXPECT_EQ(result[0], c.SerializeToString());
     EXPECT_EQ(result[1], b.SerializeToString());
@@ -140,7 +146,7 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   };
 
   {
-	  std::vector<std::string> result = cache.GetKeys();
+          std::vector<std::string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 3);
 
     EXPECT_EQ(result[0], a.SerializeToString());
@@ -155,7 +161,7 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
   cache.Put(obj4);
 
   {
-	  std::vector<std::string> result = cache.GetKeys();
+          std::vector<std::string> result = cache.GetKeys();
     EXPECT_EQ(result.size(), 3);
 
     EXPECT_EQ(result[0], d.SerializeToString());
@@ -176,3 +182,5 @@ TEST(AFF4ObjectCacheTest, TestLRU) {
     EXPECT_EQ(result.size(), 2);
   }
 }
+
+} // namespace aff4

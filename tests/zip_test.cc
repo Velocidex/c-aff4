@@ -17,12 +17,14 @@ specific language governing permissions and limitations under the License.
 #include <libaff4.h>
 #include <unistd.h>
 
+namespace aff4 {
+
 class ZipTest: public ::testing::Test {
  protected:
-	std::string filename = "/tmp/aff4_test.zip";
-	std::string segment_name = "Foobar.txt";
-	std::string data1 = "I am a segment!";
-	std::string data2 = "I am another segment!";
+        std::string filename = "/tmp/aff4_test.zip";
+        std::string segment_name = "Foobar.txt";
+        std::string data1 = "I am a segment!";
+        std::string data2 = "I am another segment!";
   URN volume_urn;
 
   // Remove the file on teardown.
@@ -128,7 +130,7 @@ TEST_F(ZipTest, CreateMember) {
     std::string member_name = member_name_for_urn(test.SerializeToString(),
                                              zip->urn, true);
     EXPECT_STREQ(member_name.c_str(),
-                 "C%3a/Windows/notepad.exe");
+                 "C%3A/Windows/notepad.exe");
 
     // Check that the reverse works.
     EXPECT_STREQ(urn_from_member_name(
@@ -142,7 +144,7 @@ TEST_F(ZipTest, CreateMember) {
     std::string member_name = member_name_for_urn(test.SerializeToString(),
                                              zip->urn, true);
     EXPECT_STREQ(member_name.c_str(),
-                 "aff4%3a%2f%2f123456/URN-with%21special%24chars/and/path");
+                 "aff4%3A%2F%2F123456/URN-with%21special%24chars/and/path");
 
     // When recovered it should not be merged with the base URN since it is a
     // fully qualified URN.
@@ -272,3 +274,5 @@ TEST_F(ZipTest, testStreamedSegment) {
   std::string expected = data1;
   EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
 }
+
+} // namespace aff4

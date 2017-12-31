@@ -23,6 +23,8 @@ specific language governing permissions and limitations under the License.
 #include <string>
 #include <sstream>
 
+#include "spdlog/spdlog.h"
+
 namespace aff4 {
 
 #define UNUSED(x) (void)x
@@ -39,6 +41,15 @@ std::string GetLastErrorMessage();
 
 std::vector<std::string> split(const std::string& s, char delim);
 
+std::shared_ptr<spdlog::logger> get_logger();
+
+#define RETURN_IF_ERROR(expr)                   \
+    do {                                        \
+        AFF4Status res = (expr);                \
+        if (res != STATUS_OK) {                 \
+            return res;                         \
+        };                                      \
+    } while (0);
 
 } // namespace aff4
 

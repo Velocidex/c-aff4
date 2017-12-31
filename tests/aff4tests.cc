@@ -16,13 +16,7 @@
 #include <glog/logging.h>
 
 int main(int argc, char* argv[]) {
-  google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
-
-  // Turn this on for verbose logging.
-  google::LogToStderr();
-  google::SetStderrLogging(google::GLOG_ERROR);
-  //google::SetStderrLogging(google::GLOG_INFO);
 
   return RUN_ALL_TESTS();
 }

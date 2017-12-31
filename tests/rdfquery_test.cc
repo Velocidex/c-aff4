@@ -12,60 +12,73 @@ under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
 CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
+#include <string>
 #include <gtest/gtest.h>
 #include <libaff4.h>
 #include <unistd.h>
 #include <glog/logging.h>
 
-TEST(AFF4ImageRDFQuery, Sample1URN) {
-	std::string filename = "samples/Base-Linear.aff4";
+namespace aff4 {
 
-	MemoryDataStore resolver;
-	// This will open the container.
-	URN urn = URN::NewURNFromFilename(filename);
-	AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
 
-	std::shared_ptr<RDFValue> value = std::shared_ptr<RDFValue>(new URN(AFF4_IMAGE_TYPE));
-	std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), value);
-	ASSERT_EQ(1, images.size());
-	for(URN u : images){
-		//std::cout << u.SerializeToString() << std::endl;
-		ASSERT_EQ(std::string("aff4://08b52fb6-fbae-45f3-967e-03502cefaf92"), u.SerializeToString());
-	}
+class AFF4ImageRDFQuery : public ::testing::Test {
+protected:
+    const std::string reference_images = "tests/ReferenceImages/";
+};
+
+
+TEST_F(AFF4ImageRDFQuery, Sample1URN) {
+    std::string filename = reference_images + "AFF4Std/Base-Linear.aff4";
+
+    MemoryDataStore resolver;
+
+    // This will open the container.
+    URN urn = URN::NewURNFromFilename(filename);
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
+
+    const URN type(AFF4_IMAGE_TYPE);
+    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);
+
+    ASSERT_EQ(1, images.size());
+    for(URN u : images){
+        ASSERT_EQ(
+            "aff4://cf853d0b-5589-4c7c-8358-2ca1572b87eb",
+            u.SerializeToString());
+    }
 }
 
-TEST(AFF4ImageRDFQuery, Sample2URN) {
-	std::string filename = "samples/Base-Allocated.aff4";
+TEST_F(AFF4ImageRDFQuery, Sample2URN) {
+    std::string filename = reference_images + "AFF4Std/Base-Allocated.aff4";
 
-	MemoryDataStore resolver;
-	// This will open the container.
-	URN urn = URN::NewURNFromFilename(filename);
-	AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
+    MemoryDataStore resolver;
+    // This will open the container.
+    URN urn = URN::NewURNFromFilename(filename);
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
 
-	std::shared_ptr<RDFValue> value = std::shared_ptr<RDFValue>(new URN(AFF4_IMAGE_TYPE));
-	std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), value);
-	ASSERT_EQ(1, images.size());
-	for(URN u : images){
-		//std::cout << u.SerializeToString() << std::endl;
-		ASSERT_EQ(std::string("aff4://f8c7d607-5a24-4759-9686-abb2394cf118"), u.SerializeToString());
-	}
+    const URN type(AFF4_IMAGE_TYPE);
+    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);
+    ASSERT_EQ(1, images.size());
+    for(URN u : images){
+        ASSERT_EQ("aff4://8fcced2b-989f-4f51-bfa2-38d4a4d818fe",
+                  u.SerializeToString());
+    }
 }
 
-TEST(AFF4ImageRDFQuery, Sample3URN) {
-	std::string filename = "samples/Base-Linear-ReadError.aff4";
+TEST_F(AFF4ImageRDFQuery, Sample3URN) {
+    std::string filename = reference_images + "AFF4Std/Base-Linear-ReadError.aff4";
 
-	MemoryDataStore resolver;
-	// This will open the container.
-	URN urn = URN::NewURNFromFilename(filename);
-	AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
+    MemoryDataStore resolver;
+    // This will open the container.
+    URN urn = URN::NewURNFromFilename(filename);
+    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
 
-	std::shared_ptr<RDFValue> value = std::shared_ptr<RDFValue>(new URN(AFF4_IMAGE_TYPE));
-	std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), value);
-	ASSERT_EQ(1, images.size());
-	for(URN u : images){
-		//std::cout << u.SerializeToString() << std::endl;
-		ASSERT_EQ(std::string("aff4://d8dade4d-68e5-4cfd-a83a-69c88f9e95c0"), u.SerializeToString());
-	}
+    const URN type(AFF4_IMAGE_TYPE);
+    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);
+    ASSERT_EQ(1, images.size());
+    for(URN u : images){
+        ASSERT_EQ("aff4://3a873665-7bf6-47b5-a12a-d6632a58ddf9",
+                  u.SerializeToString());
+    }
 }
 
-
+} // namespace aff4

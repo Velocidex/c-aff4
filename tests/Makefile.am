@@ -2,7 +2,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 # This is so we can #include <package/foo>
-AM_CPPFLAGS = -I../src -I../tests -I../third_party/gtest/googletest/ -I../third_party/gtest/googletest/include
+AM_CPPFLAGS = -I../src -I../tests
 
 # The -no-undefined flag allows libtool to generate shared libraries for
 # Cygwin and MinGW.  LIBSTDCXX_LA_LINKER_FLAG is used to fix a Solaris bug.
@@ -26,9 +26,9 @@ check_SCRIPTS =
 noinst_SCRIPTS =
 
 # Libraries that are built but not installed.
-noinst_LTLIBRARIES = libgtest.la
+#noinst_LTLIBRARIES = libgtest.la
 
-libgtest_la_SOURCES = ../third_party/gtest/googletest/src/gtest-all.cc
+#libgtest_la_SOURCES = ../third_party/gtest/googletest/src/gtest-all.cc
 libgtest_la_CXXFLAGS = -g -Wall -O0 -pthread
 libgtest_la_LIBADD = -lpthread
 
@@ -46,6 +46,6 @@ aff4_test_SOURCES =  \
 	rdfquery_test.cc \
 	aff4_capi.cc
 
-aff4_test_LDADD = libgtest.la ../src/.libs/libaff4.a ${LIBS} ${GLOG_LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${UUID_LIBS} 
+aff4_test_LDADD = ../src/.libs/libaff4.a ${LIBS} ${GLOG_LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${UUID_LIBS}
 aff4_test_CXXFLAGS = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS} ${GLOG_CFLAGS}
-aff4_test_LDFLAGS = $(STATIC_LINKERLDFLAGS)
+aff4_test_LDFLAGS =  -L$(PREFIX)/lib/ $(STATIC_LINKERLDFLAGS) -lgtest

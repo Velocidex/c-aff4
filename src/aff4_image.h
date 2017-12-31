@@ -78,7 +78,7 @@ class AFF4Image: public AFF4Stream {
     // Delegates to the workers for support compression methods.
     AFF4Status FlushChunk(const char* data, size_t length);
 
-    AFF4Status _FlushBevy();
+    AFF4Status FlushBevy();
 
     // Convert the legecy formatted bevvy data into the new format.
     std::string _FixupBevvyData(std::string* data);
@@ -86,7 +86,7 @@ class AFF4Image: public AFF4Stream {
     int _ReadPartial(
         unsigned int chunk_id, int chunks_to_read, std::string& result);
 
-    AFF4Status _ReadChunkFromBevy(
+    AFF4Status ReadChunkFromBevy(
         std::string& result, unsigned int chunk_id,
         AFF4ScopedPtr<AFF4Stream>& bevy, BevvyIndex bevy_index[],
         uint32_t index_size);
@@ -153,7 +153,7 @@ class AFF4Image: public AFF4Stream {
         AFF4Stream* source,
         ProgressContext* progress = nullptr);
 
-    virtual int Write(const char* data, int length);
+    AFF4Status Write(const char* data, int length) override;
 
     /**
      * Read data from the current read pointer.
@@ -164,11 +164,40 @@ class AFF4Image: public AFF4Stream {
      */
     virtual std::string Read(size_t length);
 
-
     AFF4Status Flush();
 
     using AFF4Stream::Write;
 };
+
+
+// The AFF4 Standard specifies an "AFF4 Image" as an abstract
+// container for image related properties. It is not actually a
+// concrete stream but it refers to a storage stream using its
+// aff4:dataStream property.
+
+// We implement a read-only stream which delegates reads to the
+// underlying storage stream. This is necessary in order to be able to
+// open such a stream for reading.
+
+// Note that to create such a stream, you can simply set the
+// aff4:dataStream to a concerete Map or ImageStream.
+class AFF4StdImage : public AFF4Stream {
+ public:
+   AFF4StdImage(DataStore* resolver, URN urn): AFF4Stream(resolver, urn) {}
+   explicit AFF4StdImage(DataStore* resolver): AFF4Stream(resolver) {}
+
+    static AFF4ScopedPtr<AFF4StdImage> NewAFF4StdImage(
+        DataStore* resolver, const URN& image_urn, const URN& volume_urn);
+
+    AFF4Status LoadFromURN() override;
+
+    std::string Read(size_t length) override;
+
+ protected:
+    URN delegate;
+};
+
+
 
 extern void aff4_image_init();
 

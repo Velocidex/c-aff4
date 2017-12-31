@@ -48,7 +48,7 @@ class FileBackedObject: public AFF4Stream {
     virtual ~FileBackedObject();
 
     virtual std::string Read(size_t length);
-    virtual int Write(const char* data, int length);
+    virtual AFF4Status Write(const char* data, int length);
 
     /**
      * Load the file from a file:/ URN.

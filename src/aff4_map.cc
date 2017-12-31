@@ -516,9 +516,7 @@ AFF4Status AFF4Map::Flush() {
 
         for (auto it : map) {
             Range* range_it = &it.second;
-            if (map_stream->Write(range_it->SerializeToString()) < 0) {
-                return IO_ERROR;
-            }
+            RETURN_IF_ERROR(map_stream->Write(range_it->SerializeToString()));
         }
 
         AFF4ScopedPtr<AFF4Stream> idx_stream = volume->CreateMember(
@@ -619,11 +617,9 @@ AFF4Status AFF4Map::GetBackingStream(URN& target) {
 }
 
 
-int AFF4Map::Write(const char* data, int length) {
+AFF4Status AFF4Map::Write(const char* data, int length) {
     URN target;
-    if (GetBackingStream(target) != STATUS_OK) {
-        return -1;
-    }
+    RETURN_IF_ERROR(GetBackingStream(target));
 
     AFF4ScopedPtr<AFF4Stream> stream = resolver->AFF4FactoryOpen<AFF4Stream>(
                                            target);
@@ -632,15 +628,13 @@ int AFF4Map::Write(const char* data, int length) {
 
     // Append the data on the end of the stream.
     stream->Seek(0, SEEK_END);
-    if (stream->Write(data, length) < 0) {
-        return IO_ERROR;
-    }
+    RETURN_IF_ERROR(stream->Write(data, length));
 
     readptr += length;
 
     MarkDirty();
 
-    return length;
+    return STATUS_OK;
 }
 
 // This is the default WriteStream() which operates on linear streams. We just
@@ -692,26 +686,6 @@ AFF4Status AFF4Map::WriteStream(AFF4Map* source, ProgressContext* progress) {
 
 static AFF4Registrar<AFF4Map> map1(AFF4_MAP_TYPE);
 static AFF4Registrar<AFF4Map> map2(AFF4_LEGACY_MAP_TYPE);
-// AFF4 Standard
-
-// In the AFF4 Standard, AFF4_IMAGE_TYPE is an abstract concept which
-// delegates the data stream implementation to some other AFF4 stream
-// (image or map) via the DataStore attribute.
-
-// TODO: Implement this kind of object for reading.
-
-//static AFF4Registrar<AFF4Map> image1(AFF4_IMAGE_TYPE);
-static AFF4Registrar<AFF4Map> image2(AFF4_DISK_IMAGE_TYPE);
-static AFF4Registrar<AFF4Map> image3(AFF4_VOLUME_IMAGE_TYPE);
-static AFF4Registrar<AFF4Map> image4(AFF4_MEMORY_IMAGE_TYPE);
-static AFF4Registrar<AFF4Map> image5(AFF4_CONTIGUOUS_IMAGE_TYPE);
-static AFF4Registrar<AFF4Map> image6(AFF4_DISCONTIGUOUS_IMAGE_TYPE);
-// Legacy
-static AFF4Registrar<AFF4Map> image7(AFF4_LEGACY_IMAGE_TYPE);
-static AFF4Registrar<AFF4Map> image8(AFF4_LEGACY_DISK_IMAGE_TYPE);
-static AFF4Registrar<AFF4Map> image9(AFF4_LEGACY_VOLUME_IMAGE_TYPE);
-static AFF4Registrar<AFF4Map> image10(AFF4_LEGACY_CONTIGUOUS_IMAGE_TYPE);
-
 
 void aff4_map_init() {}
 

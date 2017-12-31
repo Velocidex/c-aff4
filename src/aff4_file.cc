@@ -204,7 +204,7 @@ std::string FileBackedObject::Read(size_t length) {
 }
 
 
-int FileBackedObject::Write(const char* data, int length) {
+AFF4Status FileBackedObject::Write(const char* data, int length) {
     // Dont even try to write on files we are not allowed to write on.
     if (!properties.writable) {
         return IO_ERROR;
@@ -228,7 +228,7 @@ int FileBackedObject::Write(const char* data, int length) {
         size = readptr;
     }
 
-    return tmp;
+    return STATUS_OK;
 }
 
 AFF4Status FileBackedObject::Truncate() {
@@ -336,7 +336,7 @@ std::string FileBackedObject::Read(size_t length) {
     return std::string(result.get(), res);
 }
 
-int FileBackedObject::Write(const char* data, int length) {
+AFF4Status FileBackedObject::Write(const char* data, int length) {
     if (!properties.writable) {
         return IO_ERROR;
     }
@@ -352,7 +352,7 @@ int FileBackedObject::Write(const char* data, int length) {
         size = readptr;
     }
 
-    return res;
+    return STATUS_OK;
 }
 
 AFF4Status FileBackedObject::Truncate() {

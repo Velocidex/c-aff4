@@ -122,18 +122,18 @@ std::string AFF4Stream::Read(size_t length) {
     return "";
 }
 
-int AFF4Stream::Write(const std::string& data) {
+AFF4Status AFF4Stream::Write(const std::string& data) {
     return Write(data.c_str(), data.size());
 }
 
-int AFF4Stream::Write(const char data[]) {
+AFF4Status AFF4Stream::Write(const char data[]) {
     return Write(data, strlen(data));
 }
 
-int AFF4Stream::Write(const char* data, int length) {
+AFF4Status AFF4Stream::Write(const char* data, int length) {
     UNUSED(data);
     UNUSED(length);
-    return 0;
+    return NOT_IMPLEMENTED;
 }
 
 int AFF4Stream::ReadIntoBuffer(void* buffer, size_t length) {
@@ -201,10 +201,7 @@ AFF4Status AFF4Stream::CopyToStream(
         }
         length_remaining -= data.size();
 
-        if (output.Write(data) < 0) {
-            return IO_ERROR;
-        }
-
+        RETURN_IF_ERROR(output.Write(data));
         if (!progress->Report(readptr)) {
             return ABORTED;
         }
@@ -229,9 +226,7 @@ AFF4Status AFF4Stream::WriteStream(AFF4Stream* source,
             break;
         }
 
-        if (Write(data) < 0) {
-            return IO_ERROR;
-        }
+        RETURN_IF_ERROR(Write(data));
 
         // Report the data read from the source.
         if (!progress->Report(source->Tell())) {
@@ -299,7 +294,7 @@ int AFF4Stream::sprintf(std::string fmt, ...) {
     }
 }
 
-int StringIO::Write(const char* data, int length) {
+AFF4Status StringIO::Write(const char* data, int length) {
     MarkDirty();
 
     buffer.replace(readptr, length, data, length);
@@ -307,7 +302,7 @@ int StringIO::Write(const char* data, int length) {
 
     size = std::max(size, readptr);
 
-    return length;
+    return STATUS_OK;
 }
 
 std::string StringIO::Read(size_t length) {
@@ -445,7 +440,7 @@ std::string member_name_for_urn(const URN member, const URN base_urn,
 }
 
 URN urn_from_member_name(const std::string& member, const URN base_urn) {
-    std::stringstream result;
+    std::string result;
 
     // Now escape any chars which are non printable.
     for (unsigned int i = 0; i < member.size(); i++) {
@@ -454,25 +449,23 @@ URN urn_from_member_name(const std::string& member, const URN base_urn) {
 
             int number = std::stoi(member.substr(i, 2), nullptr, 16);
             if (number) {
-                result << static_cast<char>(number);
+                result += static_cast<char>(number);
             }
 
             // We consume 2 chars.
             i++;
         } else {
-            result << member[i];
+            result += member[i];
         }
     }
 
     // If this is a fully qualified AFF4 URN we return it as is, else we return
     // the relative URN to our base.
-    URN result_urn(result.str());
-    std::string scheme = result_urn.Scheme();
-    if (scheme == "aff4") {
-        return result_urn;
+    if (result.substr(0, strlen("aff4:")) == "aff4:") {
+        return result;
     }
 
-    return base_urn.Append(result.str());
+    return base_urn.Append(result);
 }
 
 
@@ -518,5 +511,14 @@ aff4_off_t max(size_t x, aff4_off_t y) {
     return std::max((aff4_off_t)x, y);
 }
 
+std::shared_ptr<spdlog::logger> get_logger() {
+    auto logger = spdlog::get("aff4");
+
+    if (!logger) {
+        return spdlog::stderr_logger_mt("aff4");
+    }
+
+    return logger;
+}
 
 } // namespace aff4

@@ -17,20 +17,24 @@ specific language governing permissions and limitations under the License.
 #include <libaff4.h>
 #include <unistd.h>
 
+namespace aff4 {
+
+
 class AFF4DirectoryTest: public ::testing::Test {
  protected:
-	std::string root_path = "/tmp/aff4_directory/";
-	std::string segment_name = "Foobar.txt";
+    std::string root_path = "/tmp/aff4_directory/";
+    std::string segment_name = "Foobar.txt";
 
   // Remove the file on teardown.
   virtual void TearDown() {
-    AFF4Directory::RemoveDirectory(root_path);
+      MemoryDataStore resolver;
+      AFF4Directory::RemoveDirectory(&resolver, root_path);
   }
 
   // Create an initial container for each test.
   virtual void SetUp() {
-    MemoryDataStore resolver;
-    URN root_urn = URN::NewURNFromFilename(root_path);
+      MemoryDataStore resolver;
+      URN root_urn = URN::NewURNFromFilename(root_path);
 
     // We are allowed to write on the output filename.
     resolver.Set(root_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
@@ -52,6 +56,9 @@ class AFF4DirectoryTest: public ::testing::Test {
     member->Write("Hello world");
     resolver.Set(member->urn, AFF4_STREAM_ORIGINAL_FILENAME,
                  new XSDString(root_path + segment_name));
+
+    // Flush the volume to make sure it can be opened again.
+    volume->Flush();
   }
 };
 
@@ -82,3 +89,4 @@ TEST_F(AFF4DirectoryTest, CreateMember) {
 
   ASSERT_EQ(filename.SerializeToString(), root_path + segment_name);
 }
+} // namespace aff4

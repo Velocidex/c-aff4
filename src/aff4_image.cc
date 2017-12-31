@@ -18,7 +18,7 @@ specific language governing permissions and limitations under the License.
 #include "libaff4.h"
 #include <zlib.h>
 #include <snappy.h>
-
+#include "aff4_utils.h"
 
 namespace aff4 {
 
@@ -58,9 +58,7 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
  */
 AFF4Status AFF4Image::LoadFromURN() {
     if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-        if (resolver->Get(urn, AFF4_LEGACY_STORED, volume_urn) != STATUS_OK) {
-                return NOT_FOUND;
-        }
+        RETURN_IF_ERROR(resolver->Get(urn, AFF4_LEGACY_STORED, volume_urn));
     }
 
     // Determine if this is an AFF4:ImageStream (AFF4 Standard) or
@@ -129,7 +127,7 @@ AFF4Status AFF4Image::LoadFromURN() {
 
 
 // Check that the bevy
-AFF4Status AFF4Image::_FlushBevy() {
+AFF4Status AFF4Image::FlushBevy() {
     // If the bevy is empty nothing else to do.
     if (bevy.Size() == 0) {
         resolver->logger->info("Bevy {} is empty.", urn);
@@ -158,24 +156,12 @@ AFF4Status AFF4Image::_FlushBevy() {
         return IO_ERROR;
     }
 
-    if (bevy_index_stream->Write(bevy_index.buffer) < 0) {
-        return IO_ERROR;
-    }
-
-    if (bevy_stream->Write(bevy.buffer) < 0) {
-        return IO_ERROR;
-    }
+    RETURN_IF_ERROR(bevy_index_stream->Write(bevy_index.buffer));
+    RETURN_IF_ERROR(bevy_stream->Write(bevy.buffer));
 
     // These calls flush the bevies and removes them from the resolver cache.
-    AFF4Status res = resolver->Close(bevy_index_stream);
-    if (res != STATUS_OK) {
-        return res;
-    }
-
-    res = resolver->Close(bevy_stream);
-    if (res != STATUS_OK) {
-        return res;
-    }
+    RETURN_IF_ERROR(resolver->Close(bevy_index_stream));
+    RETURN_IF_ERROR(resolver->Close(bevy_stream));
 
     bevy_index.Truncate();
     bevy.Truncate();
@@ -226,44 +212,44 @@ AFF4Status AFF4Image::FlushChunk(const char* data, size_t length) {
     }
 
     // The index contains the offset and the length of each chunk.
-    if (bevy_index.Write(
-            reinterpret_cast<char*>(&bevy_offset), sizeof(bevy_offset)) < 0) {
-        return IO_ERROR;
-    }
+    RETURN_IF_ERROR(
+        bevy_index.Write(
+            reinterpret_cast<char*>(&bevy_offset), sizeof(bevy_offset)));
 
     // If by attempting to compress the chunk, we actually made it
     // bigger, we just store the chunk uncompressed. The decompressor
     // can figure that this is uncompressed by comparing the chunk
     // size to the compressed chunk size.
+
+    // 3.2 Compression Storage of uncompressed chunks is supported by
+    //    the simple principle that if len(chunk) == aff4:chunk_size
+    //    then it is a stored chunk. Compression is not applied to
+    //    stored chunks.
     bevy_chunk_length = output.size();
-    if (bevy_chunk_length >= length) {
-        bevy_chunk_length = length;
-        if (bevy_index.Write(
+
+    // Chunk is compressible - store it compressed.
+    if (bevy_chunk_length < chunk_size - 16) {
+        RETURN_IF_ERROR(bevy_index.Write(
                 reinterpret_cast<char*>(&bevy_chunk_length),
-                sizeof(bevy_chunk_length)) < 0) {
-            return IO_ERROR;
-        }
+                sizeof(bevy_chunk_length)));
 
-        if (bevy.Write(data, length) < 0) {
-            return IO_ERROR;
-        }
+        RETURN_IF_ERROR(bevy.Write(output));
 
+        // Chunk is not compressible enough, store it uncompressed.
     } else {
-        if (bevy_index.Write(
+        bevy_chunk_length = chunk_size;
+        RETURN_IF_ERROR(
+            bevy_index.Write(
                 reinterpret_cast<char*>(&bevy_chunk_length),
-                sizeof(bevy_chunk_length)) < 0) {
-            return IO_ERROR;
-        }
+                sizeof(bevy_chunk_length)));
 
-        if (bevy.Write(output) < 0) {
-            return IO_ERROR;
-        }
+        RETURN_IF_ERROR(bevy.Write(data, length));
     }
 
     chunk_count_in_bevy++;
 
     if (chunk_count_in_bevy >= chunks_per_segment) {
-        return _FlushBevy();
+        return FlushBevy();
     }
 
     return result;
@@ -315,7 +301,7 @@ AFF4Status DeCompressSnappy_(const char* data, size_t length, std::string* outpu
 }
 
 
-int AFF4Image::Write(const char* data, int length) {
+AFF4Status AFF4Image::Write(const char* data, int length) {
     // This object is now dirty.
     MarkDirty();
 
@@ -340,7 +326,7 @@ int AFF4Image::Write(const char* data, int length) {
         size = readptr;
     }
 
-    return length;
+    return STATUS_OK;
 }
 
 
@@ -468,10 +454,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
                 return IO_ERROR;
             }
 
-            AFF4Status res = bevy->WriteStream(&stream, progress);
-            if (res != STATUS_OK) {
-                return res;
-            }
+            RETURN_IF_ERROR(bevy->WriteStream(&stream, progress));
 
             // Report the data read from the source.
             if (!progress->Report(source->Tell())) {
@@ -490,9 +473,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
                 return IO_ERROR;
             }
 
-            if (bevy_index->Write(stream.bevy_index.buffer) < 0) {
-                return IO_ERROR;
-            }
+            RETURN_IF_ERROR(bevy_index->Write(stream.bevy_index.buffer));
         }
 
         bevy_number++;
@@ -520,7 +501,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
  *
  * @return number of bytes read, or AFF4Status for error.
  */
-AFF4Status AFF4Image::_ReadChunkFromBevy(
+AFF4Status AFF4Image::ReadChunkFromBevy(
     std::string& result, unsigned int chunk_id, AFF4ScopedPtr<AFF4Stream>& bevy,
     BevvyIndex bevy_index[], uint32_t index_size) {
     unsigned int chunk_id_in_bevy = chunk_id % chunks_per_segment;
@@ -622,11 +603,9 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
 
         while (chunks_to_read > 0) {
             // Read a full chunk from the bevy.
-            AFF4Status res = _ReadChunkFromBevy(
-                result, chunk_id, bevy, bevy_index_array, index_size);
-
-            if (res != STATUS_OK) {
-                return res;
+            if (ReadChunkFromBevy(
+                    result, chunk_id, bevy, bevy_index_array, index_size) < 0) {
+                return IO_ERROR;
             }
 
             chunks_to_read--;
@@ -685,7 +664,7 @@ std::string AFF4Image::Read(size_t length) {
 }
 
 AFF4Status AFF4Image::_write_metadata() {
-    resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+    resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
                   /* replace = */ false);
 
     resolver->Set(urn, AFF4_STORED, new URN(volume_urn));
@@ -707,16 +686,10 @@ AFF4Status AFF4Image::_write_metadata() {
 AFF4Status AFF4Image::Flush() {
     if (IsDirty()) {
         // Flush the last chunk.
-        AFF4Status res = FlushChunk(buffer.c_str(), buffer.length());
-        if (res != STATUS_OK) {
-            return res;
-        }
+        RETURN_IF_ERROR(FlushChunk(buffer.c_str(), buffer.length()));
 
         buffer.resize(0);
-        res = _FlushBevy();
-        if (res != STATUS_OK) {
-            return res;
-        }
+        RETURN_IF_ERROR(FlushBevy());
 
         _write_metadata();
     }
@@ -751,5 +724,82 @@ std::string AFF4Image::_FixupBevvyData(std::string* data){
     delete[] bevy_index_array;
     return result;
 }
+
+
+
+AFF4ScopedPtr<AFF4StdImage> AFF4StdImage::NewAFF4StdImage(
+    DataStore* resolver, const URN& image_urn, const URN& volume_urn) {
+    AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
+        volume_urn);
+
+    if (!volume) {
+        return AFF4ScopedPtr<AFF4StdImage>();    /** Volume not known? */
+    }
+
+    // Inform the volume that we have a new image stream contained within it.
+    volume->children.insert(image_urn.SerializeToString());
+
+    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+                  /* replace = */ false);
+    resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
+    if(resolver->Has(image_urn, AFF4_STREAM_SIZE) != STATUS_OK) {
+        resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
+    }
+
+    return resolver->AFF4FactoryOpen<AFF4StdImage>(image_urn);
+}
+
+AFF4Status AFF4StdImage::LoadFromURN() {
+    // Find the delegate.
+    if (resolver->Get(urn, AFF4_DATASTREAM, delegate) != STATUS_OK) {
+        RETURN_IF_ERROR(resolver->Get(urn, AFF4_LEGACY_DATASTREAM, delegate));
+    }
+
+    // Try to open the delegate.
+    auto delegate_stream = resolver->AFF4FactoryOpen<AFF4Stream>(
+        delegate);
+    if (!delegate_stream) {
+        resolver->logger->error("Unable to open aff4:dataStream {} for Image {}",
+                                delegate, urn);
+        return NOT_FOUND;
+    }
+
+    // Get the delegate's size.
+    size = delegate_stream->Size();
+
+    return STATUS_OK;
+}
+
+std::string AFF4StdImage::Read(size_t length) {
+    auto delegate_stream = resolver->AFF4FactoryOpen<AFF4Stream>(
+        delegate);
+    if (!delegate_stream) {
+        resolver->logger->error("Unable to open aff4:dataStream {} for Image {}",
+                                delegate, urn);
+        return "";
+    }
+
+    delegate_stream->Seek(readptr, SEEK_SET);
+    return delegate_stream->Read(length);
+}
+
+// AFF4 Standard
+
+// In the AFF4 Standard, AFF4_IMAGE_TYPE is an abstract concept which
+// delegates the data stream implementation to some other AFF4 stream
+// (image or map) via the DataStore attribute.
+static AFF4Registrar<AFF4StdImage> image1(AFF4_IMAGE_TYPE);
+static AFF4Registrar<AFF4StdImage> image2(AFF4_DISK_IMAGE_TYPE);
+static AFF4Registrar<AFF4StdImage> image3(AFF4_VOLUME_IMAGE_TYPE);
+static AFF4Registrar<AFF4StdImage> image4(AFF4_MEMORY_IMAGE_TYPE);
+static AFF4Registrar<AFF4StdImage> image5(AFF4_CONTIGUOUS_IMAGE_TYPE);
+static AFF4Registrar<AFF4StdImage> image6(AFF4_DISCONTIGUOUS_IMAGE_TYPE);
+
+// Legacy
+static AFF4Registrar<AFF4StdImage> image7(AFF4_LEGACY_IMAGE_TYPE);
+static AFF4Registrar<AFF4StdImage> image8(AFF4_LEGACY_DISK_IMAGE_TYPE);
+static AFF4Registrar<AFF4StdImage> image9(AFF4_LEGACY_VOLUME_IMAGE_TYPE);
+static AFF4Registrar<AFF4StdImage> image10(AFF4_LEGACY_CONTIGUOUS_IMAGE_TYPE);
+
 
 } // namespace aff4

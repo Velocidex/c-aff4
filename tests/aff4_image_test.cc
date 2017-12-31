@@ -17,6 +17,8 @@ specific language governing permissions and limitations under the License.
 #include <unistd.h>
 #include <glog/logging.h>
 
+namespace aff4 {
+
 
 class AFF4ImageTest: public ::testing::Test {
  protected:
@@ -55,7 +57,6 @@ class AFF4ImageTest: public ::testing::Test {
           &resolver, image_urn, zip->urn);
       ASSERT_NE(image.get(), nullptr);
 
-
       // For testing - rediculously small chunks. This will create many bevies.
       image->chunk_size = 10;
       image->chunks_per_segment = 3;
@@ -80,7 +81,7 @@ class AFF4ImageTest: public ::testing::Test {
 
     // Now test the streaming API.
     {
-    	std::unique_ptr<AFF4Stream> test_stream = StringIO::NewStringIO();
+      std::unique_ptr<AFF4Stream> test_stream = StringIO::NewStringIO();
       test_stream->Write("This is a test");
       test_stream->Seek(0, SEEK_SET);
 
@@ -153,8 +154,8 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
     std::string read_data = image->Read(13);
     std::string expected_data = stream_copy->Read(13);
 
-    LOG(INFO) << "Expected:" << expected_data.c_str();
-    LOG(INFO) << "Read:" << read_data.c_str();
+    resolver.logger->info("Expected: {}", expected_data);
+    resolver.logger->info("Read: {}", read_data);
 
     EXPECT_STREQ(expected_data.c_str(), read_data.c_str());
   }
@@ -196,3 +197,6 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
     EXPECT_STREQ(data.c_str(), "This is a test");
   }
 }
+
+
+} // namespace aff4

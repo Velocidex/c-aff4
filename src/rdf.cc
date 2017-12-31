@@ -205,7 +205,8 @@ URN URN::Append(const std::string& component) const {
         i--;
     }
 
-    return URN(value.substr(0, i+1) + _NormalizePath(component));
+    const std::string urn = value.substr(0, i+1) + _NormalizePath(component);
+    return URN(urn);
 }
 
 

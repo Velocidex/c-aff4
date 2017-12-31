@@ -314,6 +314,7 @@ class DataStore {
 
   public:
     DataStore();
+    DataStore(std::shared_ptr<spdlog::logger> logger);
     virtual ~DataStore() {}
 
     // All logging directives go through this handle. It can be
@@ -367,18 +368,22 @@ class DataStore {
     virtual std::vector<URN> SelectSubjectsByPrefix(const URN& prefix) = 0;
 
     /**
-     * Query the data for all resource that have the given attribute, which is optionally set to the value;
+     * Query the data for all subjects that have the given attribute,
+     * which is optionally set to the value;
      *
      * @param attribute The required attribute.
      * @param value The optional value which to check against.
      * @return A vector of Resource URNs that have the given attribute.
      */
-    virtual std::unordered_set<URN> Query(const URN& attribute, std::shared_ptr<RDFValue> value = nullptr) = 0;
+    virtual std::unordered_set<URN> Query(
+        const URN& attribute, const RDFValue* value = nullptr) = 0;
 
     /**
      * Get the AFF4 Attributes for the given urn.
+     *
      * @param urn The Resource URN to enquire about.
-     * @return All known AFF4_Attributes for the given urn. If the urn is unknown, an empty attribute list is returned.
+     * @return All known AFF4_Attributes for the given urn. If the urn
+     * is unknown, an empty attribute list is returned.
      */
     virtual AFF4_Attributes GetAttributes(const URN& urn) = 0;
 
@@ -627,7 +632,8 @@ class MemoryDataStore: public DataStore {
     AFF4Status Has(const URN& urn, const URN& attribute);
     AFF4Status Has(const URN& urn, const URN& attribute, RDFValue& value);
 
-    std::unordered_set<URN> Query(const URN& attribute, std::shared_ptr<RDFValue> value = nullptr);
+    std::unordered_set<URN> Query(
+        const URN& attribute, const RDFValue* value = nullptr) override;
     AFF4_Attributes GetAttributes(const URN& urn);
 
     virtual AFF4Status DeleteSubject(const URN& urn);

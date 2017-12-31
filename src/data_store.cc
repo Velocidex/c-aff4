@@ -88,15 +88,12 @@ AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream& stream) {
 
 #endif
 
+DataStore::DataStore():
+    DataStore(aff4::get_logger()) {}
 
-std::shared_ptr<spdlog::logger> make_logger() {
-    static std::string name = "console";
-    name += "_";
-    return spdlog::stderr_color_mt(name);
-}
 
-DataStore::DataStore()
-    : logger(make_logger()),
+DataStore::DataStore(std::shared_ptr<spdlog::logger> logger)
+    : logger(logger),
       ObjectCache(logger) {
     // By default suppress ZipFileSegment objects since all their metadata comes
     // directly from the ZIP container. This keeps the turtle files a bit cleaner.
@@ -454,7 +451,8 @@ void MemoryDataStore::Set(const URN& urn, const URN& attribute,
     store[urn.SerializeToString()][attribute.SerializeToString()] = values;
 }
 
-AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute, RDFValue& value) {
+AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute,
+                                RDFValue& value) {
     auto urn_it = store.find(urn.SerializeToString());
 
     if (urn_it == store.end()) {
@@ -467,17 +465,16 @@ AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute, RDFValue& 
     }
 
     std::vector<std::shared_ptr<RDFValue>> values = (attribute_itr->second);
-    if (values.empty()) {
-        return NOT_FOUND;
+    AFF4Status res = NOT_FOUND;
+    for (const auto &fetched_value: values) {
+        // Only collect compatible types.
+        if (typeid(value) == typeid(*fetched_value)) {
+            res = value.UnSerializeFromString(
+                fetched_value->SerializeToString());
+        }
     }
 
-    // The RDFValue type is incompatible with what the caller provided.
-    //    if (typeid(value) != typeid(*attribute_itr->second)) {
-    //        return INCOMPATIBLE_TYPES;
-    //    }
-
-    // Get the first key.
-    return value.UnSerializeFromString(values[0]->SerializeToString());
+    return res;
 }
 
 AFF4Status MemoryDataStore::Get(const URN& urn,
@@ -562,32 +559,34 @@ AFF4Status MemoryDataStore::Has(const URN& urn, const URN& attribute, RDFValue& 
     return NOT_FOUND;
 }
 
-std::unordered_set<URN> MemoryDataStore::Query(const URN& attribute, std::shared_ptr<RDFValue> value) {
+std::unordered_set<URN> MemoryDataStore::Query(
+    const URN& attribute, const RDFValue* value) {
     std::unordered_set<URN> results;
+    std::string serialized_value;
+    std::string serialized_attribute = attribute.SerializeToString();
 
-    std::unordered_map<std::string, AFF4_Attributes>::const_iterator it = store.begin();
-    while(it != store.end()){
-        AFF4_Attributes attr = it->second;
-        // Scan all Attributes for the given attribute.
-        AFF4_Attributes::const_iterator attr_it = attr.find(attribute.SerializeToString());
-        if(attr_it != attr.end()){
-            // We have this attribute.
-            if(value != nullptr){
-                std::string v = value->SerializeToString();
-                const std::vector<std::shared_ptr<RDFValue>> values = attr_it->second;
-                for(std::shared_ptr<RDFValue> rdfv : values){
-                    std::string propertyValue = rdfv->SerializeToString();
-                    if(v.compare(propertyValue) == 0){
-                        results.emplace(it->first);
-                    }
+    if (value) {
+        serialized_value = value->SerializeToString();
+    }
+
+    for (const auto &it: store) {
+        URN subject = it.first;
+        AFF4_Attributes attr = it.second;
+
+        for (const auto &it: attr) {
+            URN stored_attribute = it.first;
+            if (stored_attribute.SerializeToString() != serialized_attribute)
+                continue;
+
+            const auto& value_array = it.second;
+
+            for (const auto &stored_value: value_array) {
+                if (value == nullptr ||
+                    serialized_value == stored_value->SerializeToString()) {
+                    results.insert(subject);
                 }
-            } else {
-                // Now value check, so just add
-                results.emplace(it->first);
             }
         }
-
-        it++;
     }
 
     return results;

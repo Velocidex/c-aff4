@@ -97,14 +97,14 @@ AFF4Status ZipFile::LoadTurtleMetadata() {
                 AFF4_CONTAINER_INFO_TURTLE);
 
     if (turtle_stream.get()) {
-        AFF4Status res = resolver->LoadFromTurtle(*turtle_stream);
+        RETURN_IF_ERROR(resolver->LoadFromTurtle(*turtle_stream));
 
         // Ensure the correct backing store URN overrides the one stored in the
         // turtle file since it is more current.
         resolver->Set(urn, AFF4_STORED, new URN(backing_store_urn));
         resolver->Set(backing_store_urn, AFF4_CONTAINS, new URN(urn));
 
-        return res;
+        return STATUS_OK;
     }
 
     return NOT_FOUND;
@@ -148,9 +148,7 @@ AFF4Status ZipFile::parse_cd() {
     // Find the End of Central Directory Record - We read about 4k of
     // data and scan for the header from the end, just in case there is
     // an archive comment appended to the end.
-    if (backing_store->Seek(-AFF4_BUFF_SIZE, SEEK_END) != STATUS_OK) {
-        return IO_ERROR;
-    }
+    RETURN_IF_ERROR(backing_store->Seek(-AFF4_BUFF_SIZE, SEEK_END));
 
     aff4_off_t ecd_real_offset = backing_store->Tell();
     std::string buffer = backing_store->Read(AFF4_BUFF_SIZE);
@@ -421,10 +419,7 @@ AFF4Status ZipFile::Flush() {
             return IO_ERROR;
         }
 
-        AFF4Status res = write_zip64_CD(*backing_store);
-        if (res != STATUS_OK) {
-            return res;
-        }
+        RETURN_IF_ERROR(write_zip64_CD(*backing_store));
     }
 
     return AFF4Volume::Flush();
@@ -570,7 +565,7 @@ ZipFileSegment::ZipFileSegment(std::string filename, ZipFile& owner) {
     owner_urn = owner.urn;
     urn = urn_from_member_name(filename, owner.urn);
 
-    LoadFromZipFile(owner);
+    LoadFromZipFile(filename, owner);
 }
 
 AFF4ScopedPtr<ZipFileSegment> ZipFileSegment::NewZipFileSegment(
@@ -582,15 +577,17 @@ AFF4ScopedPtr<ZipFileSegment> ZipFileSegment::NewZipFileSegment(
         return AFF4ScopedPtr<ZipFileSegment>();    /** Volume not known? */
     }
 
-    std::string member_filename = member_name_for_urn(segment_urn, volume->urn, true);
+    std::string member_filename = member_name_for_urn(
+        segment_urn, volume->urn, true);
 
     return volume->CreateZipSegment(member_filename);
 }
 
-AFF4Status ZipFileSegment::LoadFromZipFile(ZipFile& owner) {
-    std::string member_name = member_name_for_urn(urn, owner.urn, true);
+AFF4Status ZipFileSegment::LoadFromZipFile(
+    const std::string& member_name, ZipFile& owner) {
 
-    // Parse the ZipFileHeader for this filename.
+    // The ZipFileHeaders should have already been parsed and contain
+    // the member names.
     auto it = owner.members.find(member_name);
     if (it == owner.members.end()) {
         // The owner does not have this file yet.
@@ -699,15 +696,16 @@ AFF4Status ZipFileSegment::Truncate() {
     return StringIO::Truncate();
 }
 
-int ZipFileSegment::Write(const char* data, int length) {
+AFF4Status ZipFileSegment::Write(const char* data, int length) {
     // The segment is mapped from the backing store and the user wants to modify
     // it. We need to make a local copy.
     if (_backing_store_start_offset > 0) {
         AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
             AFF4Stream>(_backing_store_urn);
 
+        // We must have a valid backing_store.
         if (!backing_store) {
-            return 0;
+            return IO_ERROR;
         }
 
         backing_store->Seek(_backing_store_start_offset, SEEK_SET);
@@ -719,17 +717,15 @@ int ZipFileSegment::Write(const char* data, int length) {
 }
 
 AFF4Status ZipFileSegment::LoadFromURN() {
-    if (resolver->Get(urn, AFF4_STORED, owner_urn) != STATUS_OK) {
-        return NOT_FOUND;
-    }
+    RETURN_IF_ERROR(resolver->Get(urn, AFF4_STORED, owner_urn));
 
     AFF4ScopedPtr<ZipFile> owner = resolver->AFF4FactoryOpen<ZipFile>(owner_urn);
-
     if (!owner) {
         return IO_ERROR;
     }
 
-    return LoadFromZipFile(*owner);
+    const std::string member_name = member_name_for_urn(urn, owner_urn, true);
+    return LoadFromZipFile(member_name, *owner);
 }
 
 // In AFF4 we use smallish buffers, therefore we just do everything in memory.
@@ -833,19 +829,15 @@ AFF4Status ZipFileSegment::Flush() {
             zip_info->compress_size = cdata.size();
             zip_info->compression_method = ZIP_DEFLATE;
 
-            zip_info->WriteFileHeader(*backing_store);
-            if (backing_store->Write(cdata) < 0) {
-                return IO_ERROR;
-            }
+            RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
+            RETURN_IF_ERROR(backing_store->Write(cdata));
 
             // Compression method not known - ignore and store uncompressed.
         } else {
             zip_info->compress_size = buffer.size();
 
-            zip_info->WriteFileHeader(*backing_store);
-            if (backing_store->Write(buffer) < 0) {
-                return IO_ERROR;
-            }
+            RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
+            RETURN_IF_ERROR(backing_store->Write(buffer));
         }
 
         // Replace ourselves in the members map.

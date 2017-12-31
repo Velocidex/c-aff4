@@ -2,6 +2,8 @@
 #include <libaff4.h>
 #include <unistd.h>
 
+namespace aff4 {
+
 
 class StreamTest : public ::testing::Test {
  protected:
@@ -58,14 +60,14 @@ class StreamTest : public ::testing::Test {
 };
 
 TEST_F(StreamTest, StringIOTest) {
-	std::unique_ptr<AFF4Stream> stream = StringIO::NewStringIO();
+        std::unique_ptr<AFF4Stream> stream = StringIO::NewStringIO();
 
   test_Stream(*stream);
 }
 
 class FileBackedStreamTest: public StreamTest {
  protected:
-	std::string filename = "/tmp/test_filename.bin";
+        std::string filename = "/tmp/test_filename.bin";
 
   // Remove the file on teardown.
   virtual void TearDown() {
@@ -90,3 +92,4 @@ TEST_F(FileBackedStreamTest, FileBackedObjectIOTest) {
 }
 
 
+} // namespace aff4
