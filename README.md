@@ -4,7 +4,7 @@ The Advanced Forensics File Format 4 (AFF4) is an open source format used for th
 data.
 
 It was originally designed and published in [1] and has since been standardised as the AFF4 Standard v1.0, 
-which is available at https://github.com/aff4/Standard . This project is a work in progress implementation, 
+which is available at https://github.com/aff4/Standard. This project is a work in progress implementation, 
 providing two library implementations, C/C++ and Python.
 
 ## What is currently supported.
@@ -30,12 +30,12 @@ the AFF4 that have not yet been implemented in this codebase include:
 6. Support for signed statements or Bill of Materials.
 7. Logical file acquisition.
 
-# Notice
+## Notice
 
 This is not an official Google product (experimental or otherwise), it is just
 code that happens to be owned by Google.
 
-# References
+## References
 [1] "Extending the advanced forensic format to accommodate multiple data sources,
 logical evidence, arbitrary information and forensic workflow" M.I. Cohen,
 Simson Garfinkel and Bradley Schatz, digital investigation 6 (2009) S57–S68.
