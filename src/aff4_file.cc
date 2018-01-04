@@ -57,8 +57,8 @@ AFF4Status _CreateIntermediateDirectories(
 
     for (auto component : components) {
         path = path + component + PATH_SEP_STR;
-        resolver->logger->info("Creating intermediate directories {}",
-                               path);
+        resolver->logger->debug("Creating intermediate directories {}",
+                                path);
 
         if (AFF4Directory::IsDirectory(path)) {
             continue;

@@ -418,28 +418,30 @@ class _CompressorStream: public AFF4Stream {
 
 AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
                                   ProgressContext* progress) {
-    URN volume_urn;
     DefaultProgress default_progress(resolver);
     if (!progress) {
         progress = &default_progress;
     }
 
-    if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-        resolver->logger->error("Unable to find storage for urn {}", urn);
-        return NOT_FOUND;
-    }
-
-    // Open the volume.
-    AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
-                                           volume_urn);
-
-    if (!volume) {
-        return NOT_FOUND;
-    }
-
     // Write a bevy at a time.
     while (1) {
+        // This looks like a stream but can only read a chunk at a time.
         _CompressorStream stream(resolver, this, source);
+
+        URN volume_urn;
+
+        if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
+            resolver->logger->error("Unable to find storage for urn {}", urn);
+            return NOT_FOUND;
+        }
+
+        // Open the volume.
+        AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
+            volume_urn);
+
+        if (!volume) {
+            return NOT_FOUND;
+        }
 
         // TODO(scudette): This scheme is problematic on filesystems that
         // distinguish between files and directories.
@@ -455,11 +457,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
             }
 
             RETURN_IF_ERROR(bevy->WriteStream(&stream, progress));
-
-            // Report the data read from the source.
-            if (!progress->Report(source->Tell())) {
-                return ABORTED;
-            }
+            resolver->Close(bevy);
         }
 
         // Now write the index.
@@ -474,6 +472,12 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
             }
 
             RETURN_IF_ERROR(bevy_index->Write(stream.bevy_index.buffer));
+            resolver->Close(bevy_index);
+        }
+
+        // Report the data read from the source.
+        if (!progress->Report(source->Tell())) {
+            return ABORTED;
         }
 
         bevy_number++;

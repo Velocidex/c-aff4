@@ -72,7 +72,9 @@ libaff4_la_SOURCES = \
 	aff4_directory.cc \
 	aff4_file.cc \
 	aff4_symstream.cc \
-	libaff4-c.cc
+	libaff4-c.cc \
+	tclap_parsers.cc
+
 
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
 libaff4_la_INCLUDES = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS} ${UUID_CFLAGS} ${GLOG_CFLAGS}

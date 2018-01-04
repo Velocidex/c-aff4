@@ -75,7 +75,17 @@ class BasicImager {
   protected:
     URN volume_URN;
 
+    // The current URN of the volume we write to.
     URN output_volume_urn;
+
+    // The current URN of the backing file we are writing to.
+    URN output_volume_backing_urn;
+
+    // For multipart volume.
+    int output_volume_part = 0;
+
+    // Maximum size of output volume.
+    size_t max_output_volume_file_size = 10 * 1024 * 1024;
 
     // Type of compression we should use.
     AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
@@ -203,7 +213,12 @@ class BasicImager {
                    "output file to be truncated first.",
                    false));
 
-        AddArg(new TCLAP::MultiArgToNextFlag<std::string>(
+        AddArg(new TCLAP::SwitchArg(
+                   "@", "stdin_input", "Files to image read from stdin. See the -i "
+                   "flag, but these are read from stdin.",
+                   false));
+
+        AddArg(new TCLAP::MultiArgToNextFlag(
                    "i", "input", "File to image. If specified we copy this file to the "
                    "output volume located at --output. If there is no AFF4 volume on "
                    "--output yet, we create a new volume on it.\n"
@@ -226,6 +241,10 @@ class BasicImager {
                    "exist we create it.", false, "",
                    "/path/to/file"));
 
+        AddArg(new TCLAP::SizeArg(
+                   "s", "split", "Split output volumes at this size.", false, 0,
+                   "Size (E.g. 100Mb)"));
+
         AddArg(new TCLAP::ValueArg<std::string>(
                    "c", "compression", "Type of compression to use (default zlib).",
                    false, "", "zlib, snappy, none"));
@@ -245,6 +264,14 @@ class BasicImager {
 
     virtual void Abort();
     virtual ~BasicImager() {}
+
+    // Should be called periodically to give the imager a chance to
+    // swap output volume if the output needs to be split.
+    void MaybeSwapOutputVolume(const URN &image_stream);
+
+ private:
+    AFF4Status GetNextPart();
+
 };
 
 } // namespace aff4

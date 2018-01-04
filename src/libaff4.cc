@@ -515,7 +515,7 @@ std::shared_ptr<spdlog::logger> get_logger() {
     auto logger = spdlog::get("aff4");
 
     if (!logger) {
-        return spdlog::stderr_logger_mt("aff4");
+        return spdlog::stderr_color_mt("aff4");
     }
 
     return logger;

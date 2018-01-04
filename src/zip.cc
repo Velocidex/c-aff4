@@ -19,7 +19,7 @@
  stream (e.g. file offsets). The zip archive itself stores offsets relative to
  a constant global offset. So for example, if the zip file is appended to the
  end of another file, global_offset will be > 0 and "real" offsets need to be
- converted from "zip offsets" but adding this global value.
+ converted from "zip offsets" by adding this global value.
  */
 #include "config.h"
 
@@ -413,7 +413,8 @@ AFF4Status ZipFile::Flush() {
 #endif
         }
 
-        AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(backing_store_urn);
+        AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<
+            AFF4Stream>(backing_store_urn);
 
         if (!backing_store) {
             return IO_ERROR;
@@ -904,14 +905,15 @@ AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
     header.lastmoddate = lastmoddate;
     header.extra_field_len = sizeof(zip64header);
 
-    output.Seek(file_header_offset, SEEK_SET);
-    output.Write(reinterpret_cast<char*>(&header), sizeof(header));
-    output.Write(filename);
+    RETURN_IF_ERROR(output.Seek(file_header_offset, SEEK_SET));
+    RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header), sizeof(header)));
+    RETURN_IF_ERROR(output.Write(filename));
 
     zip64header.file_size = file_size;
     zip64header.compress_size = compress_size;
     zip64header.relative_offset_local_header = local_header_offset;
-    output.Write(reinterpret_cast<char*>(&zip64header), sizeof(zip64header));
+    RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&zip64header),
+                                 sizeof(zip64header)));
 
     return STATUS_OK;
 }
@@ -927,14 +929,16 @@ AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream& output) {
     header.dosdate = lastmoddate;
     header.extra_field_len = sizeof(zip64header);
 
-    output.Write(reinterpret_cast<char*>(&header), sizeof(header));
-    output.Write(filename);
+    RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header),
+                                 sizeof(header)));
+    RETURN_IF_ERROR(output.Write(filename));
 
     zip64header.file_size = file_size;
     zip64header.compress_size = compress_size;
     zip64header.relative_offset_local_header = local_header_offset;
 
-    output.Write(reinterpret_cast<char*>(&zip64header), sizeof(zip64header));
+    RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&zip64header),
+                                 sizeof(zip64header)));
 
     return STATUS_OK;
 }
@@ -949,9 +953,7 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
         progress = &empty_progress;
     }
 
-    if (resolver->Get(urn, AFF4_STORED, backing_store_urn) != STATUS_OK) {
-        return NOT_FOUND;
-    }
+    RETURN_IF_ERROR(resolver->Get(urn, AFF4_STORED, backing_store_urn));
 
     MarkDirty();
 
@@ -965,7 +967,7 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
     }
 
     // Append member at the end of the file.
-    backing_store->Seek(0, SEEK_END);
+    RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
 
     resolver->logger->debug("Writing member {} at {:x}", member_urn,
                             backing_store->Tell());
@@ -978,9 +980,7 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
 
     // For now we do not support streamed writing so we need to seek back
     // to this position later with an updated crc32.
-    if (zip_info->WriteFileHeader(*backing_store) < 0) {
-        return IO_ERROR;
-    }
+    RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
 
     if (compression_method == AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE) {
         zip_info->compression_method = ZIP_DEFLATE;
@@ -1022,12 +1022,6 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
                                      reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
                                      buffer.size() - strm.avail_in);
 
-            // Report progress.
-            if (!progress->Report(stream.Tell())) {
-                deflateEnd(&strm);
-                return ABORTED;
-            }
-
             if (backing_store->Write(c_buffer.get(), output_bytes) < 0) {
                 return IO_ERROR;
             }
@@ -1049,10 +1043,10 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
 
         zip_info->file_size = strm.total_in;
         zip_info->compress_size = strm.total_out;
-        if (backing_store->Write(c_buffer.get(),
-                                 AFF4_BUFF_SIZE - strm.avail_out) < 0) {
-            return IO_ERROR;
-        }
+        RETURN_IF_ERROR(
+            backing_store->Write(
+                c_buffer.get(),
+                AFF4_BUFF_SIZE - strm.avail_out));
 
         deflateEnd(&strm);
 
@@ -1062,7 +1056,6 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
 
         while (1) {
             std::string buffer(stream.Read(AFF4_BUFF_SIZE));
-
             if (buffer.size() == 0) {
                 break;
             }
@@ -1074,26 +1067,22 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
                                      reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
                                      buffer.size());
 
-            // Report progress.
-            if (!progress->Report(stream.Tell())) {
-                return ABORTED;
-            }
-
-            if (backing_store->Write(buffer.data(), buffer.size()) < 0) {
-                return IO_ERROR;
-            }
+            RETURN_IF_ERROR(backing_store->Write(buffer.data(), buffer.size()));
         }
     }
 
     // Update the local file header now that CRC32 is calculated.
-    if (zip_info->WriteFileHeader(*backing_store) < 0) {
-        return IO_ERROR;
-    }
+    RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
 
     members[zip_info->filename] = std::move(zip_info);
 
     // Keep track of all the segments we issue.
     children.insert(member_urn.SerializeToString());
+
+    // Report progress.
+    if (!progress->Report(stream.Tell())) {
+        return ABORTED;
+    }
 
     return STATUS_OK;
 }

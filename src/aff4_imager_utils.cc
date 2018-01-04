@@ -5,6 +5,7 @@
 #include "libaff4.h"
 #include "aff4_imager_utils.h"
 #include <iostream>
+#include <string>
 #include <time.h>
 
 namespace aff4 {
@@ -112,6 +113,28 @@ AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
 }
 
 
+// A Progress indicator which keeps tabs on the size of the output volume.
+// This is used to support output volume splitting.
+class VolumeManager : public DefaultProgress {
+public:
+    VolumeManager(DataStore *resolver, BasicImager *imager,
+                  const URN& image_urn) :
+        DefaultProgress(resolver), imager(imager), image_urn(image_urn) {}
+
+    bool Report(aff4_off_t readptr) override {
+        imager->MaybeSwapOutputVolume(image_urn);
+
+        return DefaultProgress::Report(readptr);
+    }
+
+protected:
+    // Not owned.
+    BasicImager *imager;
+
+    URN image_urn;
+};
+
+
 AFF4Status BasicImager::Run(int argc, char** argv)  {
     AFF4Status res = Initialize();
     if (res != STATUS_OK) {
@@ -152,7 +175,7 @@ AFF4Status BasicImager::ParseArgs() {
         return INCOMPATIBLE_TYPES;
     }
 
-    if (result == CONTINUE && Get("input")->isSet()) {
+    if (result == CONTINUE) {
         result = parse_input();
     }
 
@@ -162,6 +185,13 @@ AFF4Status BasicImager::ParseArgs() {
 
     if (result == CONTINUE && Get("aff4_volumes")->isSet()) {
         result = handle_aff4_volumes();
+    }
+
+    if (result == CONTINUE && Get("split")->isSet()) {
+        max_output_volume_file_size = GetArg<TCLAP::SizeArg>(
+            "split")->getValue();
+        resolver.logger->info("Output volume will be limited to {} bytes",
+                              max_output_volume_file_size);
     }
 
     return result;
@@ -217,11 +247,11 @@ AFF4Status BasicImager::handle_logging() {
 }
 
 AFF4Status BasicImager::handle_aff4_volumes() {
-    std::vector<std::string> v = GetArg<TCLAP::UnlabeledMultiArg<std::string>>(
+    auto volumes = GetArg<TCLAP::UnlabeledMultiArg<std::string>>(
         "aff4_volumes")->getValue();
 
-    for (unsigned int i = 0; i < v.size(); i++) {
-        URN urn = URN::NewURNFromFilename(v[i]);
+    for (const auto &volume_to_load: volumes) {
+        URN urn = URN::NewURNFromFilename(volume_to_load);
         resolver.logger->info("Preloading AFF4 Volume: {}", urn.SerializeToString());
 
         // Currently we support AFF4Directory and ZipFile:
@@ -231,7 +261,7 @@ AFF4Status BasicImager::handle_aff4_volumes() {
 
             if (!volume) {
                 resolver.logger->error("Directory {}  does not appear to be "
-                                       "a valid AFF4 volume.", v[i]);
+                                       "a valid AFF4 volume.", volume_to_load);
                 return IO_ERROR;
             }
 
@@ -240,8 +270,9 @@ AFF4Status BasicImager::handle_aff4_volumes() {
             AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
             if (zip.get() == nullptr || zip->members.size() == 0) {
                 resolver.logger->error(
-                    "Unable to load {} as an existing AFF4 Volume.", v[i]);
-                return IO_ERROR;
+                    "Unable to load {} as an existing AFF4 Volume (skipping).",
+                    volume_to_load);
+                continue;
             }
 
             volume_URN = zip->urn;
@@ -259,25 +290,29 @@ AFF4Status BasicImager::handle_view() {
 }
 
 AFF4Status BasicImager::parse_input() {
-    inputs = GetArg<TCLAP::MultiArgToNextFlag<std::string>>(
-                 "input")->getValue();
+    if (Get("input")->isSet()) {
+        inputs = GetArg<TCLAP::MultiArgToNextFlag>("input")->getValue();
+    }
+
+    // Read input files from stdin - this makes it easier to support
+    // files with spaces and special shell chars in their names.
+    if (GetArg<TCLAP::SwitchArg>("stdin_input")->getValue()) {
+        std::string line;
+        do {
+            line.clear();
+            std::getline (std::cin, line);
+            inputs.push_back(line);
+        } while(line.size() > 0);
+    }
 
     return CONTINUE;
 }
 
 AFF4Status BasicImager::process_input() {
     // Get the output volume.
-    URN volume_urn;
-    AFF4Status res = GetOutputVolumeURN(volume_urn);
-    if (res != STATUS_OK) {
-        return res;
-    }
-
-    AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
-                                           volume_urn);
-
     for (std::string glob : inputs) {
         for (std::string input : GlobFilename(glob)) {
+            resolver.logger->debug("Will add file {}", input);
             URN input_urn(URN::NewURNFromFilename(input, false));
             resolver.logger->info("Adding {} as {}", input, input_urn);
 
@@ -288,9 +323,14 @@ AFF4Status BasicImager::process_input() {
             // Not valid - skip it.
             if (!input_stream) {
                 resolver.logger->error("Unable to find {}", input_urn);
-                res = CONTINUE;
                 continue;
             }
+
+            URN volume_urn;
+            RETURN_IF_ERROR(GetOutputVolumeURN(volume_urn));
+
+            AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<
+                AFF4Volume>(volume_urn);
 
             // Create a new AFF4Image in this volume.
             URN image_urn = volume_urn.Append(input_urn.Parse().path);
@@ -315,11 +355,8 @@ AFF4Status BasicImager::process_input() {
                 image_stream->compression_method = compression;
 
                 // Copy the input stream to the output stream.
-                ProgressContext empty_progress(&resolver);
-                res = image_stream->WriteStream(input_stream.get(), &empty_progress);
-                if (res != STATUS_OK) {
-                    return res;
-                }
+                ProgressContext progress(&resolver);
+                RETURN_IF_ERROR(image_stream->WriteStream(input_stream.get(), &progress));
 
                 // We need to explicitly check the abort status here.
                 if (should_abort || aff4_abort_signaled) {
@@ -339,19 +376,17 @@ AFF4Status BasicImager::process_input() {
                 // Set the output compression according to the user's wishes.
                 image_stream->compression = compression;
 
-                DefaultProgress progress(&resolver);
+                VolumeManager progress(&resolver, this, image_urn);
                 progress.length = input_stream->Size();
 
                 // Copy the input stream to the output stream.
-                res = image_stream->WriteStream(input_stream.get(), &progress);
-                if (res != STATUS_OK) {
-                    return res;
-                }
+                RETURN_IF_ERROR(image_stream->WriteStream(input_stream.get(), &progress));
             }
         }
     }
 
     actions_run.insert("input");
+
     return CONTINUE;
 }
 
@@ -403,6 +438,13 @@ AFF4Status BasicImager::handle_export() {
 }
 
 
+AFF4Status BasicImager::GetNextPart() {
+        output_volume_part ++;
+        output_volume_urn = "";
+        return GetOutputVolumeURN(output_volume_urn);
+}
+
+
 AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
     if (output_volume_urn.value.size() > 0) {
         volume_urn = output_volume_urn;
@@ -413,21 +455,31 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
         return INVALID_INPUT;
     }
 
-    std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
-    URN output_urn(URN::NewURNFromFilename(output_path));
+    std::string output_path = GetArg<TCLAP::ValueArg<std::string>>(
+        "output")->getValue();
+
+    if (output_volume_part > 0) {
+        output_path = aff4_sprintf("%s.A%02d", output_path.c_str(),
+                                   output_volume_part);
+    }
+
+    output_volume_backing_urn = URN::NewURNFromFilename(output_path);
 
     // We are allowed to write on the output file.
     if (Get("truncate")->isSet()) {
-        resolver.logger->warn("Output file {} will be truncated.",  output_urn);
-        resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+        resolver.logger->warn("Output file {} will be truncated.",
+                              output_volume_backing_urn);
+        resolver.Set(output_volume_backing_urn,
+                     AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
     } else {
-        resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+        resolver.Set(output_volume_backing_urn,
+                     AFF4_STREAM_WRITE_MODE, new XSDString("append"));
     }
 
     // The output is a directory volume.
     if (AFF4Directory::IsDirectory(output_path)) {
         AFF4ScopedPtr<AFF4Directory> volume = AFF4Directory::NewAFF4Directory(
-                &resolver, output_urn);
+                &resolver, output_volume_backing_urn);
 
         if (!volume) {
             return IO_ERROR;
@@ -442,18 +494,18 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
 
     // The output is a ZipFile volume.
     AFF4ScopedPtr<AFF4Stream> output_stream = resolver.AFF4FactoryOpen
-            <AFF4Stream>(output_urn);
+            <AFF4Stream>(output_volume_backing_urn);
 
     if (!output_stream) {
         resolver.logger->error("Failed to create output file: {}: {}",
-                               output_urn.SerializeToString(),
+                               output_path,
                                GetLastErrorMessage());
 
         return IO_ERROR;
     }
 
     AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
-                                     &resolver, output_stream->urn);
+        &resolver, output_stream->urn);
 
     if (!zip) {
         return IO_ERROR;
@@ -488,6 +540,31 @@ AFF4Status BasicImager::handle_compression() {
     resolver.logger->info("Setting compression {}", compression_setting);
 
     return CONTINUE;
+}
+
+void BasicImager::MaybeSwapOutputVolume(const URN& image_stream) {
+    size_t backing_file_size = 0;
+    {
+        AFF4ScopedPtr<AFF4Stream> output_stream = resolver.AFF4FactoryOpen<
+            AFF4Stream>(output_volume_backing_urn);
+        if (output_stream.get()) {
+            backing_file_size = output_stream->Size();
+        }
+    }
+    // We need to split the volume into another file.
+    if (max_output_volume_file_size > 0 &&
+        backing_file_size > max_output_volume_file_size) {
+        {
+            AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<
+                AFF4Volume>(output_volume_urn);
+            volume->Flush();
+        }
+        resolver.logger->warn("Volume {} is too large, Splitting into next volume.",
+                              output_volume_backing_urn);
+        // Make a new volume.
+        GetNextPart();
+        resolver.Set(image_stream, AFF4_STORED, new URN(output_volume_urn));
+    }
 }
 
 
