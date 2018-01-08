@@ -23,10 +23,266 @@ specific language governing permissions and limitations under the License.
 namespace aff4 {
 
 
+AFF4Status CompressZlib_(const std::string &input, std::string* output) {
+    uLongf c_length = compressBound(input.size()) + 1;
+    output->resize(c_length);
+
+    if (compress2(reinterpret_cast<Bytef*>(const_cast<char*>(output->data())),
+                  &c_length,
+                  reinterpret_cast<Bytef*>(const_cast<char*>(input.data())),
+                  input.size(), 1) != Z_OK) {
+        return MEMORY_ERROR;
+    }
+
+    output->resize(c_length);
+
+    return STATUS_OK;
+}
+
+AFF4Status DeCompressZlib_(const std::string &input, std::string* output) {
+    uLongf buffer_size = output->size();
+
+    if (uncompress(reinterpret_cast<Bytef*>(const_cast<char*>(output->data())),
+                   &buffer_size,
+                   (const Bytef*)input.data(), input.size()) == Z_OK) {
+        output->resize(buffer_size);
+        return STATUS_OK;
+    }
+
+    return IO_ERROR;
+}
+
+
+AFF4Status CompressSnappy_(const std::string &input, std::string* output) {
+    snappy::Compress(input.data(), input.size(), output);
+
+    return STATUS_OK;
+}
+
+
+AFF4Status DeCompressSnappy_(const std::string &input, std::string* output) {
+    if (!snappy::Uncompress(input.data(), input.size(), output)) {
+        return GENERIC_ERROR;
+    }
+
+    return STATUS_OK;
+}
+
+
+class _BevyWriter {
+public:
+    _BevyWriter(DataStore *resolver,
+                AFF4_IMAGE_COMPRESSION_ENUM compression,
+                size_t chunk_size, int chunks_per_segment)
+        : resolver(resolver),
+          compression(compression), chunk_size(chunk_size),
+          bevy_index_data(chunks_per_segment + 1),
+          chunks_per_segment(chunks_per_segment) {
+        bevy.buffer.reserve(chunk_size * chunks_per_segment);
+    }
+
+    AFF4Stream &bevy_stream() {
+        return bevy;
+    }
+
+    // Generate the index stream.
+    std::string index_stream() {
+        std::string result;
+        result.reserve(chunks_per_segment * sizeof(BevyIndex));
+
+        for(const BevyIndex& index_entry: bevy_index_data) {
+            // The first empty chunk means the end of the chunks. This
+            // happens if the bevy is not full.
+            if (index_entry.length == 0) break;
+
+            result += std::string(
+                reinterpret_cast<const char *>(&index_entry),
+                sizeof(index_entry));
+        }
+
+        return result;
+    }
+
+    // Receives a single chunk's data. The chunk is compressed on the
+    // thread pool and concatenated to the bevy. NOTE: Since this is
+    // done asyncronously, the chunks are not stored in the bevy
+    // contiguously. Instead, the index is sorted by chunk id and
+    // refer to chunks in the bevy in any order.
+    void EnqueueCompressChunk(int chunk_id, const std::string& data) {
+        results.push_back(
+            resolver->pool->enqueue(
+                [this, chunk_id, data]() {
+                    return _CompressChunk(chunk_id, data);
+                }));
+    }
+
+    int chunks_written() {
+        std::unique_lock<std::mutex> lock(mutex);
+        return chunks_written_;
+    }
+
+    AFF4Status Finalize() {
+        for (auto& result: results) {
+            RETURN_IF_ERROR(result.get());
+        }
+        results.clear();
+        return STATUS_OK;
+    }
+
+private:
+    std::mutex mutex;
+    StringIO bevy;
+    DataStore *resolver;
+    AFF4_IMAGE_COMPRESSION_ENUM compression;
+    size_t chunk_size;
+    std::vector<BevyIndex> bevy_index_data;
+    size_t chunks_per_segment;
+
+    // A counter of how many chunks were written.
+    int chunks_written_ = 0;
+
+    std::vector<std::future<AFF4Status>> results;
+
+    AFF4Status _CompressChunk(int chunk_id, const std::string data) {
+        std::string c_data;
+
+        switch (compression) {
+        case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
+            RETURN_IF_ERROR(CompressZlib_(data, &c_data));
+        }
+            break;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
+            RETURN_IF_ERROR(CompressSnappy_(data, &c_data));
+        }
+            break;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_STORED: {
+            c_data = data;
+        }
+            break;
+
+        // Should never happen because the object should never accept this
+        // compression URN.
+        default:
+            resolver->logger->critical("Unexpected compression type set {}",
+                                       compression);
+            return NOT_IMPLEMENTED;
+        }
+
+        RETURN_IF_ERROR(WriteChunk(data, c_data, chunk_id));
+        return STATUS_OK;
+    }
+
+
+    AFF4Status WriteChunk(const std::string &data,
+                          const std::string &c_data,
+                          uint32_t chunk_id) {
+        if (chunk_id > chunks_per_segment) {
+            return IO_ERROR;
+        }
+
+        std::unique_lock<std::mutex> lock(mutex);
+
+        BevyIndex &index = bevy_index_data[chunk_id];
+        index.offset = bevy.Tell();
+
+        // If by attempting to compress the chunk, we actually made it
+        // bigger, we just store the chunk uncompressed. The
+        // decompressor can figure that this is uncompressed by
+        // comparing the chunk size to the compressed chunk size.
+
+        // 3.2 Compression Storage of uncompressed chunks is supported
+        //    by thise simple principle that if len(chunk) ==
+        //    aff4:chunk_size then it is a stored chunk. Compression
+        //    is not applied to stored chunks.
+
+        // Chunk is compressible - store it compressed.
+        if (c_data.size() < chunk_size - 16) {
+            index.length = c_data.size();
+            RETURN_IF_ERROR(bevy.Write(c_data));
+
+            // Chunk is not compressible enough, store it uncompressed.
+        } else {
+            index.length = data.size();
+            RETURN_IF_ERROR(bevy.Write(data));
+        }
+        chunks_written_++;
+
+        return STATUS_OK;
+    }
+};
+
+
+
+// A private class which manages image stream.
+class _CompressorStream: public AFF4Stream {
+  private:
+    AFF4Stream* source;
+
+    aff4_off_t initial_offset;
+    AFF4_IMAGE_COMPRESSION_ENUM compression;
+    size_t chunk_size;
+    int chunks_per_segment;
+
+  public:
+    _BevyWriter bevy_writer;
+
+    _CompressorStream(DataStore* resolver,
+                      AFF4_IMAGE_COMPRESSION_ENUM compression,
+                      size_t chunk_size,
+                      int chunks_per_segment, AFF4Stream* source):
+        AFF4Stream(resolver), source(source), initial_offset(source->Tell()),
+        compression(compression),
+        chunk_size(chunk_size), chunks_per_segment(chunks_per_segment),
+        bevy_writer(resolver, compression, chunk_size,
+                    chunks_per_segment) {}
+
+    // Populate the entire bevy into the writer at once.
+    AFF4Status PrepareBevy() {
+        for (int chunk_id = 0 ; chunk_id < chunks_per_segment; chunk_id++) {
+            const std::string data = source->Read(chunk_size);
+
+            // Ran out of source data - we are done early.
+            if (data.size() == 0) {
+                break;
+            }
+            size += data.size();
+            bevy_writer.EnqueueCompressChunk(chunk_id, data);
+        }
+        RETURN_IF_ERROR(bevy_writer.Finalize());
+        return bevy_writer.bevy_stream().Seek(0, SEEK_SET);
+    }
+
+    // The progress reporting calls us to figure out how much work we
+    // actually did. Since we compress asynchronously, a better
+    // measure of how far along we are is to report how many chunks we
+    // finished compressing right now.
+    aff4_off_t Tell() override {
+        return initial_offset + bevy_writer.chunks_written() * chunk_size;
+    };
+
+
+    // This stream returns an entire compressed bevy from any read
+    // request.  We just read a full bevu worth of chunks from our
+    // source stream, compress it and return the compressed data. On
+    // the next read, we return an empty string which indicates the
+    // bevy is complete. This allows us to seamlessly hook this class
+    // into WriteStream() calls into the Bevy segment.
+    std::string Read(size_t length) {
+        auto& bevy_stream = bevy_writer.bevy_stream();
+        return bevy_stream.Read(length);
+    }
+
+    virtual ~_CompressorStream() {}
+};
+
+
+
 AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
     DataStore* resolver, const URN& image_urn, const URN& volume_urn) {
     AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
-                                           volume_urn);
+        volume_urn);
 
     if (!volume) {
         return AFF4ScopedPtr<AFF4Image>();    /** Volume not known? */
@@ -57,6 +313,8 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
  * @return STATUS_OK if the object was successfully initialized.
  */
 AFF4Status AFF4Image::LoadFromURN() {
+    URN volume_urn;
+
     if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
         RETURN_IF_ERROR(resolver->Get(urn, AFF4_LEGACY_STORED, volume_urn));
     }
@@ -126,11 +384,17 @@ AFF4Status AFF4Image::LoadFromURN() {
 }
 
 
-// Check that the bevy
+// Bevy is full - flush it to the image and start the next one. Takes
+// and disposes of the bevy_writer. Next Write() will make a new
+// writer.
 AFF4Status AFF4Image::FlushBevy() {
+    RETURN_IF_ERROR(bevy_writer->Finalize());
+
+    AFF4Stream &bevy_stream = bevy_writer->bevy_stream();
+    RETURN_IF_ERROR(bevy_stream.Seek(0, SEEK_SET));
+
     // If the bevy is empty nothing else to do.
-    if (bevy.Size() == 0) {
-        resolver->logger->info("Bevy {} is empty.", urn);
+    if (bevy_stream.Size() == 0) {
         return STATUS_OK;
     }
 
@@ -138,181 +402,78 @@ AFF4Status AFF4Image::FlushBevy() {
     URN bevy_index_urn(bevy_urn.value +(".index"));
 
     // Open the volume.
+    URN volume_urn;
+    RETURN_IF_ERROR(resolver->Get(urn, AFF4_STORED, volume_urn));
+
     AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
-                                           volume_urn);
+        volume_urn);
 
     if (!volume) {
         return NOT_FOUND;
     }
 
     // Create the new segments in this zip file.
-    AFF4ScopedPtr<AFF4Stream> bevy_index_stream = volume->CreateMember(
+    AFF4ScopedPtr<AFF4Stream> bevy_index_member = volume->CreateMember(
                 bevy_index_urn);
 
-    AFF4ScopedPtr<AFF4Stream> bevy_stream = volume->CreateMember(bevy_urn);
+    AFF4ScopedPtr<AFF4Stream> bevy_member = volume->CreateMember(bevy_urn);
 
-    if (!bevy_index_stream || !bevy_stream) {
+    if (!bevy_index_member || !bevy_member) {
         resolver->logger->error("Unable to create bevy URN {}", bevy_urn);
         return IO_ERROR;
     }
 
-    RETURN_IF_ERROR(bevy_index_stream->Write(bevy_index.buffer));
-    RETURN_IF_ERROR(bevy_stream->Write(bevy.buffer));
+    std::string index_stream;
+    bevy_index_member->reserve(chunks_per_segment * sizeof(BevyIndex));
+    RETURN_IF_ERROR(bevy_index_member->Write(
+                        bevy_writer->index_stream()));
+
+    ProgressContext empty_progress(resolver);
+    bevy_index_member->reserve(chunks_per_segment * chunk_size);
+    RETURN_IF_ERROR(bevy_member->WriteStream(&bevy_stream, &empty_progress));
 
     // These calls flush the bevies and removes them from the resolver cache.
-    RETURN_IF_ERROR(resolver->Close(bevy_index_stream));
-    RETURN_IF_ERROR(resolver->Close(bevy_stream));
+    RETURN_IF_ERROR(resolver->Close(bevy_index_member));
+    RETURN_IF_ERROR(resolver->Close(bevy_member));
 
-    bevy_index.Truncate();
-    bevy.Truncate();
-
-    chunk_count_in_bevy = 0;
+    // Done with this bevy - make a new writer.
+    bevy_writer.reset(new _BevyWriter(
+                          resolver, compression, chunk_size,
+                          chunks_per_segment));
     bevy_number++;
-
-    return STATUS_OK;
-}
-
-
-/**
- * Flush the current chunk into the current bevy.
- *
- * @param data: Chunk data. This should be a full chunk unless it is the last
- *        chunk in the stream which may be short.
- * @param length: Length of data.
- *
- * @return Status.
- */
-AFF4Status AFF4Image::FlushChunk(const char* data, size_t length) {
-    uint64_t bevy_offset = bevy.Tell();
-    uint32_t bevy_chunk_length = 0;
-
-    std::string output;
-
-    AFF4Status result;
-
-    switch (compression) {
-        case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
-            result = CompressZlib_(data, length, &output);
-        }
-        break;
-
-        case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
-            result = CompressSnappy_(data, length, &output);
-        }
-        break;
-
-        case AFF4_IMAGE_COMPRESSION_ENUM_STORED: {
-            output.assign(data, length);
-            result = STATUS_OK;
-        }
-        break;
-
-        default:
-            return IO_ERROR;
-    }
-
-    // The index contains the offset and the length of each chunk.
-    RETURN_IF_ERROR(
-        bevy_index.Write(
-            reinterpret_cast<char*>(&bevy_offset), sizeof(bevy_offset)));
-
-    // If by attempting to compress the chunk, we actually made it
-    // bigger, we just store the chunk uncompressed. The decompressor
-    // can figure that this is uncompressed by comparing the chunk
-    // size to the compressed chunk size.
-
-    // 3.2 Compression Storage of uncompressed chunks is supported by
-    //    the simple principle that if len(chunk) == aff4:chunk_size
-    //    then it is a stored chunk. Compression is not applied to
-    //    stored chunks.
-    bevy_chunk_length = output.size();
-
-    // Chunk is compressible - store it compressed.
-    if (bevy_chunk_length < chunk_size - 16) {
-        RETURN_IF_ERROR(bevy_index.Write(
-                reinterpret_cast<char*>(&bevy_chunk_length),
-                sizeof(bevy_chunk_length)));
-
-        RETURN_IF_ERROR(bevy.Write(output));
-
-        // Chunk is not compressible enough, store it uncompressed.
-    } else {
-        bevy_chunk_length = chunk_size;
-        RETURN_IF_ERROR(
-            bevy_index.Write(
-                reinterpret_cast<char*>(&bevy_chunk_length),
-                sizeof(bevy_chunk_length)));
-
-        RETURN_IF_ERROR(bevy.Write(data, length));
-    }
-
-    chunk_count_in_bevy++;
-
-    if (chunk_count_in_bevy >= chunks_per_segment) {
-        return FlushBevy();
-    }
-
-    return result;
-}
-
-AFF4Status CompressZlib_(const char* data, size_t length, std::string* output) {
-    uLongf c_length = compressBound(length) + 1;
-    output->resize(c_length);
-
-    if (compress2(reinterpret_cast<Bytef*>(const_cast<char*>(output->data())),
-                  &c_length,
-                  reinterpret_cast<Bytef*>(const_cast<char*>(data)),
-                  length, 1) != Z_OK) {
-        return MEMORY_ERROR;
-    }
-
-    output->resize(c_length);
-
-    return STATUS_OK;
-}
-
-AFF4Status DeCompressZlib_(const char* data, size_t length, std::string* buffer) {
-    uLongf buffer_size = buffer->size();
-
-    if (uncompress(reinterpret_cast<Bytef*>(const_cast<char*>(buffer->data())),
-                   &buffer_size,
-                   (const Bytef*)data, length) == Z_OK) {
-        buffer->resize(buffer_size);
-        return STATUS_OK;
-    }
-
-    return IO_ERROR;
-}
-
-
-AFF4Status CompressSnappy_(const char* data, size_t length, std::string* output) {
-    snappy::Compress(data, length, output);
-
-    return STATUS_OK;
-}
-
-
-AFF4Status DeCompressSnappy_(const char* data, size_t length, std::string* output) {
-    if (!snappy::Uncompress(data, length, output)) {
-        return GENERIC_ERROR;
-    }
+    chunk_count_in_bevy = 0;
 
     return STATUS_OK;
 }
 
 
 AFF4Status AFF4Image::Write(const char* data, int length) {
+    if (length <= 0) return STATUS_OK;
+
+    // Prepare a bevy writer to collect the first bevy.
+    if (bevy_writer == nullptr) {
+        bevy_writer.reset(new _BevyWriter(resolver, compression, chunk_size,
+                                          chunks_per_segment));
+    }
+
     // This object is now dirty.
     MarkDirty();
 
+    // Append small reads to the buffer.
     buffer.append(data, length);
     size_t offset = 0;
-    const char* chunk_ptr = buffer.data();
 
-    // Consume full chunks from the buffer.
-    while (buffer.length() - offset >= chunk_size) {
-        if (FlushChunk(chunk_ptr + offset, chunk_size) != STATUS_OK) {
-            return IO_ERROR;
+    // Consume full chunks from the buffer and send them to the bevy
+    // writer.
+    while (buffer.size() - offset >= chunk_size) {
+        bevy_writer->EnqueueCompressChunk(
+            chunk_count_in_bevy,
+            buffer.substr(offset, chunk_size));
+
+        chunk_count_in_bevy++;
+
+        if (chunk_count_in_bevy >= chunks_per_segment) {
+            RETURN_IF_ERROR(FlushBevy());
         }
 
         offset += chunk_size;
@@ -330,90 +491,11 @@ AFF4Status AFF4Image::Write(const char* data, int length) {
 }
 
 
-// A private class which manages image stream.
-class _CompressorStream: public AFF4Stream {
-  private:
-    AFF4Stream* stream;
-    AFF4Image* owner;
+AFF4Image::AFF4Image(DataStore* resolver, URN urn):
+    AFF4Stream(resolver, urn) {}
 
-  public:
-    StringIO bevy_index;
-    uint32_t chunk_count_in_bevy = 0;
-    uint64_t bevy_length = 0;
-    uint32_t chunk_length = 0;
-
-    _CompressorStream(DataStore* resolver, AFF4Image* owner, AFF4Stream* stream):
-        AFF4Stream(resolver), stream(stream), owner(owner) {}
-
-    std::string Read(size_t unused_length) {
-        UNUSED(unused_length);
-        // Stop copying when the bevy is full.
-        if (chunk_count_in_bevy >= owner->chunks_per_segment) {
-            return "";
-        }
-
-        const std::string data(stream->Read(owner->chunk_size));
-        if (data.size() == 0) {
-            return "";
-        }
-
-        // Our readptr reflects the source stream's readptr in order to report how
-        // much we read from it accurately.
-        readptr = stream->Tell();
-
-        size_t length = data.size();
-        std::string output;
-
-        size += length;
-        AFF4Status result;
-
-        switch (owner->compression) {
-            case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
-                result = CompressZlib_(data.data(), length, &output);
-            }
-            break;
-
-            case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
-                result = CompressSnappy_(data.data(), length, &output);
-            }
-            break;
-
-            case AFF4_IMAGE_COMPRESSION_ENUM_STORED: {
-                output.assign(data.data(), length);
-                result = STATUS_OK;
-            }
-            break;
-
-            // Should never happen because the object should never accept this
-            // compression URN.
-            default:
-                resolver->logger->critical("Unexpected compression type set {}",
-                                          owner->compression);
-                result = NOT_IMPLEMENTED;
-        }
-
-        if (result == STATUS_OK) {
-            if (bevy_index.Write(
-                    reinterpret_cast<char*>(&bevy_length), sizeof(bevy_length)) < 0) {
-                return "";
-            }
-
-            chunk_length = output.size();
-            if (bevy_index.Write(
-                    reinterpret_cast<char*>(&chunk_length), sizeof(chunk_length)) < 0) {
-                return "";
-            }
-
-            bevy_length += output.size();
-            chunk_count_in_bevy++;
-        }
-
-        return output;
-    }
-
-
-    virtual ~_CompressorStream() {}
-};
+AFF4Image::AFF4Image(DataStore* resolver):
+    AFF4Stream(resolver) {}
 
 
 AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
@@ -425,8 +507,12 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
 
     // Write a bevy at a time.
     while (1) {
-        // This looks like a stream but can only read a chunk at a time.
-        _CompressorStream stream(resolver, this, source);
+        // This looks like a stream but can only read a bevy at a time.
+        _CompressorStream stream(resolver, compression, chunk_size,
+                                 chunks_per_segment, source);
+
+        // Read and compress the bevy into memory.
+        RETURN_IF_ERROR(stream.PrepareBevy());
 
         URN volume_urn;
 
@@ -443,8 +529,6 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
             return NOT_FOUND;
         }
 
-        // TODO(scudette): This scheme is problematic on filesystems that
-        // distinguish between files and directories.
         URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number)));
         URN bevy_index_urn(bevy_urn.value + (".index"));
 
@@ -456,6 +540,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
                 return IO_ERROR;
             }
 
+            bevy->reserve(chunks_per_segment * chunk_size);
             RETURN_IF_ERROR(bevy->WriteStream(&stream, progress));
             resolver->Close(bevy);
         }
@@ -471,7 +556,8 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
                 return IO_ERROR;
             }
 
-            RETURN_IF_ERROR(bevy_index->Write(stream.bevy_index.buffer));
+            RETURN_IF_ERROR(bevy_index->Write(
+                                stream.bevy_writer.index_stream()));
             resolver->Close(bevy_index);
         }
 
@@ -483,7 +569,9 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
         bevy_number++;
         size += stream.Size();
 
-        if (stream.chunk_count_in_bevy != chunks_per_segment) {
+        // The bevy is not full - this means we reached the end of the
+        // input.
+        if (stream.Size() < chunks_per_segment * chunk_size) {
             break;
         }
     }
@@ -507,9 +595,9 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
  */
 AFF4Status AFF4Image::ReadChunkFromBevy(
     std::string& result, unsigned int chunk_id, AFF4ScopedPtr<AFF4Stream>& bevy,
-    BevvyIndex bevy_index[], uint32_t index_size) {
+    BevyIndex bevy_index[], uint32_t index_size) {
     unsigned int chunk_id_in_bevy = chunk_id % chunks_per_segment;
-    BevvyIndex entry;
+    BevyIndex entry;
 
     if (index_size == 0) {
         resolver->logger->error("Index empty in {} : chunk {}",
@@ -532,6 +620,8 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
     std::string cbuffer = bevy->Read(entry.length);
 
     std::string buffer;
+    // We expect the decompressed buffer to be maximum chunk_size. If
+    // it ends up decompressing to longer we error out.
     buffer.resize(chunk_size);
 
     AFF4Status res;
@@ -543,11 +633,11 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
     } else {
         switch (compression) {
         case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB:
-            res = DeCompressZlib_(cbuffer.data(), cbuffer.length(), &buffer);
+            res = DeCompressZlib_(cbuffer, &buffer);
             break;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:
-            res = DeCompressSnappy_(cbuffer.data(), cbuffer.length(), &buffer);
+            res = DeCompressSnappy_(cbuffer, &buffer);
             break;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
@@ -580,7 +670,13 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
     while (chunks_to_read > 0) {
         unsigned int bevy_id = chunk_id / chunks_per_segment;
         URN bevy_urn = urn.Append(aff4_sprintf("%08d", bevy_id));
-        URN bevy_index_urn = (!isAFF4Legacy) ? bevy_urn.value + (".index") : bevy_urn.value + ("/index");
+        URN bevy_index_urn;
+
+        if  (isAFF4Legacy) {
+            bevy_index_urn = bevy_urn.value + ("/index");
+        } else {
+            bevy_index_urn = bevy_urn.value + (".index");
+        }
 
         AFF4ScopedPtr<AFF4Stream> bevy_index = resolver->AFF4FactoryOpen
             <AFF4Stream>(bevy_index_urn);
@@ -593,16 +689,16 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
             return -1;
         }
 
-        uint32_t index_size = bevy_index->Size() / sizeof(BevvyIndex);
+        uint32_t index_size = bevy_index->Size() / sizeof(BevyIndex);
         std::string bevy_index_data = bevy_index->Read(bevy_index->Size());
 
         if (isAFF4Legacy) {
             // Massage the bevvy data format from the old into the new.
-            bevy_index_data = _FixupBevvyData(&bevy_index_data);
+            bevy_index_data = _FixupBevyData(&bevy_index_data);
             index_size = bevy_index->Size() / sizeof(uint32_t);
         }
 
-        BevvyIndex* bevy_index_array = reinterpret_cast<BevvyIndex*>(
+        BevyIndex* bevy_index_array = reinterpret_cast<BevyIndex*>(
             const_cast<char*>(bevy_index_data.data()));
 
         while (chunks_to_read > 0) {
@@ -671,8 +767,6 @@ AFF4Status AFF4Image::_write_metadata() {
     resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
                   /* replace = */ false);
 
-    resolver->Set(urn, AFF4_STORED, new URN(volume_urn));
-
     resolver->Set(urn, AFF4_STREAM_CHUNK_SIZE, new XSDInteger(chunk_size));
 
     resolver->Set(urn, AFF4_STREAM_CHUNKS_PER_SEGMENT,
@@ -690,12 +784,11 @@ AFF4Status AFF4Image::_write_metadata() {
 AFF4Status AFF4Image::Flush() {
     if (IsDirty()) {
         // Flush the last chunk.
-        RETURN_IF_ERROR(FlushChunk(buffer.c_str(), buffer.length()));
-
-        buffer.resize(0);
+        bevy_writer->EnqueueCompressChunk(chunk_count_in_bevy, buffer);
         RETURN_IF_ERROR(FlushBevy());
 
         _write_metadata();
+        buffer.resize(0);
     }
 
     // Always call the baseclass to ensure the object is marked non dirty.
@@ -707,9 +800,9 @@ static AFF4Registrar<AFF4Image> r2(AFF4_LEGACY_IMAGESTREAM_TYPE);
 
 void aff4_image_init() {}
 
-std::string AFF4Image::_FixupBevvyData(std::string* data){
+std::string AFF4Image::_FixupBevyData(std::string* data){
     uint32_t index_size = data->length() / sizeof(uint32_t);
-    BevvyIndex* bevy_index_array = new BevvyIndex[index_size];
+    BevyIndex* bevy_index_array = new BevyIndex[index_size];
     uint32_t* bevy_index_data = reinterpret_cast<uint32_t*>(const_cast<char*>(data->data()));
 
     uint64_t cOffset = 0;
@@ -724,7 +817,7 @@ std::string AFF4Image::_FixupBevvyData(std::string* data){
 
     std::string result = std::string(
         reinterpret_cast<char*>(bevy_index_array),
-        index_size * sizeof(BevvyIndex));
+        index_size * sizeof(BevyIndex));
     delete[] bevy_index_array;
     return result;
 }

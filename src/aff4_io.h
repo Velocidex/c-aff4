@@ -149,6 +149,11 @@ class AFF4Stream: public AFF4Object {
     virtual aff4_off_t Tell();
     virtual aff4_off_t Size();
 
+    // Callers may reserve space in the stream for efficiency. This
+    // gives the implementation a hint as to how large this stream is
+    // likely to be.
+    virtual void reserve(size_t size);
+
     /**
      * Streams are always reset to their begining when returned from the cache.
      *
@@ -186,11 +191,12 @@ class StringIO: public AFF4Stream {
         return result;
     }
 
-    virtual std::string Read(size_t length);
-    virtual AFF4Status Write(const char* data, int length);
+    std::string Read(size_t length) override;
+    AFF4Status Write(const char* data, int length) override;
 
-    virtual AFF4Status Truncate();
-    virtual aff4_off_t Size();
+    AFF4Status Truncate() override;
+    aff4_off_t Size() override;
+    void reserve(size_t size) override;
 
     using AFF4Stream::Write;
 };

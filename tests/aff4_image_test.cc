@@ -31,7 +31,7 @@ class AFF4ImageTest: public ::testing::Test {
 
   // Remove the file on teardown.
   virtual void TearDown() {
-    unlink(filename.c_str());
+      unlink(filename.c_str());
   }
 
   // Create an AFF4Image stream with some data in it.

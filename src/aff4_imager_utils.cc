@@ -167,6 +167,12 @@ AFF4Status BasicImager::Run(int argc, char** argv)  {
 AFF4Status BasicImager::ParseArgs() {
     AFF4Status result = handle_logging();
 
+    if (Get("threads")->isSet()) {
+        int threads = GetArg<TCLAP::ValueArg<int>>("threads")->getValue();
+        resolver.logger->info("Will use {} threads.", threads);
+        resolver.pool.reset(new ThreadPool(threads));
+    }
+
     // Check for incompatible commands.
     if (Get("export")->isSet() && Get("input")->isSet()) {
         resolver.logger->critical(

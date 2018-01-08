@@ -20,11 +20,11 @@ specific language governing permissions and limitations under the License.
 #include "libaff4.h"
 #include "aff4_imager_utils.h"
 
-
-aff4::BasicImager imager;
-
 int main(int argc, char* argv[]) {
+    aff4::BasicImager imager;
+
     aff4::AFF4Status res = imager.Run(argc, argv);
+
     if (res == aff4::STATUS_OK || res == aff4::CONTINUE) {
         return 0;
     }

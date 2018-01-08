@@ -13,7 +13,7 @@ AM_LDFLAGS = -no-undefined $(LIBSTDCXX_LA_LINKER_FLAG) \
 # Support static builds.
 if STATIC_BUILD
 STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
-STATIC_LINKERLDFLAGS = -all-static
+STATIC_LINKERLDFLAGS = -static  -static-libstdc++ -static-libgcc
 endif
 
 ## unittests to run when people type 'make check'.
@@ -24,13 +24,6 @@ check_SCRIPTS =
 
 # Every time you add a unittest to check_SCRIPTS, add it here too
 noinst_SCRIPTS =
-
-# Libraries that are built but not installed.
-#noinst_LTLIBRARIES = libgtest.la
-
-#libgtest_la_SOURCES = ../third_party/gtest/googletest/src/gtest-all.cc
-libgtest_la_CXXFLAGS = -g -Wall -O0 -pthread
-libgtest_la_LIBADD = -lpthread
 
 noinst_PROGRAMS = aff4-test
 

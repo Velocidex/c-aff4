@@ -67,50 +67,57 @@ AFF4Status DeCompressSnappy_(const char* data, size_t length, std::string* outpu
 
 
 // This is the type written to the map stream in this exact binary layout.
-struct BevvyIndex {
-    uint64_t offset = 0;
-    uint32_t length = 0;
+struct BevyIndex {
+    uint64_t offset = 0;   // Offset of the chunk within the bevy.
+    uint32_t length = 0;   // Length of the compressed chunk.
 } __attribute__((packed));
+
+
+class _BevyWriter;
 
 
 class AFF4Image: public AFF4Stream {
   protected:
-    // Delegates to the workers for support compression methods.
-    AFF4Status FlushChunk(const char* data, size_t length);
-
     AFF4Status FlushBevy();
 
     // Convert the legecy formatted bevvy data into the new format.
-    std::string _FixupBevvyData(std::string* data);
+    std::string _FixupBevyData(std::string* data);
 
     int _ReadPartial(
         unsigned int chunk_id, int chunks_to_read, std::string& result);
 
     AFF4Status ReadChunkFromBevy(
         std::string& result, unsigned int chunk_id,
-        AFF4ScopedPtr<AFF4Stream>& bevy, BevvyIndex bevy_index[],
+        AFF4ScopedPtr<AFF4Stream>& bevy, BevyIndex bevy_index[],
         uint32_t index_size);
 
+    // The below are used to implement variable sized write support
+    // through the Write() interfaces. This is not recommmended - it
+    // is more efficient to write the image using the WriteStream()
+    // interface.
+
+    // Accept small writes into this buffer - when we have a complete
+    // chunk we can sent it to the bevy writer.
     std::string buffer;
 
-    // The current bevy we write into.
-    StringIO bevy_index;
-    StringIO bevy;
+    // Collect chunks here for the current bevy.
+    std::unique_ptr<_BevyWriter> bevy_writer;
 
-    unsigned int bevy_number = 0;           /**< The current bevy number for
-                                           * writing. */
+    // The current bevy we write into.
+    unsigned int bevy_number = 0;
+
+    // The next chunk to write in the bevy.
     unsigned int chunk_count_in_bevy = 0;
 
-    URN volume_urn;                       /**< The Volume we are stored on. */
-
+    // Called when we finished the image to finalize the metadata
     AFF4Status _write_metadata();
 
     // FALSE if stream is aff4:ImageStream, true if stream is aff4:stream.
     bool isAFF4Legacy = false;
 
   public:
-    AFF4Image(DataStore* resolver, URN urn): AFF4Stream(resolver, urn) {}
-    explicit AFF4Image(DataStore* resolver): AFF4Stream(resolver) {}
+    AFF4Image(DataStore* resolver, URN urn);
+    explicit AFF4Image(DataStore* resolver);
 
     unsigned int chunk_size = 32*1024;    /**< The number of bytes in each
                                          * chunk. */

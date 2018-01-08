@@ -89,11 +89,12 @@ AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream& stream) {
 #endif
 
 DataStore::DataStore():
-    DataStore(aff4::get_logger()) {}
+    DataStore(DataStoreOptions()) {}
 
 
-DataStore::DataStore(std::shared_ptr<spdlog::logger> logger)
-    : logger(logger),
+DataStore::DataStore(DataStoreOptions options)
+    : logger(options.logger),
+      pool(std::make_unique<ThreadPool>(options.threadpool_size)),
       ObjectCache(logger) {
     // By default suppress ZipFileSegment objects since all their metadata comes
     // directly from the ZIP container. This keeps the turtle files a bit cleaner.
@@ -712,14 +713,14 @@ AFF4Status AFF4ObjectCache::Flush() {
 
 void AFF4ObjectCache::Dump() {
     // Now dump the objects in use.
-    std::cout << "Objects in use:\n";
+    logger->info("Objects in use:");
     for (auto it : in_use) {
-        std::cout << it.first << " - " << it.second->use_count << "\n";
+        logger->info("{} - {}", it.first, it.second->use_count);
     }
 
-    std::cout << "Objects in cache:\n";
+    logger->info("Objects in cache:");
     for (AFF4ObjectCacheEntry* it = lru_list.next; it != &lru_list; it = it->next) {
-        std::cout << it->key << " - " << it->use_count << "\n";
+        logger->info("{} - {}", it->key, it->use_count);
     }
 }
 

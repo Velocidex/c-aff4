@@ -166,6 +166,11 @@ class AFF4Object {
     virtual void MarkDirty() {
         _dirty = true;
     }
+
+ private:
+    // AFF4Objects are not trivially copyable.
+    AFF4Object(const AFF4Object&) = delete;
+    AFF4Object& operator=(const AFF4Object&) = delete;
 };
 
 

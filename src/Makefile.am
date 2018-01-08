@@ -10,11 +10,12 @@ AM_CPPFLAGS = -I$(top_srcdir)/src
 
 # On windows we need to specify this to avoid a bug in gcc
 # (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
-if WIN32_NATIVE_HOST
+if WINDOWS
 WINCXXFLAGS = -mno-ms-bitfields
 else
 UNIXLDFLAGS = ${UUID_CFLAGS}
 endif
+
 
 # Default flags for targets without specific overrides.
 AM_CXXFLAGS = $(WINCXXFLAGS)
@@ -22,7 +23,7 @@ AM_CXXFLAGS = $(WINCXXFLAGS)
 # Support static builds.
 if STATIC_BUILD
 STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
-STATIC_LINKERLDFLAGS = -all-static
+STATIC_LINKERLDFLAGS = -static -static-libstdc++ -static-libgcc
 endif
 
 # The -no-undefined flag allows libtool to generate shared libraries for
@@ -75,17 +76,23 @@ libaff4_la_SOURCES = \
 	libaff4-c.cc \
 	tclap_parsers.cc
 
-
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)
-libaff4_la_INCLUDES = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS} ${UUID_CFLAGS} ${GLOG_CFLAGS}
-if WIN32_NATIVE_HOST
-libaff4_la_LIBADD = -lrpcrt4 -lshlwapi ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${GLOG_LIBS}
+libaff4_la_INCLUDES = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS} ${UUID_CFLAGS}
+
+if WINDOWS
+libaff4_la_LIBADD = -lrpcrt4 -lshlwapi ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS}
 else
-libaff4_la_LIBADD =  ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${UUID_LIBS} ${GLOG_LIBS}
+libaff4_la_LIBADD =  ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${UUID_LIBS}
 endif
 
 bin_PROGRAMS = aff4imager
-aff4imager_LDADD = libaff4.la ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${GLOG_LIBS} ${UUID_LIBS}
-aff4imager_INCLUDES = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS} ${GLOG_CFLAGS}
+aff4imager_LDADD = libaff4.la ${LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${UUID_LIBS}
+aff4imager_INCLUDES = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS}
 aff4imager_LDFLAGS = $(STATIC_LINKERLDFLAGS)
-aff4imager_SOURCES = aff4imager.cc
+
+# Linux backwards compatibility shims for static builds.
+if LINUX
+   aff4imager_SOURCES = aff4imager.cc compatibility.cc
+else
+   aff4imager_SOURCES = aff4imager.cc
+endif

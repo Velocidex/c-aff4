@@ -85,7 +85,7 @@ class BasicImager {
     int output_volume_part = 0;
 
     // Maximum size of output volume.
-    size_t max_output_volume_file_size = 10 * 1024 * 1024;
+    size_t max_output_volume_file_size = 0;
 
     // Type of compression we should use.
     AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
@@ -248,6 +248,10 @@ class BasicImager {
         AddArg(new TCLAP::ValueArg<std::string>(
                    "c", "compression", "Type of compression to use (default zlib).",
                    false, "", "zlib, snappy, none"));
+
+        AddArg(new TCLAP::ValueArg<int>(
+                   "", "threads", "Total number of threads to use.",
+                   false, 2, "(default 2)"));
 
         AddArg(new TCLAP::UnlabeledMultiArg<std::string>(
                    "aff4_volumes",

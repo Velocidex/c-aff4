@@ -152,6 +152,10 @@ off_t AFF4Stream::Size() {
     return size;
 }
 
+void AFF4Stream::reserve(size_t size) {
+    UNUSED(size);
+}
+
 
 bool DefaultProgress::Report(aff4_off_t readptr) {
     uint64_t now = time_from_epoch();
@@ -320,6 +324,10 @@ AFF4Status StringIO::Truncate() {
     buffer = "";
     readptr = 0;
     return STATUS_OK;
+}
+
+void StringIO::reserve(size_t size) {
+    buffer.reserve(size);
 }
 
 

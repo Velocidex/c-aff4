@@ -448,6 +448,10 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream& backing_store) {
     aff4_off_t ecd_real_offset = backing_store.Tell();
 
     int total_entries = members.size();
+    cd_stream.reserve(
+        total_entries * (sizeof(Zip64EndCD) + sizeof(Zip64CDLocator)) +
+        sizeof(EndCentralDirectory));
+
     resolver->logger->info("Writing Centeral Directory for {} members.",
                            total_entries);
 
@@ -946,7 +950,8 @@ AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream& output) {
 //-------------------------------------------------------------------------
 // ZipFile Class.
 //-------------------------------------------------------------------------
-AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int compression_method,
+AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
+                                    int compression_method,
                                     ProgressContext* progress) {
     ProgressContext empty_progress(resolver);
     if (!progress) {
@@ -1003,12 +1008,12 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
 
         while (1) {
             std::string buffer(stream.Read(AFF4_BUFF_SIZE));
-
             if (buffer.size() == 0) {
                 break;
             }
 
-            strm.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data()));
+            strm.next_in = reinterpret_cast<Bytef*>(
+                const_cast<char*>(buffer.data()));
             strm.avail_in = buffer.size();
 
             if (deflate(&strm, Z_PARTIAL_FLUSH) != Z_OK) {
@@ -1018,9 +1023,9 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream, int comp
 
             int output_bytes = AFF4_BUFF_SIZE - strm.avail_out;
             zip_info->crc32_cs = crc32(
-                                     zip_info->crc32_cs,
-                                     reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
-                                     buffer.size() - strm.avail_in);
+                zip_info->crc32_cs,
+                reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
+                buffer.size() - strm.avail_in);
 
             if (backing_store->Write(c_buffer.get(), output_bytes) < 0) {
                 return IO_ERROR;

@@ -19,6 +19,7 @@ specific language governing permissions and limitations under the License.
 #include "config.h"
 
 #include "aff4_base.h"
+#include "threadpool.h"
 #include "spdlog/spdlog.h"
 
 #include <unordered_map>
@@ -300,6 +301,12 @@ class AFF4ScopedPtr {
 
  */
 
+struct DataStoreOptions {
+    std::shared_ptr<spdlog::logger> logger = aff4::get_logger();
+    int threadpool_size = 1;
+};
+
+
 /** The abstract data store.
 
     Data stores know how to serialize RDF statements of the type:
@@ -314,7 +321,7 @@ class DataStore {
 
   public:
     DataStore();
-    DataStore(std::shared_ptr<spdlog::logger> logger);
+    DataStore(DataStoreOptions options);
     virtual ~DataStore() {}
 
     // All logging directives go through this handle. It can be
@@ -323,6 +330,9 @@ class DataStore {
 
     /// You can add new namespaces here for turtle serialization.
     std::vector<std::pair<std::string, std::string>> namespaces;
+
+    // A global thread pool for general use.
+    std::unique_ptr<ThreadPool> pool;
 
     template<typename T>
     AFF4ScopedPtr<T> CachePut(AFF4Object* object) {
