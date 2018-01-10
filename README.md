@@ -1,41 +1,57 @@
 # AFF4 -The Advanced Forensics File Format
 
-The Advanced Forensics File Format 4 (AFF4) is an open source format used for the storage of digital evidence and
-data.
+The Advanced Forensics File Format 4 (AFF4) is an open source format
+used for the storage of digital evidence and data.
 
-It was originally designed and published in [1] and has since been standardised as the AFF4 Standard v1.0, 
-which is available at https://github.com/aff4/Standard. This project is a work in progress implementation, 
-providing two library implementations, C/C++ and Python.
+The standard is currently maintained here:
+https://github.com/aff4/Standard
+
+Reference Images are found:
+https://github.com/aff4/ReferenceImages
+
+This project implementats a C/C++ library for creating, reading and
+manipulating AFF4 images. The project also includes the canonical
+aff4imager binary which provides a general purpose standalone imaging
+tool.
+
+The library and binary are known to work on Linux (all versions since
+Ubuntu 10.04), Windows (All versions) and OSX (All known versions).
+
 
 ## What is currently supported.
 
-The focus of this implementation at present is reading images conforming with the 
-AFF4 Standard v1.0. Canonical images are provided in the AFF4 Reference Images github 
-project at https://github.com/aff4/ReferenceImages
+Currently this library supports most of the features described in the
+standard https://github.com/aff4/Standard.
 
-1. Reading ZipFile style volumes.
-2. Reading AFF4 Image streams using the deflate or snappy compressor.
-3. Reading RDF metadata using Turtle (and in some instances YAML for backwards compatibility).
+1. Reading and Writing ZipFile style volumes
+
+   a. Supports splitting of output volumes into volume groups
+      (e.g. splitting at 1GB volumes).
+
+2. Reading ahd Writing Directory style volumes.
+
+3. Reading and Writing AFF4 Image streams using the deflate or snappy
+   compressor.
+
+4. Reading RDF metadata using Turtle.
+
+5. Multi-threaded imaging for efficient utilization on multi core
+   systems.
+
 
 ## What is not yet supported.
 
-The write support in the libraries is currently broken and being worked on. Other aspects of 
-the AFF4 that have not yet been implemented in this codebase include:
+This implementation currently does not implement Section 6. Hashing of
+the standard. This includes verifying or generating linear or block
+hashes.
 
-1. Encrypted AFF4 volumes.
-2. Persistent data store.
-3. HTTP backed streams.
-4. Splitting an AFF4 Image across multiple volumes.
-5. Map streams.
-6. Support for signed statements or Bill of Materials.
-7. Logical file acquisition.
+## Copyright
 
-## Notice
-
-This is not an official Google product (experimental or otherwise), it is just
-code that happens to be owned by Google.
+Copyright 2015-2017 Google Inc.
+Copyright 2018 Rekall Innovations (Michael Cohen).
 
 ## References
+
 [1] "Extending the advanced forensic format to accommodate multiple data sources,
 logical evidence, arbitrary information and forensic workflow" M.I. Cohen,
 Simson Garfinkel and Bradley Schatz, digital investigation 6 (2009) S57–S68.
