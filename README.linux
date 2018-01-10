@@ -44,7 +44,7 @@ cd ..
 
 apt-get source libraptor2-dev
 cd raptor2-2.0.13/
-./configure --prefix=$PREFIX --enable-static --without-www LDFLAGS="-L/home/scudette/build/static/lib -static -static-libstdc++" --enable-serializers="turtle ntriples" --enable-parsers="turtle ntriples"
+./configure --prefix=$PREFIX --enable-static --without-www LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --enable-serializers="turtle ntriples" --enable-parsers="turtle ntriples"
 make -j4 install
 cd ..
 

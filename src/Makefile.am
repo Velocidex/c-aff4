@@ -12,6 +12,8 @@ AM_CPPFLAGS = -I$(top_srcdir)/src
 # (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
 if WINDOWS
 WINCXXFLAGS = -mno-ms-bitfields
+# On windows we want to compile libpthread statically.
+PTHREAD_FLAGS = -Wl,-Bstatic,--whole-archive,-lpthread -Wl,--no-whole-archive
 else
 UNIXLDFLAGS = ${UUID_CFLAGS}
 endif
@@ -22,8 +24,8 @@ AM_CXXFLAGS = $(WINCXXFLAGS)
 
 # Support static builds.
 if STATIC_BUILD
-STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
-STATIC_LINKERLDFLAGS = -static -static-libstdc++ -static-libgcc
+STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc ${PTHREAD_FLAGS}
+STATIC_LINKERLDFLAGS = -static -static-libstdc++ -static-libgcc ${PTHREAD_FLAGS}
 endif
 
 # The -no-undefined flag allows libtool to generate shared libraries for

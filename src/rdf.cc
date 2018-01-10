@@ -275,7 +275,7 @@ static std::string abspath(std::string path) {
     // The windows version of this function is somewhat simpler.
     DWORD buffer_len = GetFullPathName(path.c_str(), 0, NULL, NULL);
     if (buffer_len > 0) {
-        auto buffer = std::unique_ptr<char>(new char[buffer_len]);
+        auto buffer = std::unique_ptr<TCHAR>(new TCHAR[buffer_len]);
         GetFullPathName(path.c_str(), buffer_len, buffer.get(), NULL);
         return std::string(buffer.get());
     }
