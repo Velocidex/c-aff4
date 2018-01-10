@@ -1,7 +1,0 @@
-dependent_versions:
-- _version.py
-- pyaff4/_version.py
-version_data:
-  post: '6'
-  rc: '0'
-  version: '0.26'
