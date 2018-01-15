@@ -2,21 +2,22 @@
   Utilities for AFF4 imaging. These are mostly high level utilities used by the
   command line imager.
 */
+#include <fnmatch.h>
+
 #include "libaff4.h"
 #include "aff4_imager_utils.h"
+#include "rdf.h"
 #include <iostream>
 #include <string>
 #include <time.h>
 
 namespace aff4 {
 
-
-// This will be flipped by the signal handler.
+// High level functions for imaging and extracting streams. Can be
+// used without an imager instance.
 AFF4Status ImageStream(DataStore& resolver, const std::vector<URN>& input_urns,
                        URN output_urn,
-                       bool truncate,
-                       size_t buffer_size) {
-    UNUSED(buffer_size);
+                       bool truncate) {
     AFF4Status result = STATUS_OK;
 
     // We are allowed to write on the output file.
@@ -77,9 +78,7 @@ AFF4Status ImageStream(DataStore& resolver, const std::vector<URN>& input_urns,
 
 AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
                          URN output_urn,
-                         bool truncate,
-                         size_t buffer_size) {
-    UNUSED(buffer_size);
+                         bool truncate) {
     // We are allowed to write on the output file.
     if (truncate) {
         resolver.logger->info("Truncating output file: {}", output_urn.value);
@@ -206,6 +205,10 @@ AFF4Status BasicImager::ParseArgs() {
 AFF4Status BasicImager::ProcessArgs() {
     AFF4Status result = CONTINUE;
 
+    if (Get("list")->isSet()) {
+        result = handle_list();
+    }
+
     if (result == CONTINUE && Get("view")->isSet()) {
         result = handle_view();
     }
@@ -260,8 +263,10 @@ AFF4Status BasicImager::handle_aff4_volumes() {
         URN urn = URN::NewURNFromFilename(volume_to_load);
         resolver.logger->info("Preloading AFF4 Volume: {}", urn.SerializeToString());
 
-        // Currently we support AFF4Directory and ZipFile:
-        if (AFF4Directory::IsDirectory(urn)) {
+        // Currently we support AFF4Directory and ZipFile. If the
+        // directory does not already exist, and the argument ends
+        // with a / then we create a new directory.
+        if (AFF4Directory::IsDirectory(urn, /* must_exist= */ false)) {
             AFF4ScopedPtr<AFF4Directory> volume = AFF4Directory::NewAFF4Directory(
                     &resolver, urn);
 
@@ -271,7 +276,7 @@ AFF4Status BasicImager::handle_aff4_volumes() {
                 return IO_ERROR;
             }
 
-            volume_URN = volume->urn;
+            volume_URNs.push_back(volume->urn);
         } else {
             AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
             if (zip.get() == nullptr || zip->members.size() == 0) {
@@ -281,12 +286,23 @@ AFF4Status BasicImager::handle_aff4_volumes() {
                 continue;
             }
 
-            volume_URN = zip->urn;
+            volume_URNs.push_back(zip->urn);
         }
     }
 
     return CONTINUE;
 }
+
+AFF4Status BasicImager::handle_list() {
+    URN image_type(AFF4_IMAGE_TYPE);
+    for (const auto& subject: resolver.Query(
+             URN(AFF4_TYPE), &image_type)) {
+        std::cout << subject.SerializeToString() << "\n";
+    }
+
+    return STATUS_OK;
+}
+
 
 AFF4Status BasicImager::handle_view() {
     resolver.Dump(GetArg<TCLAP::SwitchArg>("verbose")->getValue());
@@ -296,19 +312,18 @@ AFF4Status BasicImager::handle_view() {
 }
 
 AFF4Status BasicImager::parse_input() {
-    if (Get("input")->isSet()) {
-        inputs = GetArg<TCLAP::MultiArgToNextFlag>("input")->getValue();
-    }
-
-    // Read input files from stdin - this makes it easier to support
-    // files with spaces and special shell chars in their names.
-    if (GetArg<TCLAP::SwitchArg>("stdin_input")->getValue()) {
-        std::string line;
-        do {
-            line.clear();
-            std::getline (std::cin, line);
-            inputs.push_back(line);
-        } while(line.size() > 0);
+    for (const auto& input: GetArg<TCLAP::MultiArgToNextFlag>("input")->getValue()) {
+        // Read input files from stdin - this makes it easier to support
+        // files with spaces and special shell chars in their names.
+        if (input == "@") {
+            for(std::string line;;) {
+                std::getline (std::cin, line);
+                if (line.size() == 0) break;
+                inputs.push_back(line);
+            }
+        } else {
+            inputs.push_back(input);
+        }
     }
 
     return CONTINUE;
@@ -364,6 +379,11 @@ AFF4Status BasicImager::process_input() {
                 ProgressContext progress(&resolver);
                 RETURN_IF_ERROR(image_stream->WriteStream(input_stream.get(), &progress));
 
+                // Make this stream as an Image (Should we have
+                // another type for a LogicalImage?
+                resolver.Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+                             /* replace = */ false);
+
                 // We need to explicitly check the abort status here.
                 if (should_abort || aff4_abort_signaled) {
                     return ABORTED;
@@ -387,6 +407,11 @@ AFF4Status BasicImager::process_input() {
 
                 // Copy the input stream to the output stream.
                 RETURN_IF_ERROR(image_stream->WriteStream(input_stream.get(), &progress));
+
+                // Make this stream as an Image (Should we have
+                // another type for a LogicalImage?
+                resolver.Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+                             /* replace = */ false);
             }
         }
     }
@@ -397,50 +422,74 @@ AFF4Status BasicImager::process_input() {
 }
 
 AFF4Status BasicImager::handle_export() {
-    if (!Get("output")->isSet()) {
+    if (Get("output")->isSet()) {
         resolver.logger->error(
-            "Can not specify an export without an output");
+            "Can not specify an export and an output volume at the same time "
+            "(did you mean --export_dir).");
         return INVALID_INPUT;
     }
 
-    std::string output = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
-    std::string export_ = GetArg<TCLAP::ValueArg<std::string>>("export")->getValue();
-    URN export_urn(export_);
-    URN output_urn(output);
+    std::string export_dir = GetArg<TCLAP::ValueArg<std::string>>(
+        "export_dir")->getValue();
+    URN export_dir_urn = URN::NewURNFromFilename(export_dir, true);
+    std::vector<URN> urns;
+    std::string export_pattern = GetArg<TCLAP::ValueArg<std::string>>(
+        "export")->getValue();
 
-    // We do not want to interpret this parameter as a file reference since it
-    // must come from the image.
-    if (volume_URN.value.size() > 0 &&
-            export_urn.Scheme() == "file") {
-        resolver.logger->info("Interpreting export URN as relative to volume {}",
-                              volume_URN.value);
-
-        export_urn = volume_URN.Append(export_);
+    // A pattern of @ means to read all subjects from stdin.
+    if (export_pattern == "@") {
+        for(std::string line;;) {
+            std::getline (std::cin, line);
+            if (line.size() == 0) break;
+            urns.push_back(line);
+            resolver.logger->info("Found image {}", line);
+        }
+    } else {
+        const URN image_type = URN(AFF4_IMAGE_TYPE);
+        for (const URN& image: resolver.Query(AFF4_TYPE, &image_type)) {
+            if (fnmatch(
+                    export_pattern.c_str(), image.SerializeToString().c_str(),
+                    FNM_EXTMATCH | FNM_CASEFOLD) == 0) {
+                resolver.logger->info("Found image {}", image);
+                urns.push_back(image);
+            }
+        }
     }
 
-    // When we export we always truncate the output file.
-    resolver.Set(output_urn, AFF4_STREAM_WRITE_MODE,
-                 new XSDString("truncate"));
 
-    // Hold the volume in use while we extract the stream for efficiency.
-    AFF4ScopedPtr <AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
-                                            volume_URN);
+    for (const URN& export_urn: urns) {
+        // Skip export URNs which are not an AFF4_IMAGE_TYPE.
+        const URN image_type = URN(AFF4_IMAGE_TYPE);
+        if (resolver.Has(export_urn, URN(AFF4_TYPE), image_type) != STATUS_OK) {
+            resolver.logger->info("Can not find URN {}, skipping", export_urn);
+            continue;
+        }
 
-    if (!volume) {
-        resolver.logger->error("Unable to open volume {}", volume_URN.SerializeToString());
-        return IO_ERROR;
+        URN output_urn = export_dir_urn.Append(export_urn.Path());
+        resolver.logger->info("Writing to {}", output_urn);
+
+        // Hold all the volumes in use while we extract the streams
+        // for efficiency. This prevents volumes from being opened and
+        // closed on demand under high load.
+        std::vector<AFF4ScopedPtr<AFF4Volume>> volumes;
+        for (const auto& volume_urn: volume_URNs) {
+            auto volume = resolver.AFF4FactoryOpen<AFF4Volume>(volume_urn);
+            if (!volume) {
+                resolver.logger->error("Unable to open volume {}", volume_urn);
+                return IO_ERROR;
+            }
+
+            volumes.push_back(std::move(volume));
+        }
+
+        resolver.logger->info("Extracting {} into {}", export_urn, output_urn);
+        RETURN_IF_ERROR(
+            ExtractStream(
+                resolver, export_urn, output_urn, /* truncate = */ true));
     }
 
-    resolver.logger->info("Extracting {} into {}", export_urn, output_urn);
-    AFF4Status res = ExtractStream(
-        resolver, export_urn, output_urn, Get("truncate")->isSet());
-
-    if (res == STATUS_OK) {
-        actions_run.insert("export");
-        return CONTINUE;
-    }
-
-    return res;
+    actions_run.insert("export");
+    return CONTINUE;
 }
 
 
@@ -483,7 +532,7 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
     }
 
     // The output is a directory volume.
-    if (AFF4Directory::IsDirectory(output_path)) {
+    if (AFF4Directory::IsDirectory(output_path, /* must_exist= */ true)) {
         AFF4ScopedPtr<AFF4Directory> volume = AFF4Directory::NewAFF4Directory(
                 &resolver, output_volume_backing_urn);
 

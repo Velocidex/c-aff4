@@ -532,7 +532,8 @@ AFF4Status MemoryDataStore::Has(const URN& urn, const URN& attribute) {
     return STATUS_OK;
 }
 
-AFF4Status MemoryDataStore::Has(const URN& urn, const URN& attribute, RDFValue& value) {
+AFF4Status MemoryDataStore::Has(const URN& urn, const URN& attribute,
+                                const RDFValue& value) {
     auto urn_it = store.find(urn.SerializeToString());
 
     if (urn_it == store.end()) {

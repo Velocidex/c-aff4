@@ -60,7 +60,7 @@ AFF4Status _CreateIntermediateDirectories(
         resolver->logger->debug("Creating intermediate directories {}",
                                 path);
 
-        if (AFF4Directory::IsDirectory(path)) {
+        if (AFF4Directory::IsDirectory(path, /* must_exist= */ true)) {
             continue;
         }
 
@@ -99,7 +99,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
         return INVALID_INPUT;
     }
 
-    resolver->logger->info("Opening file {}", filename);
+    resolver->logger->debug("Opening file {}", filename);
 
     std::vector<std::string> directory_components = split(filename, PATH_SEP);
     directory_components.pop_back();
@@ -112,7 +112,8 @@ AFF4Status FileBackedObject::LoadFromURN() {
         desired_access |= GENERIC_WRITE;
 
         // Next call will append.
-        resolver->Set(urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+        resolver->Set(urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"),
+                      /* replace = */ true);
         properties.writable = true;
 
         // Only create directories if we are allowed to.
@@ -295,7 +296,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
         }
     }
 
-    resolver->logger->info("Opening file {}", filename);
+    resolver->logger->debug("Opening file {}", filename);
 
     fd = open(filename.c_str(), flags,
               S_IRWXU | S_IRWXG | S_IRWXO);

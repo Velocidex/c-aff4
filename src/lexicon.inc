@@ -91,7 +91,7 @@ LEXICON_DEFINE(AFF4_ZIP_SEGMENT_TYPE, "http://aff4.org/Schema#zip_segment");
  * AFF4 Primary Object Types.
  *
  * Note: These types are abstract entities which refer to a logical
- * image. They do not say anything about the actual storage methos
+ * image. They do not say anything about the actual storage methods
  * used. Instead they refer to the AFF4 stream which stores the data
  * in their dataStream attribute.
  *
