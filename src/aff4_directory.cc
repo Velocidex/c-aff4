@@ -219,9 +219,9 @@ AFF4Status AFF4Directory::Flush() {
 }
 
 
-bool AFF4Directory::IsDirectory(const URN& urn) {
+bool AFF4Directory::IsDirectory(const URN& urn, bool must_exist) {
     std::string filename = urn.ToFilename();
-    return AFF4Directory::IsDirectory(filename);
+    return AFF4Directory::IsDirectory(filename, must_exist);
 }
 
 #ifdef _WIN32
@@ -292,7 +292,8 @@ AFF4Status AFF4Directory::MkDir(DataStore* resolver, const std::string& path) {
     return STATUS_OK;
 }
 
-bool AFF4Directory::IsDirectory(const std::string& filename) {
+bool AFF4Directory::IsDirectory(const std::string& filename,
+                                bool must_exist) {
     DWORD dwAttrib = GetFileAttributes(filename.c_str());
 
     bool result = (dwAttrib != INVALID_FILE_ATTRIBUTES &&
@@ -300,8 +301,10 @@ bool AFF4Directory::IsDirectory(const std::string& filename) {
 
     // If the URN ends with a / and we have permissions to create it, it is a
     // directory.
-    char last = *(filename.rbegin());
-    result |= (last == '/' || last == '\\');
+    if (!must_exist) {
+        char last = *(filename.rbegin());
+        result |= (last == '/' || last == '\\');
+    }
 
     return result;
 }
@@ -317,12 +320,13 @@ AFF4Status AFF4Directory::MkDir(DataStore *resolver, const std::string& path) {
     return STATUS_OK;
 }
 
-bool AFF4Directory::IsDirectory(const std::string& filename) {
+bool AFF4Directory::IsDirectory(const std::string& filename,
+                                bool must_exist) {
     DIR* dir = opendir(filename.c_str());
     if (!dir) {
         // If the URN ends with a / and we have permissions to create it, it is a
         // directory.
-        if (*(filename.rbegin()) == PATH_SEP) {
+        if (!must_exist && *(filename.rbegin()) == PATH_SEP) {
             return true;
         }
 

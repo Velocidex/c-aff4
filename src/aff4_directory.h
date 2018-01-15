@@ -60,8 +60,8 @@ class AFF4Directory: public AFF4Volume {
     virtual AFF4Status Flush();
 
     // Some handy static methods.
-    static bool IsDirectory(const URN& urn);
-    static bool IsDirectory(const std::string& filename);
+    static bool IsDirectory(const URN& urn, bool must_exist=false);
+    static bool IsDirectory(const std::string& filename, bool must_exist=false);
     static AFF4Status RemoveDirectory(DataStore *resolver, const std::string& root_path);
     static AFF4Status MkDir(DataStore *resolver, const std::string& path);
 };

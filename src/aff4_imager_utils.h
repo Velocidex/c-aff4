@@ -47,14 +47,12 @@ namespace aff4 {
  * @param input_urns: A vector of URNs to be copied to the output volume.
  * @param output_urn: A URN to create or append the volume to.
  * @param truncate: Should the output file be truncated?
- * @param buffer_size: Inputs will be copied in this buffer size.
  *
  * @return STATUS_OK if images were added successfully.
  */
 AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
                        URN output_urn,
-                       bool truncate = true,
-                       size_t buffer_size = 1024*1024);
+                       bool truncate = true);
 
 /**
  * Copy a stream from a loaded volume into and output stream.
@@ -62,18 +60,16 @@ AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
  * @param resolver
  * @param input_urn
  * @param output_urn
- * @param buffer_size
  *
  * @return
  */
 AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
                          URN output_urn,
-                         bool truncate = true,
-                         size_t buffer_size = 1024*1024);
+                         bool truncate = true);
 
 class BasicImager {
   protected:
-    URN volume_URN;
+    std::vector<URN> volume_URNs;
 
     // The current URN of the volume we write to.
     URN output_volume_urn;
@@ -120,6 +116,7 @@ class BasicImager {
     virtual AFF4Status handle_logging();
     virtual AFF4Status handle_aff4_volumes();
     virtual AFF4Status handle_view();
+    virtual AFF4Status handle_list();
     virtual AFF4Status parse_input();
     virtual AFF4Status process_input();
     virtual AFF4Status handle_export();
@@ -200,6 +197,7 @@ class BasicImager {
 
     virtual AFF4Status RegisterArgs() {
         AddArg(new TCLAP::SwitchArg("V", "view", "View AFF4 metadata", false));
+        AddArg(new TCLAP::SwitchArg("l", "list", "List all image streams in the volume.", false));
         AddArg(new TCLAP::MultiSwitchArg(
                    "d", "debug", "Display debugging logging (repeat for more info)",
                    false));
@@ -213,22 +211,19 @@ class BasicImager {
                    "output file to be truncated first.",
                    false));
 
-        AddArg(new TCLAP::SwitchArg(
-                   "@", "stdin_input", "Files to image read from stdin. See the -i "
-                   "flag, but these are read from stdin.",
-                   false));
-
         AddArg(new TCLAP::MultiArgToNextFlag(
-                   "i", "input", "File to image. If specified we copy this file to the "
+                   "i", "input", "File to image. If specified we copy these file to the "
                    "output volume located at --output. If there is no AFF4 volume on "
-                   "--output yet, we create a new volume on it.\n"
+                   "--output yet, we create a new volume on it. An filename of @ means "
+                   "to read filenames from stdin (In this case no glob expansion will "
+                   "occur). \n"
                    "This can be specified multiple times with shell expansion. e.g.:\n"
                    "-i /bin/*",
                    false, "/path/to/file/or/device"));
 
         AddArg(new TCLAP::ValueArg<std::string>(
-                   "e", "export", "Name of the stream to export. If specified we try "
-                   "to open this stream and write it to the --output file. Note that "
+                   "e", "export", "Name of the streams to export. If specified we try "
+                   "to open this stream and write it to the export directory. Note that "
                    "you will also need to specify an AFF4 volume path to load so we know "
                    "where to find the stream. Specifying a relative URN "
                    "implies a stream residing in a loaded volume. E.g.\n"
@@ -237,8 +232,14 @@ class BasicImager {
                    false, "", "string"));
 
         AddArg(new TCLAP::ValueArg<std::string>(
+                   "D", "export_dir", "Directory to export to (Defaults to current "
+                   "directory)",
+                   false, ".", "path to directory"));
+
+        AddArg(new TCLAP::ValueArg<std::string>(
                    "o", "output", "Output file to write to. If the file does not "
-                   "exist we create it.", false, "",
+                   "exist we create it. NOTE: If output is a directory we write an "
+                   "AFF4 Directory volume when imaging.", false, "",
                    "/path/to/file"));
 
         AddArg(new TCLAP::SizeArg(

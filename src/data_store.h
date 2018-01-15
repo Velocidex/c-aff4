@@ -358,7 +358,8 @@ class DataStore {
     /**
      * Does the given URN have the given attribute set to the given value.
      */
-    virtual AFF4Status Has(const URN& urn, const URN& attribute, RDFValue& value) = 0;
+    virtual AFF4Status Has(const URN& urn, const URN& attribute,
+                           const RDFValue& value) = 0;
 
     /**
      * Does the given URN have the given attribute set
@@ -640,7 +641,7 @@ class MemoryDataStore: public DataStore {
     AFF4Status Get(const URN& urn, const URN& attribute, std::vector<std::shared_ptr<RDFValue>>& value);
     AFF4Status Has(const URN& urn);
     AFF4Status Has(const URN& urn, const URN& attribute);
-    AFF4Status Has(const URN& urn, const URN& attribute, RDFValue& value);
+    AFF4Status Has(const URN& urn, const URN& attribute, const RDFValue& value);
 
     std::unordered_set<URN> Query(
         const URN& attribute, const RDFValue* value = nullptr) override;
