@@ -503,7 +503,6 @@ class DataStore {
             return AFF4ScopedPtr<T>(dynamic_cast<T*>(cached_obj), this);
         }
 
-        URN type_urn;
         std::unique_ptr<AFF4Object> obj;
         const uri_components components = urn.Parse();
 
@@ -511,26 +510,33 @@ class DataStore {
         std::vector<std::shared_ptr<RDFValue>> types;
         if(Get(urn, AFF4_TYPE, types) == STATUS_OK) {
             // Try to instantiate all the types until one works.
-            for(auto& v : types) {
-                obj = GetAFF4ClassFactory()->CreateInstance(v->SerializeToString(),
-                                                            this, &urn);
-                if(obj != nullptr) {
-                    type_urn = URN(v->SerializeToString());
-                    break;
+            for(const auto& v : types) {
+                std::unique_ptr<AFF4Object> tmp_obj = GetAFF4ClassFactory()->
+                    CreateInstance(v->SerializeToString(), this, &urn);
+                if(tmp_obj == nullptr) {
+                    continue;
                 }
-            }
-        }
 
-        // Check if there is a resolver triple for it.
-        if(!obj) {
-            if (Get(urn, AFF4_TYPE, type_urn) == STATUS_OK) {
-                obj = GetAFF4ClassFactory()->CreateInstance(type_urn.value, this, &urn);
+                // Have the object load and initialize itself.
+                tmp_obj->urn = urn;
+                if (tmp_obj->LoadFromURN() != STATUS_OK) {
+                    logger->debug("Failed to load {} as {}", urn, *v);
+                    continue;
+                }
+
+                obj.swap(tmp_obj);
             }
         }
 
         // Try to instantiate the handler based on the URN scheme alone.
         if (!obj) {
             obj = GetAFF4ClassFactory()->CreateInstance(components.scheme, this, &urn);
+            if (obj) {
+                obj->urn = urn;
+                if (obj->LoadFromURN() != STATUS_OK) {
+                    obj.release();
+                }
+            }
         }
 
         // Failed to find the object.
@@ -538,12 +544,6 @@ class DataStore {
             return AFF4ScopedPtr<T>();
         }
 
-        // Have the object load and initialize itself.
-        obj->urn = urn;
-        if (obj->LoadFromURN() != STATUS_OK) {
-            logger->debug("Failed to load {} as {}", urn, type_urn);
-            return AFF4ScopedPtr<T>();
-        }
 
         // Cache the object for next time.
         T* result = dynamic_cast<T*>(obj.get());

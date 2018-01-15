@@ -456,7 +456,6 @@ AFF4Status BasicImager::handle_export() {
         }
     }
 
-
     for (const URN& export_urn: urns) {
         // Skip export URNs which are not an AFF4_IMAGE_TYPE.
         const URN image_type = URN(AFF4_IMAGE_TYPE);
@@ -465,7 +464,10 @@ AFF4Status BasicImager::handle_export() {
             continue;
         }
 
-        URN output_urn = export_dir_urn.Append(export_urn.Path());
+        // Prepend the domain (AFF4 volume) to the export directory to
+        // make sure the exported stream is unique.
+        URN output_urn = export_dir_urn.Append(export_urn.Domain()).Append(
+            export_urn.Path());
         resolver.logger->info("Writing to {}", output_urn);
 
         // Hold all the volumes in use while we extract the streams
