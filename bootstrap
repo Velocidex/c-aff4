@@ -1,5 +1,0 @@
-#! /bin/sh
-
-# This file is run after checkout from source control.
-
-autoreconf --force --install
