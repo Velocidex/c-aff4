@@ -111,9 +111,7 @@ AFF4Status ZipFile::LoadTurtleMetadata() {
 }
 
 AFF4Status ZipFile::LoadFromURN() {
-    if (resolver->Get(urn, AFF4_STORED, backing_store_urn) != STATUS_OK) {
-        return NOT_FOUND;
-    }
+    RETURN_IF_ERROR(resolver->Get(urn, AFF4_STORED, backing_store_urn));
 
     // Is the backing store writable?
     XSDString mode("read");

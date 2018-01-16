@@ -60,7 +60,8 @@ libaff4_include_HEADERS = \
 	aff4_imager_utils.h \
 	aff4_file.h \
 	aff4_symstream.h \
-	libaff4-c.h
+	libaff4-c.h \
+	threadpool.h
 
 libaff4_la_SOURCES = \
 	aff4_image.cc \
