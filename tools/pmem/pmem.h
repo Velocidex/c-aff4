@@ -89,7 +89,7 @@ class PmemImager: public BasicImager {
                    "required when the program is invoked with the --input, --export or "
                    "other actionable flags.\n", false));
 
-        AddArg(new TCLAP::MultiArgToNextFlag<std::string>(
+        AddArg(new TCLAP::MultiArgToNextFlag(
                    "p", "pagefile", "Also capture the pagefile. Note that you must "
                    "provide this option rather than e.g. '--input c:\\pagefile.sys' "
                    "because we can not normally read the pagefile directly. This "

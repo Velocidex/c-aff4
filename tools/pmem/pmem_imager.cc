@@ -91,7 +91,7 @@ AFF4Status PmemImager::ProcessArgs() {
 }
 
 AFF4Status PmemImager::handle_pagefiles() {
-    pagefiles = GetArg<TCLAP::MultiArgToNextFlag<std::string>>(
+    pagefiles = GetArg<TCLAP::MultiArgToNextFlag>(
         "pagefile")->getValue();
 
   return CONTINUE;
@@ -139,13 +139,18 @@ AFF4Status PmemImager::WriteElfFormat_(
   AFF4Map temp_map(&resolver);
 
   // Write the ELF header.
-  Elf64_Ehdr elf_header = {
-    .ident = {ELFMAG0, ELFMAG1, ELFMAG2, ELFMAG3, ELFCLASS64,
-              ELFDATA2LSB, EV_CURRENT},
-    .type = ET_CORE,
-    .machine = EM_X86_64,
-    .version = EV_CURRENT,
-  };
+  Elf64_Ehdr elf_header;
+  elf_header.ident[0] = ELFMAG0;
+  elf_header.ident[1] = ELFMAG1;
+  elf_header.ident[2] = ELFMAG2;
+  elf_header.ident[3] = ELFMAG3;
+  elf_header.ident[4] = ELFCLASS64;
+  elf_header.ident[5] = ELFDATA2LSB;
+  elf_header.ident[6] = EV_CURRENT;
+
+  elf_header.type = ET_CORE;
+  elf_header.machine = EM_X86_64;
+  elf_header.version = EV_CURRENT;
 
   elf_header.phoff    = sizeof(Elf64_Ehdr);
   elf_header.phentsize = sizeof(Elf64_Phdr);

@@ -18,7 +18,6 @@ else
 UNIXLDFLAGS = ${UUID_CFLAGS}
 endif
 
-
 # Default flags for targets without specific overrides.
 AM_CXXFLAGS = $(WINCXXFLAGS)
 

@@ -51,6 +51,9 @@ std::shared_ptr<spdlog::logger> get_logger();
         };                                      \
     } while (0);
 
+// A portable version of fnmatch.
+int fnmatch(const char *pattern, const char *string);
+
 } // namespace aff4
 
 #endif  // SRC_AFF4_UTILS_H_

@@ -145,6 +145,6 @@ AC_CONFIG_FILES([
         Makefile
         src/Makefile
         tests/Makefile
-        docs/Makefile
+        tools/pmem/Makefile
         ])
 AC_OUTPUT

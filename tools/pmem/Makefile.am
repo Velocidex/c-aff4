@@ -6,15 +6,23 @@ ACLOCAL_AMFLAGS = -I m4
 # This is so we can #include <package/foo>
 AM_CPPFLAGS = -I$(top_srcdir) -DHAVE_SSTREAM -I$(top_srcdir)/../osx/
 
-# These are good warnings to turn on by default
-if GCC
-AM_CXXFLAGS = -Wall -Wwrite-strings -Woverloaded-virtual -Wno-sign-compare
+# On windows we need to specify this to avoid a bug in gcc
+# (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991)
+if WINDOWS
+WINCXXFLAGS = -mno-ms-bitfields
+# On windows we want to compile libpthread statically.
+PTHREAD_FLAGS = -Wl,-Bstatic,--whole-archive,-lpthread -Wl,--no-whole-archive
+else
+UNIXLDFLAGS = ${UUID_CFLAGS}
 endif
+
+# Default flags for targets without specific overrides.
+AM_CXXFLAGS = $(WINCXXFLAGS)
 
 # Support static builds.
 if STATIC_BUILD
-STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc
-STATIC_LINKERLDFLAGS = -all-static
+STATIC_LIBLDFLAGS = -static -static-libstdc++ -static-libgcc ${PTHREAD_FLAGS}
+STATIC_LINKERLDFLAGS = -static -static-libstdc++ -static-libgcc ${PTHREAD_FLAGS}
 endif
 
 # The -no-undefined flag allows libtool to generate shared libraries for
@@ -23,7 +31,7 @@ endif
 AM_LDFLAGS = -no-undefined $(LIBSTDCXX_LA_LINKER_FLAG) \
              -version-info @SO_VERSION@
 
-if WIN32_NATIVE_HOST
+if WINDOWS
 bin_PROGRAMS = winpmem
 
 winpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
@@ -38,16 +46,19 @@ all-local: winpmem$(EXEEXT)
 	cat resources/pmem.aff4 >> winpmem$(EXEEXT)
 endif
 
-if LINUX_NATIVE_HOST
+if LINUX
 bin_PROGRAMS = linpmem
 
 linpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 linpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
 linpmem_SOURCES = pmem_imager.cc linux_pmem.cc
 linpmem_LDADD = -laff4
+
+all-local: linpmem
+
 endif
 
-if OSX_NATIVE_HOST
+if OSX
 bin_PROGRAMS = osxpmem
 
 osxpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)

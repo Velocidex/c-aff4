@@ -54,7 +54,7 @@ AFF4Status LinuxPmemImager::ParseIOMap_(std::vector<aff4_off_t> *ram) {
 
 
 AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
-  std::cout << "Processing /proc/kcore";
+  resolver.logger->info("Processing /proc/kcore");
 
   // The start address of each physical memory range.
   std::vector<aff4_off_t> physical_range_start;
@@ -156,7 +156,7 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
 
 
 AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
-  std::cout << "Imaging memory\n";
+  resolver.logger->info("Imaging memory");
 
   URN output_urn;
   AFF4Status res = GetOutputVolumeURN(output_volume_urn);
@@ -185,6 +185,9 @@ AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
   if (res != STATUS_OK) {
     return res;
   }
+
+  resolver.Set(map_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+               /* replace = */ false);
 
   actions_run.insert("memory");
 
