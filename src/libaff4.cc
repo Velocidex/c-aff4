@@ -13,6 +13,12 @@ CONDITIONS OF ANY KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations under the License.
 */
 
+#ifdef _WIN32
+#include "shlwapi.h"
+#else
+#include <fnmatch.h>
+#endif
+
 #include "config.h"
 
 #include "aff4_utils.h"
@@ -477,7 +483,8 @@ URN urn_from_member_name(const std::string& member, const URN base_urn) {
 }
 
 
-std::vector<std::string>& split(const std::string& s, char delim, std::vector<std::string>& elems) {
+std::vector<std::string>& split(const std::string& s, char delim,
+                                std::vector<std::string>& elems) {
     std::stringstream ss(s);
     std::string item;
     while (std::getline(ss, item, delim)) {
@@ -528,5 +535,22 @@ std::shared_ptr<spdlog::logger> get_logger() {
 
     return logger;
 }
+
+#ifdef _WIN32
+
+int fnmatch(const char *pattern, const char *string) {
+    return !PathMatchSpec(string, pattern);
+}
+
+#else
+
+int fnmatch(const char *pattern, const char *string) {
+    return ::fnmatch(pattern, string, FNM_EXTMATCH | FNM_CASEFOLD);
+}
+
+#endif
+
+
+
 
 } // namespace aff4

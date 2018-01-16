@@ -142,10 +142,10 @@ class WinPmemImager: public PmemImager {
 
   virtual AFF4Status RegisterArgs() {
     AddArg(new TCLAP::SwitchArg(
-        "l", "load-driver", "Load the driver and exit", false));
+        "L", "load-driver", "Load the driver and exit", false));
 
     AddArg(new TCLAP::SwitchArg(
-        "u", "unload-driver", "Unload the driver and exit", false));
+        "U", "unload-driver", "Unload the driver and exit", false));
 
     AddArg(new TCLAP::SwitchArg(
         "", "write-mode", "Enable write mode. You must have the "

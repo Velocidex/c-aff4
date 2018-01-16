@@ -703,7 +703,7 @@ AFF4Status WinPmemImager::handle_acquisition_mode() {
 }
 
 AFF4Status WinPmemImager::handle_pagefiles() {
-    std::vector<std::string> pagefile_args = GetArg<TCLAP::MultiArgToNextFlag<std::string>>(
+    std::vector<std::string> pagefile_args = GetArg<TCLAP::MultiArgToNextFlag>(
       "pagefile")->getValue();
 
   for (auto it : pagefile_args) {

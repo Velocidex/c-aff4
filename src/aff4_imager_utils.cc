@@ -2,7 +2,6 @@
   Utilities for AFF4 imaging. These are mostly high level utilities used by the
   command line imager.
 */
-#include <fnmatch.h>
 
 #include "libaff4.h"
 #include "aff4_imager_utils.h"
@@ -447,9 +446,9 @@ AFF4Status BasicImager::handle_export() {
     } else {
         const URN image_type = URN(AFF4_IMAGE_TYPE);
         for (const URN& image: resolver.Query(AFF4_TYPE, &image_type)) {
-            if (fnmatch(
-                    export_pattern.c_str(), image.SerializeToString().c_str(),
-                    FNM_EXTMATCH | FNM_CASEFOLD) == 0) {
+            if (aff4::fnmatch(
+                    export_pattern.c_str(),
+                    image.SerializeToString().c_str()) == 0) {
                 resolver.logger->info("Found image {}", image);
                 urns.push_back(image);
             }
