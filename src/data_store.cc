@@ -99,9 +99,12 @@ bool DataStore::ShouldSuppress(const URN& subject,
                                const std::string& value) {
     URN type(AFF4_TYPE);
     if (predicate == AFF4_STORED &&
-        (Has(subject, type, URN(AFF4_ZIP_SEGMENT_TYPE)) ||
-         Has(subject, type, URN(AFF4_ZIP_TYPE)) ||
-         Has(subject, type, URN(AFF4_DIRECTORY_TYPE)))) {
+        (HasURNWithAttributeAndValue(
+            subject, type, URN(AFF4_ZIP_SEGMENT_TYPE)) ||
+         HasURNWithAttributeAndValue(
+             subject, type, URN(AFF4_ZIP_TYPE)) ||
+         HasURNWithAttributeAndValue(
+             subject, type, URN(AFF4_DIRECTORY_TYPE)))) {
         return true;
     }
 
@@ -512,61 +515,61 @@ AFF4Status MemoryDataStore::Get(const URN& urn,
     return STATUS_OK;
 }
 
-AFF4Status MemoryDataStore::Has(const URN& urn) {
+bool MemoryDataStore::HasURN(const URN& urn) {
     auto urn_it = store.find(urn.SerializeToString());
 
     if (urn_it == store.end()) {
-        return NOT_FOUND;
+        return false;
     }
-    return STATUS_OK;
+    return true;
 }
 
-AFF4Status MemoryDataStore::Has(const URN& urn, const URN& attribute) {
+bool MemoryDataStore::HasURNWithAttribute(const URN& urn, const URN& attribute) {
     auto urn_it = store.find(urn.SerializeToString());
 
     if (urn_it == store.end()) {
-        return NOT_FOUND;
+        return false;
     }
 
     auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
     if (attribute_itr == urn_it->second.end()) {
-        return NOT_FOUND;
+        return false;
     }
 
     std::vector<std::shared_ptr<RDFValue>> values = (attribute_itr->second);
     if (values.empty()) {
-        return NOT_FOUND;
+        return false;
     }
-    return STATUS_OK;
+    return true;
 }
 
-AFF4Status MemoryDataStore::Has(const URN& urn, const URN& attribute,
-                                const RDFValue& value) {
+bool MemoryDataStore::HasURNWithAttributeAndValue(
+    const URN& urn, const URN& attribute, const RDFValue& value) {
     auto urn_it = store.find(urn.SerializeToString());
+    std::string serialized_value = value.SerializeToString();
 
     if (urn_it == store.end()) {
-        return NOT_FOUND;
+        return false;
     }
 
     auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
     if (attribute_itr == urn_it->second.end()) {
-        return NOT_FOUND;
+        return false;
     }
 
     std::vector<std::shared_ptr<RDFValue>> values = (attribute_itr->second);
     if (values.empty()) {
-        return NOT_FOUND;
+        return false;
     }
-    std::string attr = value.SerializeToString();
+
     // iterator over all values looking for a RDFValue that matches the attribute requested.
-    for (std::shared_ptr<RDFValue> v : values) {
-        std::string value = v->SerializeToString();
-        if (value.compare(attr) == 0) {
-            return STATUS_OK;
+    for (const auto& v: values) {
+        if (serialized_value == v->SerializeToString()) {
+            return true;
         }
     }
 
-    return NOT_FOUND;
+    return false;
 }
 
 std::unordered_set<URN> MemoryDataStore::Query(
@@ -604,7 +607,7 @@ std::unordered_set<URN> MemoryDataStore::Query(
 
 AFF4_Attributes MemoryDataStore::GetAttributes(const URN& urn) {
     AFF4_Attributes attr;
-    if(Has(urn) == NOT_FOUND){
+    if(!HasURN(urn)){
         return attr;
     }
     auto urn_it = store.find(urn.SerializeToString());

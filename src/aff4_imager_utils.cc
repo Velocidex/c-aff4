@@ -458,7 +458,8 @@ AFF4Status BasicImager::handle_export() {
     for (const URN& export_urn: urns) {
         // Skip export URNs which are not an AFF4_IMAGE_TYPE.
         const URN image_type = URN(AFF4_IMAGE_TYPE);
-        if (resolver.Has(export_urn, URN(AFF4_TYPE), image_type) != STATUS_OK) {
+        if (!resolver.HasURNWithAttributeAndValue(
+                export_urn, URN(AFF4_TYPE), image_type)) {
             resolver.logger->info("Can not find URN {}, skipping", export_urn);
             continue;
         }
