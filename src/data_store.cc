@@ -92,20 +92,34 @@ DataStore::DataStore():
     DataStore(DataStoreOptions()) {}
 
 
+// Since subjects may have multiple types, we need to ensure that we
+// suppress predicates properly.
+bool DataStore::ShouldSuppress(const URN& subject,
+                               const URN& predicate,
+                               const std::string& value) {
+    URN type(AFF4_TYPE);
+    if (predicate == AFF4_STORED &&
+        (Has(subject, type, URN(AFF4_ZIP_SEGMENT_TYPE)) ||
+         Has(subject, type, URN(AFF4_ZIP_TYPE)) ||
+         Has(subject, type, URN(AFF4_DIRECTORY_TYPE)))) {
+        return true;
+    }
+
+    if (predicate == AFF4_TYPE &&
+        (value == AFF4_ZIP_SEGMENT_TYPE ||
+         value == AFF4_ZIP_TYPE ||
+         value == AFF4_DIRECTORY_TYPE)) {
+        return true;
+    }
+
+    return false;
+}
+
+
 DataStore::DataStore(DataStoreOptions options)
     : logger(options.logger),
       pool(std::make_unique<ThreadPool>(options.threadpool_size)),
       ObjectCache(logger) {
-    // By default suppress ZipFileSegment objects since all their metadata comes
-    // directly from the ZIP container. This keeps the turtle files a bit cleaner.
-    suppressed_rdftypes[AFF4_ZIP_SEGMENT_TYPE].insert(AFF4_TYPE);
-    suppressed_rdftypes[AFF4_ZIP_SEGMENT_TYPE].insert(AFF4_STORED);
-
-    // The following are obvious due to the type of the container.
-    suppressed_rdftypes[AFF4_ZIP_TYPE].insert(AFF4_TYPE);
-    suppressed_rdftypes[AFF4_ZIP_TYPE].insert(AFF4_STORED);
-    suppressed_rdftypes[AFF4_DIRECTORY_TYPE].insert(AFF4_TYPE);
-    suppressed_rdftypes[AFF4_DIRECTORY_TYPE].insert(AFF4_STORED);
 
     // Add these default namespace.
     namespaces.push_back(std::pair<std::string, std::string>("aff4", AFF4_NAMESPACE));
@@ -202,7 +216,8 @@ public:
         return result;
     }
 
-    AFF4Status AddStatement(const URN& subject, const URN& predicate, const RDFValue* value) {
+    AFF4Status AddStatement(const URN& subject, const URN& predicate,
+                            const RDFValue* value) {
         raptor_statement* triple = raptor_new_statement(world);
         triple->subject = raptor_new_term_from_uri_string(
             world,
@@ -369,15 +384,10 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream& output_stream, URN base, bo
     }
 
     for (const auto& it : store) {
-        URN subject(it.first);
-        URN type;
-
-        if (Get(subject, AFF4_TYPE, type) != STATUS_OK) {
-            continue;
-        }
+        URN subject = it.first;
 
         for (const auto& attr_it : it.second) {
-            URN predicate(attr_it.first);
+            URN predicate = attr_it.first;
 
             // Volatile predicates are suppressed.
             if (!verbose) {
@@ -387,21 +397,19 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream& output_stream, URN base, bo
                         AFF4_VOLATILE_NAMESPACE)) {
                     continue;
                 }
-
-                // Skip this URN if it is in the suppressed_rdftypes set.
-                auto suppressed_predicate_it = suppressed_rdftypes.find(type.value);
-                if (suppressed_predicate_it != suppressed_rdftypes.end()) {
-                    if (suppressed_predicate_it->second.find(predicate.value)
-                        != suppressed_predicate_it->second.end()) {
-                        continue;
-                    }
-                }
             }
 
             // Load all attributes.
             const std::vector<std::shared_ptr<RDFValue>> attr = attr_it.second;
             for (auto at_it = attr.begin(); at_it != attr.end(); at_it++) {
-                serializer->AddStatement(subject, predicate, (*at_it).get());
+                const RDFValue* value = (*at_it).get();
+
+                // Skip this URN if it is in the suppressed_rdftypes set.
+                if (ShouldSuppress(
+                        subject, predicate, value->SerializeToString()))
+                    continue;
+
+                serializer->AddStatement(subject, predicate, value);
             }
         }
     }

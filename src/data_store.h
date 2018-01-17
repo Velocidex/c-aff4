@@ -605,7 +605,16 @@ class DataStore {
     std::unordered_map<std::string, std::shared_ptr<AFF4Stream>> SymbolicStreams;
 
     /// These types will not be dumped * to turtle files.
-    std::unordered_map<std::string, std::unordered_set<std::string>> suppressed_rdftypes;
+    std::unordered_map<
+        std::string, std::unordered_set<std::string>> suppressed_rdftypes;
+
+    // Should we suppress this tuple from the turtle file? We do not
+    // want to write facts in the turtle file which are self evident
+    // from context. For example, the AFF4_STORED attribute of
+    // AFF4_ZIP_SEGMENT_TYPE are inferred from the Zip container
+    // itself.
+    virtual bool ShouldSuppress(const URN& subject, const URN& predicate,
+                                const std::string& value);
 
 };
 

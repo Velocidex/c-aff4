@@ -48,14 +48,11 @@ endif
 
 if LINUX
 bin_PROGRAMS = linpmem
-
 linpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 linpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
-linpmem_SOURCES = pmem_imager.cc linux_pmem.cc
+linpmem_SOURCES = pmem_imager.cc linux_pmem.cc ../../src/compatibility.cc
 linpmem_LDADD = -laff4
-
 all-local: linpmem
-
 endif
 
 if OSX

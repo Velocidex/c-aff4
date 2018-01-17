@@ -21,6 +21,11 @@ specific language governing permissions and limitations under the License.
 
 namespace aff4 {
 
+struct ram_range {
+    aff4_off_t start;
+    aff4_off_t length;
+};
+
 class LinuxPmemImager: public PmemImager {
  protected:
     virtual std::string GetName() {
@@ -36,7 +41,7 @@ class LinuxPmemImager: public PmemImager {
   virtual AFF4Status ImagePhysicalMemory();
  private:
   AFF4Status CreateMap_(AFF4Map *map, aff4_off_t *length);
-  AFF4Status ParseIOMap_(std::vector<aff4_off_t> *ram);
+  AFF4Status ParseIOMap_(std::vector<ram_range> *ram);
 };
 
 } // namespace aff4
