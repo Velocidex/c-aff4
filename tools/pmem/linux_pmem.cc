@@ -20,7 +20,7 @@ specific language governing permissions and limitations under the License.
 namespace aff4 {
 
 // Return the physical offset of all the system ram mappings.
-AFF4Status LinuxPmemImager::ParseIOMap_(std::vector<aff4_off_t> *ram) {
+AFF4Status LinuxPmemImager::ParseIOMap_(std::vector<ram_range> *ram) {
     resolver.logger->info("Will parse /proc/iomem");
     ram->clear();
 
@@ -36,11 +36,11 @@ AFF4Status LinuxPmemImager::ParseIOMap_(std::vector<aff4_off_t> *ram) {
     pcrepp::Pcre RAM_regex("(([0-9a-f]+)-([0-9a-f]+) : System RAM)");
     int offset = 0;
     while (RAM_regex.search(data, offset)) {
-        uint64_t start = strtoll(RAM_regex.get_match(1).c_str(), nullptr, 16);
-        uint64_t end = strtoll(RAM_regex.get_match(2).c_str(), nullptr, 16);
+        aff4_off_t start = strtoll(RAM_regex.get_match(1).c_str(), nullptr, 16);
+        aff4_off_t end = strtoll(RAM_regex.get_match(2).c_str(), nullptr, 16);
         resolver.logger->info("System RAM {:x} - {:x}", start, end);
 
-        ram->push_back(start);
+        ram->push_back({start, end-start});
         offset = RAM_regex.get_match_end(0);
     }
 
@@ -57,7 +57,7 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
   resolver.logger->info("Processing /proc/kcore");
 
   // The start address of each physical memory range.
-  std::vector<aff4_off_t> physical_range_start;
+  std::vector<ram_range> physical_range_start;
   RETURN_IF_ERROR(ParseIOMap_(&physical_range_start));
 
   *length = 0;
@@ -101,6 +101,8 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
   // The index in physical_range_start vector we are currently seeking.
   int physical_range_start_index = 0;
 
+  std::vector<Elf64_Phdr> segments;
+
   for (int i = 0; i < header.phnum; i++) {
     Elf64_Phdr pheader;
     if (stream->ReadIntoBuffer(
@@ -112,6 +114,29 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
     if (pheader.type != PT_LOAD)
       continue;
 
+    if (pheader.memsz != pheader.filesz)
+      continue;
+
+    segments.push_back(pheader);
+  }
+
+  if (segments.size() == 0) {
+      resolver.logger->info("No ranges found in /proc/kcore");
+      return NOT_FOUND;
+  }
+
+  // Physical Memory ranges seem to be first so sorting by virtual
+  // address brings them to the front.
+  std::sort(segments.begin(), segments.end(),
+            [](const Elf64_Phdr x, const Elf64_Phdr y) {
+                return x.vaddr < y.vaddr;
+            });
+
+  Elf64_Phdr first_run = segments[0];
+  struct ram_range first_system_ram = physical_range_start[0];
+  aff4_off_t range_start = first_run.vaddr - first_system_ram.start;
+
+  for (const auto& pheader: segments) {
     // The kernel maps all physical memory regions inside its own
     // virtual address space. This virtual address space, in turn is
     // exported via /proc/kcore.
@@ -124,19 +149,19 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
     // where the memory is mapped.
 
     // Physical Address - The physical address where the Virtual
-    // address region is mapped by the kernel.
+    // address region is mapped by the kernel. (NOTE: On old kernels
+    // this is always 0).
 
     // Therefore we search the exported ELF regions for the one which
     // is mapping the next required physical range. We then create an
     // AFF4 mapping between the physical memory region to the
     // /proc/kcore file address to enable reading the image.
-    if (pheader.paddr != static_cast<Elf64_Addr>(
-            physical_range_start[physical_range_start_index])) {
+    if (pheader.paddr != 0 && pheader.paddr != static_cast<Elf64_Addr>(
+            physical_range_start[physical_range_start_index].start)) {
         resolver.logger->info("Skipped range {:x} - {:x} @ {:x}",
                               pheader.vaddr, pheader.memsz, pheader.off);
         continue;
     }
-    physical_range_start_index++;
     resolver.logger->info("Found range {:x}/{:x} @ {:x}/{:x}",
                           pheader.paddr, pheader.memsz, pheader.vaddr,
                           pheader.off);
@@ -144,6 +169,10 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
                   pheader.off,
                   pheader.memsz,
                   kcore_urn);
+
+    physical_range_start_index++;
+    if (physical_range_start_index >= physical_range_start.size())
+        break;
   }
 
   if (map->Size() == 0) {
