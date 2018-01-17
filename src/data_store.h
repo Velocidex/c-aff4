@@ -358,17 +358,17 @@ class DataStore {
     /**
      * Does the given URN have the given attribute set to the given value.
      */
-    virtual AFF4Status Has(const URN& urn, const URN& attribute,
-                           const RDFValue& value) = 0;
+    virtual bool HasURNWithAttributeAndValue(
+        const URN& urn, const URN& attribute, const RDFValue& value) = 0;
 
     /**
      * Does the given URN have the given attribute set
      */
-    virtual AFF4Status Has(const URN& urn, const URN& attribute) = 0;
+    virtual bool HasURNWithAttribute(const URN& urn, const URN& attribute) = 0;
     /**
      * Does the datastore know the given urn
      */
-    virtual AFF4Status Has(const URN& urn) = 0;
+    virtual bool HasURN(const URN& urn) = 0;
 
     virtual void Set(const URN& urn, const URN& attribute,
                      std::shared_ptr<RDFValue> value,
@@ -641,20 +641,24 @@ class MemoryDataStore: public DataStore {
      * @param value: The value.
      */
     virtual void Set(const URN& urn, const URN& attribute, RDFValue* value,
-                     bool replace = true);
+                     bool replace = true) override;
 
     virtual void Set(const URN& urn, const URN& attribute,
-                     std::shared_ptr<RDFValue> value, bool replace = true);
+                     std::shared_ptr<RDFValue> value, bool replace = true) override;
 
-    AFF4Status Get(const URN& urn, const URN& attribute, RDFValue& value);
-    AFF4Status Get(const URN& urn, const URN& attribute, std::vector<std::shared_ptr<RDFValue>>& value);
-    AFF4Status Has(const URN& urn);
-    AFF4Status Has(const URN& urn, const URN& attribute);
-    AFF4Status Has(const URN& urn, const URN& attribute, const RDFValue& value);
+    AFF4Status Get(const URN& urn, const URN& attribute, RDFValue& value) override;
+    AFF4Status Get(const URN& urn, const URN& attribute,
+                   std::vector<std::shared_ptr<RDFValue>>& value) override;
+
+    bool HasURN(const URN& urn) override;
+    bool HasURNWithAttribute(const URN& urn, const URN& attribute) override;
+    bool HasURNWithAttributeAndValue(
+        const URN& urn, const URN& attribute, const RDFValue& value) override;
 
     std::unordered_set<URN> Query(
         const URN& attribute, const RDFValue* value = nullptr) override;
-    AFF4_Attributes GetAttributes(const URN& urn);
+
+    AFF4_Attributes GetAttributes(const URN& urn) override;
 
     virtual AFF4Status DeleteSubject(const URN& urn);
 

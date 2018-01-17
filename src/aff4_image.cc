@@ -294,7 +294,7 @@ AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
     resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
                   /* replace = */ false);
     resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
-    if(resolver->Has(image_urn, AFF4_STREAM_SIZE) != STATUS_OK) {
+    if(!resolver->HasURNWithAttribute(image_urn, AFF4_STREAM_SIZE)) {
         resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
     }
 
@@ -322,7 +322,8 @@ AFF4Status AFF4Image::LoadFromURN() {
     // Determine if this is an AFF4:ImageStream (AFF4 Standard) or
     // a aff4:stream (AFF4 Legacy)
     URN rdfType (AFF4_LEGACY_IMAGESTREAM_TYPE);
-    isAFF4Legacy = (resolver->Has(urn, AFF4_TYPE, rdfType) == STATUS_OK);
+    isAFF4Legacy = resolver->HasURNWithAttributeAndValue(
+        urn, AFF4_TYPE, rdfType);
 
     // Configure the stream parameters.
     XSDInteger value;
@@ -839,7 +840,7 @@ AFF4ScopedPtr<AFF4StdImage> AFF4StdImage::NewAFF4StdImage(
     resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
                   /* replace = */ false);
     resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
-    if(resolver->Has(image_urn, AFF4_STREAM_SIZE) != STATUS_OK) {
+    if(!resolver->HasURNWithAttribute(image_urn, AFF4_STREAM_SIZE)) {
         resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
     }
 
