@@ -93,6 +93,9 @@ void AFF4Object::Return() {
 }
 
 AFF4Status AFF4Stream::Seek(off_t offset, int whence) {
+    if (!properties.seekable)
+        return IO_ERROR;
+
     off_t new_offset = readptr;
 
     if (whence == 0) {

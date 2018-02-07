@@ -188,7 +188,7 @@ AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
   resolver.logger->info("Imaging memory");
 
   URN output_urn;
-  AFF4Status res = GetOutputVolumeURN(output_volume_urn);
+  AFF4Status res = GetOutputVolumeURN(&output_volume_urn);
   if (res != STATUS_OK)
     return res;
 

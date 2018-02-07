@@ -109,7 +109,7 @@ class BasicImager {
         return AFF4_VERSION;
     }
 
-    AFF4Status GetOutputVolumeURN(URN& volume_urn);
+    AFF4Status GetOutputVolumeURN(URN* volume_urn);
 
     std::unique_ptr<TCLAP::CmdLine> cmd;
 
@@ -239,7 +239,8 @@ class BasicImager {
         AddArg(new TCLAP::ValueArg<std::string>(
                    "o", "output", "Output file to write to. If the file does not "
                    "exist we create it. NOTE: If output is a directory we write an "
-                   "AFF4 Directory volume when imaging.", false, "",
+                   "AFF4 Directory volume when imaging. If the output is '-' we write "
+                   "to stdout.", false, "",
                    "/path/to/file"));
 
         AddArg(new TCLAP::SizeArg(

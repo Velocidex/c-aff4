@@ -47,8 +47,8 @@ class FileBackedObject: public AFF4Stream {
     explicit FileBackedObject(DataStore* resolver): AFF4Stream(resolver), fd(0){}
     virtual ~FileBackedObject();
 
-    virtual std::string Read(size_t length);
-    virtual AFF4Status Write(const char* data, int length);
+    std::string Read(size_t length) override;
+    AFF4Status Write(const char* data, int length) override;
 
     /**
      * Load the file from a file:/ URN.
@@ -56,9 +56,8 @@ class FileBackedObject: public AFF4Stream {
      *
      * @return STATUS_OK if we were able to open it successfully.
      */
-    virtual AFF4Status LoadFromURN();
-
-    virtual AFF4Status Truncate();
+    AFF4Status LoadFromURN() override;
+    AFF4Status Truncate() override;
 
     // We provide access to the underlying file handle so callers can do other
     // things with the stream (i.e. ioctl on raw devices).
@@ -79,7 +78,7 @@ class AFF4ConstantStream: public AFF4Stream {
   public:
     explicit AFF4ConstantStream(DataStore* resolver): AFF4Stream(resolver) {}
 
-    virtual aff4_off_t Size() {
+    aff4_off_t Size() override {
         return -1;
     }
     virtual AFF4Status LoadFromURN() {
@@ -89,6 +88,18 @@ class AFF4ConstantStream: public AFF4Stream {
     virtual std::string Read(size_t length) {
         return std::string(length, constant);
     }
+};
+
+class AFF4BuiltInStreams : public AFF4Stream {
+ public:
+    explicit AFF4BuiltInStreams(DataStore *resolver): AFF4Stream(resolver) {}
+    std::string Read(size_t length) override;
+    AFF4Status Write(const char* data, int length) override;
+     AFF4Status LoadFromURN() override;
+    AFF4Status Truncate() override;
+
+ private:
+    int fd;
 };
 
 extern void aff4_file_init();

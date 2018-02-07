@@ -347,7 +347,7 @@ AFF4Status BasicImager::process_input() {
             }
 
             URN volume_urn;
-            RETURN_IF_ERROR(GetOutputVolumeURN(volume_urn));
+            RETURN_IF_ERROR(GetOutputVolumeURN(&volume_urn));
 
             AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<
                 AFF4Volume>(volume_urn);
@@ -498,13 +498,13 @@ AFF4Status BasicImager::handle_export() {
 AFF4Status BasicImager::GetNextPart() {
         output_volume_part ++;
         output_volume_urn = "";
-        return GetOutputVolumeURN(output_volume_urn);
+        return GetOutputVolumeURN(&output_volume_urn);
 }
 
 
-AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
+AFF4Status BasicImager::GetOutputVolumeURN(URN* volume_urn) {
     if (output_volume_urn.value.size() > 0) {
-        volume_urn = output_volume_urn;
+        *volume_urn = output_volume_urn;
         return STATUS_OK;
     }
 
@@ -515,12 +515,16 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
     std::string output_path = GetArg<TCLAP::ValueArg<std::string>>(
         "output")->getValue();
 
-    if (output_volume_part > 0) {
-        output_path = aff4_sprintf("%s.A%02d", output_path.c_str(),
-                                   output_volume_part);
-    }
+    if (output_path == "-") {
+        output_volume_backing_urn = URN("builtin://stdout");
+    } else {
+        if (output_volume_part > 0) {
+            output_path = aff4_sprintf("%s.A%02d", output_path.c_str(),
+                                       output_volume_part);
+        }
 
-    output_volume_backing_urn = URN::NewURNFromFilename(output_path);
+        output_volume_backing_urn = URN::NewURNFromFilename(output_path);
+    }
 
     // We are allowed to write on the output file.
     if (Get("truncate")->isSet()) {
@@ -542,7 +546,7 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
             return IO_ERROR;
         }
 
-        volume_urn = volume->urn;
+        *volume_urn = volume->urn;
         output_volume_urn = volume->urn;
 
         resolver.logger->info("Creating output AFF4 Directory structure.");
@@ -568,7 +572,7 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN& volume_urn) {
         return IO_ERROR;
     }
 
-    volume_urn = zip->urn;
+    *volume_urn = zip->urn;
     output_volume_urn = zip->urn;
 
     resolver.logger->info("Creating output AFF4 ZipFile.");
