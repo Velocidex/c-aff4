@@ -436,10 +436,8 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream& backing_store) {
     struct EndCentralDirectory end;
 
     // Append a new central directory to the end of the zip file.
-    if (backing_store.Seek(0, SEEK_END) != STATUS_OK) {
-        resolver->logger->error(
-            "Unable to write EOCD on non-seekable stream: {}", urn);
-        return IO_ERROR;
+    if (backing_store.properties.seekable) {
+        RETURN_IF_ERROR(backing_store.Seek(0, SEEK_END));
     }
 
     // The real start of the ECD.
@@ -811,8 +809,8 @@ AFF4Status ZipFileSegment::Flush() {
         std::unique_ptr<ZipInfo> zip_info(new ZipInfo());
 
         // Append member at the end of the file.
-        if (backing_store->Seek(0, SEEK_END) != STATUS_OK) {
-            return IO_ERROR;
+        if (backing_store->properties.seekable) {
+            RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
         }
 
         // zip_info offsets are relative to the start of the zip file.
@@ -892,7 +890,7 @@ ZipInfo::ZipInfo() {
 AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
     // Remember where we wrote the file header.
     if (file_header_offset < 0) {
-        file_header_offset = output.Tell();
+        file_header_offset = output.Size();
     }
 
     struct ZipFileHeader header;
@@ -907,7 +905,9 @@ AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
     header.lastmoddate = lastmoddate;
     header.extra_field_len = sizeof(zip64header);
 
-    RETURN_IF_ERROR(output.Seek(file_header_offset, SEEK_SET));
+    if (output.properties.seekable) {
+        RETURN_IF_ERROR(output.Seek(file_header_offset, SEEK_SET));
+    }
     RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header), sizeof(header)));
     RETURN_IF_ERROR(output.Write(filename));
 
@@ -970,7 +970,9 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
     }
 
     // Append member at the end of the file.
-    RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
+    if (backing_store->properties.seekable) {
+        RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
+    }
 
     resolver->logger->debug("Writing member {} at {:x}", member_urn,
                             backing_store->Tell());

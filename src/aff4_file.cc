@@ -343,13 +343,18 @@ AFF4Status FileBackedObject::Write(const char* data, int length) {
     }
 
     // Since all file operations are synchronous this object can not be dirty.
-    lseek(fd, readptr, SEEK_SET);
-    int res = write(fd, data, length);
-    if (res > 0) {
-        readptr += res;
+    if (properties.seekable) {
+        lseek(fd, readptr, SEEK_SET);
     }
 
-    if (size >= 0 && readptr > size) {
+    int res = write(fd, data, length);
+    if (res >= 0) {
+        readptr += res;
+    } else {
+        return IO_ERROR;
+    }
+
+    if (readptr > size) {
         size = readptr;
     }
 
@@ -361,7 +366,7 @@ AFF4Status FileBackedObject::Truncate() {
         return IO_ERROR;
     }
 
-    Seek(0, SEEK_SET);
+    RETURN_IF_ERROR(Seek(0, SEEK_SET));
     size = 0;
 
     return STATUS_OK;
@@ -401,6 +406,52 @@ class AFF4FileRegistrer {
 // The FileBackedObject will be invoked for file:// style urns.
 AFF4FileRegistrer file1("file");
 AFF4Registrar<FileBackedObject> file2(AFF4_FILE_TYPE);
+
+
+AFF4Status AFF4BuiltInStreams::LoadFromURN() {
+    auto type = urn.Parse().domain;
+
+    // Right now we only support writing to stdout.
+    if (type == "stdout") {
+        fd = STDOUT_FILENO;
+        properties.seekable = false;
+        properties.writable = true;
+        properties.sizeable = false;
+
+        return STATUS_OK;
+    }
+
+    resolver->logger->error("Unsupported builtin stream {}", urn);
+    return IO_ERROR;
+}
+
+std::string AFF4BuiltInStreams::Read(size_t length) {
+    UNUSED(length);
+    return "";
+}
+
+AFF4Status AFF4BuiltInStreams::Write(const char* data, int length) {
+    int res = write(fd, data, length);
+    if (res >= 0) {
+        readptr += res;
+    } else {
+        return IO_ERROR;
+    }
+
+    if (readptr > size) {
+        size = readptr;
+    }
+
+    return STATUS_OK;
+}
+
+AFF4Status AFF4BuiltInStreams::Truncate() {
+    return IO_ERROR;
+}
+
+
+AFF4Registrar<AFF4BuiltInStreams> builtin("builtin");
+
 
 void aff4_file_init() {}
 
