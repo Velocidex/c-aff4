@@ -137,6 +137,16 @@ files.
    volumes so you will need all volumes to properly extract the
    stream.
 
+7. Acquiring into standard output::
+
+     ./aff4imager -i /bin/* -o - | gsutil cp - gs://rekall-test/test.aff4
+
+   If the output filename is specifies as a single dash ("-"), the
+   imager writes the AFF4 volume to stdout. This allows the image to
+   be piped to a different tool. The example above streams the image
+   directly to a cloud storage bucket without needing to write a
+   temporary local copy.
+
 
 Inspecting AFF4 volumes.
 ~~~~~~~~~~~~~~~~~~~~~~~~
