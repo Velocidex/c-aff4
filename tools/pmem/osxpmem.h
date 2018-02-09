@@ -18,7 +18,7 @@ specific language governing permissions and limitations under the License.
 
 #include "pmem.h"
 // Driver API.
-#include "MacPmem/Common/pmem_common.h"
+#include "resources/OSX/pmem_common.h"
 #include <stdint.h>
 
 #define MINIMUM_PMEM_API_VERSION 2
@@ -27,15 +27,17 @@ namespace aff4 {
 
 class PmemMetadata {
 protected:
-  vector<uint8_t> buf_;
+  std::vector<uint8_t> buf_;
+  DataStore *resolver_;
 
 public:
-  explicit PmemMetadata() {}
+  explicit PmemMetadata(DataStore *resolver): resolver_(resolver) {}
+  ~PmemMetadata() {}
 
-  AFF4Status LoadMetadata(string sysctl_name);
+  AFF4Status LoadMetadata(std::string sysctl_name);
   pmem_meta_t *get_meta();
   size_t get_meta_size();
-  vector<pmem_meta_record_t> get_records();
+  std::vector<pmem_meta_record_t> get_records();
 
   bool efi_readable(EFI_MEMORY_TYPE type) {
     return (type == EfiLoaderCode ||
@@ -54,16 +56,16 @@ public:
 
 class OSXPmemImager: public PmemImager {
  private:
-  string device_name;
-  string sysctl_name;
+  std::string device_name;
+  std::string sysctl_name;
   URN device_urn;   /**< The URN of the pmem device. */
   URN driver_urn;
   bool driver_installed_ = false;
   PmemMetadata metadata;
 
  protected:
-  virtual string GetName() {
-    return "The OSXPmem memory imager.  Copyright 2015 Google Inc.";
+  virtual std::string GetName() {
+    return "The OSXPmem memory imager.";
   }
 
   /**
@@ -91,21 +93,21 @@ class OSXPmemImager: public PmemImager {
   AFF4Status UninstallDriver();
 
   // Get the path to the embedded driver.
-  string get_driver_path();
+  std::string get_driver_path();
 
   virtual AFF4Status RegisterArgs() {
     AddArg(new TCLAP::SwitchArg(
-        "l", "load-driver", "Load the driver and exit", false));
+        "L", "load-driver", "Load the driver and exit", false));
 
     AddArg(new TCLAP::SwitchArg(
-        "u", "unload-driver", "Unload the driver and exit", false));
+        "U", "unload-driver", "Unload the driver and exit", false));
 
-    AddArg(new TCLAP::ValueArg<string>(
+    AddArg(new TCLAP::ValueArg<std::string>(
         "", "driver", "Path to driver to load. "
         "This is usually set to the driver included in the package.",
         false, "MacPmem.kext", "Path to driver."));
 
-    AddArg(new TCLAP::ValueArg<string>(
+    AddArg(new TCLAP::ValueArg<std::string>(
         "", "device", "Path to device to image. "
         "Note the device name depends on the specific driver.",
         false, "pmem", "Path to device."));
@@ -118,9 +120,10 @@ class OSXPmemImager: public PmemImager {
   virtual AFF4Status ProcessArgs();
 
   // Write the memory information.yaml file.
-  virtual string DumpMemoryInfoToYaml();
+  virtual std::string DumpMemoryInfoToYaml();
 
  public:
+  OSXPmemImager() : PmemImager(), metadata(&resolver) {}
   virtual ~OSXPmemImager();
 };
 

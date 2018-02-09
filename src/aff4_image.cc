@@ -221,7 +221,6 @@ class _CompressorStream: public AFF4Stream {
     AFF4Stream* source;
 
     aff4_off_t initial_offset;
-    AFF4_IMAGE_COMPRESSION_ENUM compression;
     size_t chunk_size;
     int chunks_per_segment;
 
@@ -233,7 +232,6 @@ class _CompressorStream: public AFF4Stream {
                       size_t chunk_size,
                       int chunks_per_segment, AFF4Stream* source):
         AFF4Stream(resolver), source(source), initial_offset(source->Tell()),
-        compression(compression),
         chunk_size(chunk_size), chunks_per_segment(chunks_per_segment),
         bevy_writer(resolver, compression, chunk_size,
                     chunks_per_segment) {}
@@ -269,10 +267,10 @@ class _CompressorStream: public AFF4Stream {
     // the next read, we return an empty string which indicates the
     // bevy is complete. This allows us to seamlessly hook this class
     // into WriteStream() calls into the Bevy segment.
-    std::string Read(size_t length) {
+    std::string Read(size_t length) override {
         auto& bevy_stream = bevy_writer.bevy_stream();
         return bevy_stream.Read(length);
-    }
+    };
 
     virtual ~_CompressorStream() {}
 };

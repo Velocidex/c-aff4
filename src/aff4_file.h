@@ -81,11 +81,11 @@ class AFF4ConstantStream: public AFF4Stream {
     aff4_off_t Size() override {
         return -1;
     }
-    virtual AFF4Status LoadFromURN() {
+    AFF4Status LoadFromURN() override {
         size = Size();
         return STATUS_OK;
     }
-    virtual std::string Read(size_t length) {
+    std::string Read(size_t length) override {
         return std::string(length, constant);
     }
 };

@@ -69,20 +69,20 @@ class AFF4Map: public AFF4Stream {
     static AFF4ScopedPtr<AFF4Map> NewAFF4Map(
         DataStore* resolver, const URN& object_urn, const URN& volume_urn);
 
-    virtual AFF4Status LoadFromURN();
+    AFF4Status LoadFromURN() override;
 
-    virtual std::string Read(size_t length);
+    std::string Read(size_t length) override;
     AFF4Status Write(const char* data, int length) override;
 
-    virtual AFF4Status WriteStream(
+    AFF4Status WriteStream(
         AFF4Stream* source,
-        ProgressContext* progress = nullptr);
+        ProgressContext* progress = nullptr) override;
 
-    virtual AFF4Status WriteStream(
+    AFF4Status WriteStream(
         AFF4Map* source,
         ProgressContext* progress = nullptr);
 
-    AFF4Status Flush();
+    AFF4Status Flush() override;
 
     AFF4Status AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
                         aff4_off_t length, URN target);
@@ -96,7 +96,7 @@ class AFF4Map: public AFF4Stream {
 
     void Clear();
 
-    virtual aff4_off_t Size();
+    aff4_off_t Size() override;
 
     using AFF4Stream::Write;
 };
