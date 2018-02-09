@@ -150,15 +150,15 @@ class AFF4Image: public AFF4Stream {
      *
      * @return
      */
-    virtual AFF4Status LoadFromURN();
+    AFF4Status LoadFromURN() override;
 
 
     /**
      * An optimized WriteStream() API.
      */
-    virtual AFF4Status WriteStream(
+    AFF4Status WriteStream(
         AFF4Stream* source,
-        ProgressContext* progress = nullptr);
+        ProgressContext* progress = nullptr) override;
 
     AFF4Status Write(const char* data, int length) override;
 
@@ -169,9 +169,9 @@ class AFF4Image: public AFF4Stream {
      *
      * @return A string containing the data to read.
      */
-    virtual std::string Read(size_t length);
+    std::string Read(size_t length) override;
 
-    AFF4Status Flush();
+    AFF4Status Flush() override;
 
     using AFF4Stream::Write;
 };

@@ -660,23 +660,22 @@ class MemoryDataStore: public DataStore {
 
     AFF4_Attributes GetAttributes(const URN& urn) override;
 
-    virtual AFF4Status DeleteSubject(const URN& urn);
+    AFF4Status DeleteSubject(const URN& urn) override;
 
-    virtual std::vector<URN> SelectSubjectsByPrefix(const URN& prefix);
+    std::vector<URN> SelectSubjectsByPrefix(const URN& prefix) override;
 
 #ifdef AFF4_HAS_LIBYAML_CPP
-    virtual AFF4Status DumpToYaml(AFF4Stream& output,
-                                  bool verbose = false);
-    virtual AFF4Status LoadFromYaml(AFF4Stream& output);
+    AFF4Status DumpToYaml(AFF4Stream& output, bool verbose = false) override;
+    AFF4Status LoadFromYaml(AFF4Stream& output) override;
 #endif
 
-    virtual AFF4Status DumpToTurtle(AFF4Stream& output, URN base,
-                                    bool verbose = false);
+    AFF4Status DumpToTurtle(AFF4Stream& output, URN base,
+			    bool verbose = false) override;
 
-    virtual AFF4Status LoadFromTurtle(AFF4Stream& output);
+    AFF4Status LoadFromTurtle(AFF4Stream& output) override;
 
-    virtual AFF4Status Clear();
-    virtual AFF4Status Flush();
+    AFF4Status Clear() override;
+    AFF4Status Flush() override;
 };
 
 } // namespace aff4

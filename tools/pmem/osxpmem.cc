@@ -23,7 +23,7 @@ specific language governing permissions and limitations under the License.
 namespace aff4 {
 
 
-AFF4Status PmemMetadata::LoadMetadata(string sysctl_name) {
+AFF4Status PmemMetadata::LoadMetadata(std::string sysctl_name) {
   size_t metalen = buf_.size();
   pmem_meta_t *meta = get_meta();
 
@@ -41,7 +41,7 @@ AFF4Status PmemMetadata::LoadMetadata(string sysctl_name) {
   }
 
   if (meta->pmem_api_version != MINIMUM_PMEM_API_VERSION) {
-      resolver.logger->error(
+      resolver_->logger->error(
           "Pmem driver version incompatible. Reported {} required: {}",
           meta->pmem_api_version, static_cast<int>(MINIMUM_PMEM_API_VERSION));
     return INCOMPATIBLE_TYPES;
@@ -57,8 +57,8 @@ pmem_meta_t *PmemMetadata::get_meta() {
 // Extracting records from the pmem_meta_t struct is pretty tricky
 // since it is a variable length struct. We just copy them into a
 // vector so we can iterate over them easier.
-vector<pmem_meta_record_t> PmemMetadata::get_records() {
-  vector<pmem_meta_record_t> result;
+std::vector<pmem_meta_record_t> PmemMetadata::get_records() {
+  std::vector<pmem_meta_record_t> result;
   pmem_meta_t *meta = get_meta();
   size_t meta_size = get_meta_size();
   size_t meta_index = meta->records_offset;
@@ -82,7 +82,7 @@ size_t PmemMetadata::get_meta_size() {
   return buf_.size();
 };
 
-string OSXPmemImager::DumpMemoryInfoToYaml() {
+std::string OSXPmemImager::DumpMemoryInfoToYaml() {
   pmem_meta_t *meta = metadata.get_meta();
   YAML::Emitter out;
   YAML::Node node;
@@ -117,7 +117,7 @@ string OSXPmemImager::DumpMemoryInfoToYaml() {
 }
 
 AFF4Status OSXPmemImager::ImagePhysicalMemory() {
-  std::cout << "Imaging memory\n";
+  resolver.logger->info("Imaging memory");
 
   AFF4Status res;
 
@@ -126,7 +126,7 @@ AFF4Status OSXPmemImager::ImagePhysicalMemory() {
     return res;
 
   URN output_urn;
-  res = GetOutputVolumeURN(output_volume_urn);
+  res = GetOutputVolumeURN(&output_volume_urn);
   if (res != STATUS_OK)
     return res;
 
@@ -139,7 +139,7 @@ AFF4Status OSXPmemImager::ImagePhysicalMemory() {
   // This is a physical memory image.
   resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
 
-  string format = GetArg<TCLAP::ValueArg<string>>("format")->getValue();
+  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
 
   if (format == "map") {
     res = WriteMapObject_(map_urn, output_volume_urn);
@@ -219,14 +219,14 @@ AFF4Status OSXPmemImager::ParseArgs() {
     return INVALID_INPUT;
   }
 
-  string device = GetArg<TCLAP::ValueArg<string>>("device")->getValue();
+  std::string device = GetArg<TCLAP::ValueArg<std::string>>("device")->getValue();
 
   device_name = aff4_sprintf("/dev/%s", device.c_str());
   sysctl_name = aff4_sprintf("kern.%s_info", device.c_str());
   device_urn = URN::NewURNFromFilename(device_name);
 
   driver_urn = URN::NewURNFromFilename(
-    GetArg<TCLAP::ValueArg<string>>("driver")->getValue());
+    GetArg<TCLAP::ValueArg<std::string>>("driver")->getValue());
 
   return result;
 }
@@ -249,9 +249,9 @@ AFF4Status OSXPmemImager::ProcessArgs() {
 }
 
 AFF4Status OSXPmemImager::UninstallDriver() {
-  string driver_path = get_driver_path();
-  std::cout << "Unloading driver " << driver_path << "\n";
-  string argv = aff4_sprintf("/sbin/kextunload %s", driver_path.c_str());
+  std::string driver_path = get_driver_path();
+  resolver.logger->info("Unloading driver {}",  driver_path);
+  std::string argv = aff4_sprintf("/sbin/kextunload %s", driver_path.c_str());
   if (system(argv.c_str()) != 0) {
       resolver.logger->error("Unable to unload driver at {}", driver_path);
     return IO_ERROR;
@@ -261,7 +261,7 @@ AFF4Status OSXPmemImager::UninstallDriver() {
   return STATUS_OK;
 }
 
-string OSXPmemImager::get_driver_path() {
+std::string OSXPmemImager::get_driver_path() {
     // Device does not exist, try to load it ourselves.
     char path[1024 * 4];
     uint32_t size = sizeof(path);
@@ -279,13 +279,13 @@ AFF4Status OSXPmemImager::InstallDriver() {
     <FileBackedObject>(device_urn);
 
   if (!device_stream) {
-    string driver_path = get_driver_path();
-    string argv = aff4_sprintf("/sbin/kextload %s", driver_path.c_str());
+    std::string driver_path = get_driver_path();
+    std::string argv = aff4_sprintf("/sbin/kextload %s", driver_path.c_str());
     if (system(argv.c_str()) != 0) {
         resolver.logger->error("Unable to load driver at {}", driver_path);
       return IO_ERROR;
     }
-    std::cout << "Loading driver from " << driver_path << "\n";
+    resolver.logger->info("Loading driver from {}", driver_path);
     driver_installed_ = true;
   }
 
@@ -301,8 +301,8 @@ AFF4Status OSXPmemImager::InstallDriver() {
 OSXPmemImager::~OSXPmemImager() {
   if (driver_installed_) {
     if (Get("load-driver")->isSet()) {
-    std::cout << "Memory access driver left loaded since you specified "
-      "the -l flag.\n";
+      resolver.logger->info("Memory access driver left loaded since you specified "
+                            "the -l flag.");
     } else
       UninstallDriver();
   }

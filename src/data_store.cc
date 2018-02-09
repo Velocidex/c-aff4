@@ -121,7 +121,7 @@ bool DataStore::ShouldSuppress(const URN& subject,
 
 DataStore::DataStore(DataStoreOptions options)
     : logger(options.logger),
-      pool(std::make_unique<ThreadPool>(options.threadpool_size)),
+      pool(std::unique_ptr<ThreadPool>(new ThreadPool(options.threadpool_size))),
       ObjectCache(logger) {
 
     // Add these default namespace.
@@ -480,7 +480,8 @@ AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute,
     AFF4Status res = NOT_FOUND;
     for (const auto &fetched_value: values) {
         // Only collect compatible types.
-        if (typeid(value) == typeid(*fetched_value)) {
+        const RDFValue& fetched_value_ref = *fetched_value;
+        if (typeid(value) == typeid(fetched_value_ref)) {
             res = value.UnSerializeFromString(
                 fetched_value->SerializeToString());
         }

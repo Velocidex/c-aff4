@@ -55,7 +55,7 @@ AFF4Object::AFF4Object(DataStore* resolver): resolver(resolver) {
     memset(buffer, 0, 100);
 
     uuid_generate(uuid);
-    uuid_unparse(uuid, buffer);
+    uuid_unparse_lower(uuid, buffer);
     urn.Set(AFF4_PREFIX + std::string(buffer));
 }
 
@@ -538,6 +538,11 @@ std::shared_ptr<spdlog::logger> get_logger() {
 
     return logger;
 }
+
+
+#ifndef FNM_EXTMATCH
+#define FNM_EXTMATCH 0
+#endif
 
 #ifdef _WIN32
 

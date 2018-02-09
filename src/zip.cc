@@ -61,8 +61,8 @@ AFF4ScopedPtr<ZipFile> ZipFile::NewZipFile(DataStore* resolver, URN backing_stor
     AFF4ScopedPtr<ZipFile> result = resolver->AFF4FactoryOpen<ZipFile>(self->urn);
 
     if(result.get() != nullptr && result->members.size() == 0) {
-
-        // Mark the container with its URN
+        // Mark the container with its URN. Some AFF4 implementations
+        // rely on this being the first segment in the volume.
         AFF4ScopedPtr<AFF4Stream> desc = self->CreateMember(
             self->urn.Append(AFF4_CONTAINER_DESCRIPTION));
 
@@ -70,7 +70,9 @@ AFF4ScopedPtr<ZipFile> ZipFile::NewZipFile(DataStore* resolver, URN backing_stor
             return result;
         } else {
             desc->Write(self->urn.SerializeToString());
-            desc->Flush();
+
+            // Also remove it from the cache.
+            resolver->Close(desc);
         }
 
         // Create a version.txt file.
@@ -85,7 +87,7 @@ AFF4ScopedPtr<ZipFile> ZipFile::NewZipFile(DataStore* resolver, URN backing_stor
                                     AFF4_VERSION_MAJOR,
                                     AFF4_VERSION_MINOR,
                                     AFF4_TOOL, PACKAGE_VERSION));
-            ver->Flush();
+            resolver->Close(ver);
         }
     }
     return result;

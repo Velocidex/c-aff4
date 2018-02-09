@@ -169,16 +169,16 @@ class ZipFileSegment: public StringIO {
     AFF4Status LoadFromURN() override;
     AFF4Status LoadFromZipFile(const std::string &member_name, ZipFile& owner);
 
-    AFF4Status Flush();
-    AFF4Status Truncate();
+    AFF4Status Flush() override;
+    AFF4Status Truncate() override;
 
     std::string Read(size_t length) override;
     AFF4Status Write(const char* data, int length) override;
 
     aff4_off_t Size() override;
 
-    virtual AFF4Status WriteStream(
-        AFF4Stream* source, ProgressContext* progress = nullptr);
+    AFF4Status WriteStream(
+        AFF4Stream* source, ProgressContext* progress = nullptr) override;
 
     using AFF4Stream::Write;
 

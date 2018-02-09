@@ -68,7 +68,7 @@ class PmemImager: public BasicImager {
         const URN &output_urn, const URN &volume_urn);
 
  public:
- PmemImager(): BasicImager() {}
+    PmemImager(): BasicImager() {}
     virtual ~PmemImager();
     virtual AFF4Status Initialize();
 
