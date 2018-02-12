@@ -2,7 +2,7 @@ AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 # This is so we can #include <package/foo>
-AM_CPPFLAGS = -I../src -I../tests
+AM_CPPFLAGS = -I$(top_srcdir)
 
 # The -no-undefined flag allows libtool to generate shared libraries for
 # Cygwin and MinGW.  LIBSTDCXX_LA_LINKER_FLAG is used to fix a Solaris bug.
@@ -39,6 +39,6 @@ aff4_test_SOURCES =  \
 	rdfquery_test.cc \
 	aff4_capi.cc
 
-aff4_test_LDADD = ../src/.libs/libaff4.a ${LIBS} ${GLOG_LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${UUID_LIBS}
+aff4_test_LDADD = $(top_srcdir)/aff4/libaff4.la ${LIBS} ${GLOG_LIBS} ${YAML_CPP_LIBS} ${ZLIB_LIBS} ${RAPTOR2_LIBS} ${TCLAP_LIBS} ${UUID_LIBS}
 aff4_test_CXXFLAGS = ${RAPTOR2_CFLAGS} ${UUID_CFLAGS} ${TCLAP_CFLAGS} ${YAML_CPP_CFLAGS} ${ZLIB_CFLAGS} ${GLOG_CFLAGS}
 aff4_test_LDFLAGS =  -L$(PREFIX)/lib/ $(STATIC_LINKERLDFLAGS) -lgtest

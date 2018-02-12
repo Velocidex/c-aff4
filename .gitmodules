@@ -4,3 +4,6 @@
 [submodule "pyaff4/test_images"]
 	path = pyaff4/test_images
 	url = https://github.com/aff4/ReferenceImages.git
+[submodule "tests/ReferenceImages"]
+	path = tests/ReferenceImages
+	url = https://github.com/aff4/ReferenceImages.git

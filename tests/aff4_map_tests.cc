@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include <libaff4.h>
+#include "aff4/libaff4.h"
 #include <unistd.h>
 #include <glog/logging.h>
 
