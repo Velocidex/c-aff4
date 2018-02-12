@@ -13,7 +13,7 @@
   specific language governing permissions and limitations under the License.
 */
 #include <gtest/gtest.h>
-#include <libaff4-c.h>
+#include "aff4/libaff4-c.h"
 #include <unistd.h>
 #include <glog/logging.h>
 

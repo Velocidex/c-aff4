@@ -50,8 +50,8 @@ if LINUX
 bin_PROGRAMS = linpmem
 linpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 linpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
-linpmem_SOURCES = pmem_imager.cc linux_pmem.cc ../../src/compatibility.cc
-linpmem_LDADD = -laff4
+linpmem_SOURCES = pmem_imager.cc linux_pmem.cc ../../aff4/compatibility.cc
+linpmem_LDADD = $(top_srcdir)/aff4/libaff4.la
 all-local: linpmem
 endif
 

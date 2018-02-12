@@ -9,12 +9,12 @@ SO_VERSION=1:0:0
 
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([config])
-AC_CONFIG_SRCDIR([src])
-AC_CONFIG_HEADERS([src/config.h])
+AC_CONFIG_SRCDIR([aff4])
+AC_CONFIG_HEADERS([aff4/config.h])
 AC_CANONICAL_HOST
 AC_SUBST(ARCH,[host_cpu])
 
-AM_INIT_AUTOMAKE([1.10 no-define foreign])
+AM_INIT_AUTOMAKE([1.10 no-define foreign subdir-objects])
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_INSTALL
@@ -143,7 +143,7 @@ AM_COND_IF([HAVE_DOXYGEN],
 
 AC_CONFIG_FILES([
         Makefile
-        src/Makefile
+        aff4/Makefile
         tests/Makefile
         tools/pmem/Makefile
         ])

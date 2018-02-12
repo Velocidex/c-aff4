@@ -94,7 +94,7 @@ Makefile.in
 test_filename.bin
 *_test
 *.zip
-src/aff4imager
+aff4/aff4imager
 *~
 
 doxygen/
