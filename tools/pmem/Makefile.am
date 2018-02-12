@@ -37,7 +37,7 @@ bin_PROGRAMS = winpmem
 winpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 winpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
 winpmem_SOURCES = pmem_imager.cc win_pmem.cc
-winpmem_LDADD = -lrpcrt4 -lshlwapi -laff4 -lyaml-cpp
+winpmem_LDADD = -lrpcrt4 -lshlwapi $(top_srcdir)/aff4/libaff4.la -lyaml-cpp
 
 
 all-local: winpmem$(EXEEXT)
@@ -50,7 +50,7 @@ if LINUX
 bin_PROGRAMS = linpmem
 linpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 linpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
-linpmem_SOURCES = pmem_imager.cc linux_pmem.cc ../../aff4/compatibility.cc
+linpmem_SOURCES = pmem_imager.cc linux_pmem.cc $(top_srcdir)/aff4/compatibility.cc
 linpmem_LDADD = $(top_srcdir)/aff4/libaff4.la
 all-local: linpmem
 endif
@@ -61,16 +61,18 @@ bin_PROGRAMS = osxpmem
 osxpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 osxpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
 osxpmem_SOURCES = pmem_imager.cc osxpmem.cc
-osxpmem_LDADD = -laff4 -lyaml-cpp
+osxpmem_LDADD = $(top_srcdir)/aff4/libaff4.la -lyaml-cpp
 
-all-local: osxpmem
+# In order to build a deployable bundle we must have all the libraries
+# installed on the system first.
+install-exec-hook:
 	@echo Creating deployable bundle.
 	rm -rf osxpmem.app osxpmem.zip
-	dylibbundler -x ./osxpmem -b -d osxpmem.app/libs/ -p @executable_path/libs/ -of -od -cd
-	cp README.md osxpmem osxpmem.app/
-	rm -f osxpmem
+	mkdir osxpmem.app/
+	cp README.md $(bindir)/osxpmem osxpmem.app/  || echo You must run make install before building a bundle.
+	dylibbundler -x osxpmem.app/osxpmem -b -d osxpmem.app/libs/ -p @executable_path/libs/ -of -od -cd
 	cp -a resources/MacPmem.kext osxpmem.app/
-	chown -R root:wheel osxpmem.app/
 	chmod -R o-wx osxpmem.app/
 	zip -r osxpmem.zip osxpmem.app/
+
 endif

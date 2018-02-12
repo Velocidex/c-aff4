@@ -94,6 +94,8 @@ class OSXPmemImager: public PmemImager {
 
   // Get the path to the embedded driver.
   std::string get_driver_path();
+  AFF4Status fix_file_permissions(const std::string& path);
+  void fix_path(const std::string& path, mode_t mode);
 
   virtual AFF4Status RegisterArgs() {
     AddArg(new TCLAP::SwitchArg(

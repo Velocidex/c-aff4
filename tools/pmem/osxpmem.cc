@@ -19,6 +19,7 @@ specific language governing permissions and limitations under the License.
 #include <sys/sysctl.h>
 #include <mach-o/dyld.h>
 #include <yaml-cpp/yaml.h>
+#include <fts.h>
 
 namespace aff4 {
 
@@ -274,12 +275,52 @@ std::string OSXPmemImager::get_driver_path() {
 };
 
 
+void OSXPmemImager::fix_path(const std::string& path, mode_t mode) {
+    if (lchown(path.c_str(), 0, 0) != 0) {
+        resolver.logger->info("Can not chown {} ({}). Driver may not load.",
+                              path, strerror(errno));
+    }
+
+    if (chmod(path.c_str(), 07700 & mode) != 0) {
+        resolver.logger->info("Can not chmod {} ({}). Driver may not load.",
+                              path, strerror(errno));
+    }
+}
+
+
+AFF4Status OSXPmemImager::fix_file_permissions(const std::string& path) {
+    fix_path(path, 0700);
+    char *path_name[] = {const_cast<char*>(path.c_str()), nullptr};
+    FTS* top_level = fts_open(path_name, FTS_XDEV | FTS_LOGICAL, nullptr);
+    if (!top_level) {
+        resolver.logger->error("{}: {}", path, strerror(errno));
+        return IO_ERROR;
+    }
+
+    while(fts_read(top_level)) {
+        FTSENT *child = fts_children(top_level, 0);
+
+        while(child) {
+            std::string child_path = child->fts_accpath;
+            child_path.append("/");
+            child_path.append(child->fts_name);
+            fix_path(child_path, child->fts_statp->st_mode);
+            child = child->fts_link;
+        }
+    }
+
+    return STATUS_OK;
+}
+
+
 AFF4Status OSXPmemImager::InstallDriver() {
   AFF4ScopedPtr<FileBackedObject> device_stream = resolver.AFF4FactoryOpen
     <FileBackedObject>(device_urn);
 
   if (!device_stream) {
     std::string driver_path = get_driver_path();
+    RETURN_IF_ERROR(fix_file_permissions(driver_path));
+
     std::string argv = aff4_sprintf("/sbin/kextload %s", driver_path.c_str());
     if (system(argv.c_str()) != 0) {
         resolver.logger->error("Unable to load driver at {}", driver_path);
