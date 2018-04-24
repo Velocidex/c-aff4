@@ -388,6 +388,9 @@ AFF4Status BasicImager::process_input() {
                     return ABORTED;
                 }
 
+                resolver.Close(input_stream);
+                resolver.Close(image_stream);
+
                 // Otherwise use an AFF4Image.
             } else {
                 AFF4ScopedPtr<AFF4Image> image_stream = AFF4Image::NewAFF4Image(
@@ -411,6 +414,9 @@ AFF4Status BasicImager::process_input() {
                 // another type for a LogicalImage?
                 resolver.Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
                              /* replace = */ false);
+
+                resolver.Close(input_stream);
+                resolver.Close(image_stream);
             }
         }
     }
