@@ -78,8 +78,9 @@ cd uriparser-0.8.4/
 make -j4 install
 cd ..
 
-apt-get source libyaml-cpp-dev
-cd yaml-cpp-0.5.2/
+# We need the latest yaml-cpp
+git clone https://github.com/jbeder/yaml-cpp.git
+cd yaml-cpp
 echo "
 # the name of the target operating system
 SET(CMAKE_SYSTEM_NAME Windows)
@@ -100,7 +101,7 @@ set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 " > Toolchain-mingw32.cmake
 
-cmake -DCMAKE_TOOLCHAIN_FILE=Toolchain-mingw32.cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX .
+cmake -DCMAKE_TOOLCHAIN_FILE=Toolchain-mingw32.cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX . -DYAML_CPP_BUILD_TESTS=no
 make install -j4
 cd ..
 

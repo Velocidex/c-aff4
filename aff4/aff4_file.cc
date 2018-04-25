@@ -51,6 +51,13 @@ AFF4Status _CreateIntermediateDirectories(
     std::string path = PATH_SEP_STR;
 
 #ifdef _WIN32
+    // On windows leading \\ means a device - we do not want to create
+    // any intermediate directories for devices.
+    if (components.size() > 2 &&
+        components[0] == "" && components[1] == "") {
+        return STATUS_OK;
+    }
+
     // On windows we do not want a leading \ (e.g. C:\windows not \C:\Windows)
     path = "";
 #endif

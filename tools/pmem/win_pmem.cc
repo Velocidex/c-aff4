@@ -299,7 +299,7 @@ AFF4Status WinPmemImager::ImagePageFile() {
     std::cout << "Preparing to run " << command_line.c_str() << "\n";
     std::string buffer(BUFF_SIZE, 0);
     URN volume_urn;
-    AFF4Status res = GetOutputVolumeURN(volume_urn);
+    AFF4Status res = GetOutputVolumeURN(&volume_urn);
     if (res != STATUS_OK)
       return res;
 
@@ -363,7 +363,7 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
     return res;
 
   URN output_urn;
-  res = GetOutputVolumeURN(output_volume_urn);
+  res = GetOutputVolumeURN(&output_volume_urn);
   if (res != STATUS_OK)
     return res;
 
