@@ -257,7 +257,7 @@ class AFF4ScopedPtr {
     }
 
     AFF4ScopedPtr& operator=(AFF4ScopedPtr&& other) {
-        if (this != *other) {
+        if (this != &other) {
             this->~AFF4ScopedPtr();
             new (this) AFF4ScopedPtr(std::forward<AFF4ScopedPtr>(other));
         }
