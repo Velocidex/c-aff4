@@ -256,6 +256,15 @@ class AFF4ScopedPtr {
         resolver_ = other.resolver_;
     }
 
+    AFF4ScopedPtr& operator=(AFF4ScopedPtr&& other) {
+        if (this != *other) {
+            this->~AFF4ScopedPtr();
+            new (this) AFF4ScopedPtr(std::forward<AFF4ScopedPtr>(other));
+        }
+
+        return (*this);
+    }
+
     AFF4ScopedPtr(const AFF4ScopedPtr& other) = delete;
     void operator=(const AFF4ScopedPtr& other) = delete;
 };
