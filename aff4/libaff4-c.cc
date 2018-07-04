@@ -18,23 +18,25 @@
 #include "aff4/libaff4.h"
 #include "aff4/libaff4-c.h"
 
-// The application resolver
-static aff4::MemoryDataStore* resolver = nullptr;
-
+aff4::MemoryDataStore& get_resolver() {
+    // The application resolver
+    static aff4::MemoryDataStore resolver;
+    return resolver;
+}
 
 // The next handle.
 static int nextHandle = 0;
 
-std::unordered_map<int, aff4::URN> *get_handles() {
+std::unordered_map<int, aff4::URN>& get_handles() {
     // The map of handles to AFF4 Map instances.
-    static auto* handles = new std::unordered_map<int, aff4::URN>();
+    static std::unordered_map<int, aff4::URN> handles;
     return handles;
 }
 
 bool GetHandle(int handle, aff4::URN *urn) {
-    auto handles = get_handles();
-    const auto& it = handles->find(handle);
-    if (it == handles->end())
+    auto& handles = get_handles();
+    const auto& it = handles.find(handle);
+    if (it == handles.end())
         return false;
 
     *urn = it->second;
@@ -46,17 +48,13 @@ bool GetHandle(int handle, aff4::URN *urn) {
 extern "C" {
 
 void AFF4_init() {
-    resolver = new aff4::MemoryDataStore();
 }
 
 int AFF4_open(char* filename) {
-    if(resolver == nullptr){
-        AFF4_init();
-    }
-    int handle = nextHandle++;
+    aff4::MemoryDataStore& resolver = get_resolver();
     aff4::URN urn = aff4::URN::NewURNFromFilename(filename);
     aff4::AFF4ScopedPtr<aff4::ZipFile> zip = aff4::ZipFile::NewZipFile(
-        resolver, urn);
+        &resolver, urn);
     if (!zip) {
         errno = ENOENT;
         return -1;
@@ -64,13 +62,13 @@ int AFF4_open(char* filename) {
 
     // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
     const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
-    std::unordered_set<aff4::URN> images = resolver->Query(aff4::AFF4_TYPE, &type);
+    std::unordered_set<aff4::URN> images = resolver.Query(aff4::AFF4_TYPE, &type);
 
     if (images.empty()) {
         const aff4::URN legacy_type(aff4::AFF4_LEGACY_IMAGE_TYPE);
-        images = resolver->Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
+        images = resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
         if (images.empty()) {
-            resolver->Close(zip);
+            resolver.Close(zip);
             errno = ENOENT;
             return -1;
         }
@@ -82,32 +80,30 @@ int AFF4_open(char* filename) {
 
     // Make sure we only load an image that is stored in the filename provided
     for (const auto & image : sorted_images) {
-        if (!resolver->HasURNWithAttributeAndValue(image, aff4::AFF4_STORED, zip->urn)) {
+        if (!resolver.HasURNWithAttributeAndValue(image, aff4::AFF4_STORED, zip->urn)) {
             continue;
         }
 
-        if(!resolver->AFF4FactoryOpen<aff4::AFF4StdImage>(image)) {
+        if(!resolver.AFF4FactoryOpen<aff4::AFF4StdImage>(image)) {
             continue;
         }
 
-        (*get_handles())[handle] = image;
+        const int handle = nextHandle++;
+        get_handles()[handle] = image;
         return handle;
     }
 
-    resolver->Close(zip);
+    resolver.Close(zip);
     errno = ENOENT;
     return -1;
 }
 
 uint64_t AFF4_object_size(int handle) {
-    if(resolver == nullptr){
-        AFF4_init();
-    }
-
+    aff4::MemoryDataStore& resolver = get_resolver();
     aff4::URN urn;
     if (GetHandle(handle, &urn)) {
-        auto stream = resolver->AFF4FactoryOpen<aff4::AFF4Stream>(urn);
-        if (stream.get() != nullptr) {
+        auto stream = resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
+        if (stream.get()) {
             return stream->Size();
         }
     }
@@ -115,18 +111,16 @@ uint64_t AFF4_object_size(int handle) {
 }
 
 int AFF4_read(int handle, uint64_t offset, void* buffer, int length) {
-    if(resolver == nullptr){
-        AFF4_init();
-    }
+    aff4::MemoryDataStore& resolver = get_resolver();
     aff4::URN urn;
 
     if (!GetHandle(handle, &urn)) return -1;
 
-    auto stream = resolver->AFF4FactoryOpen<aff4::AFF4Stream>(urn);
+    auto stream = resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
     int read = 0;
-    if (stream.get() != nullptr) {
+    if (stream.get()) {
         stream->Seek(offset, SEEK_SET);
-        std::string result = stream->Read(length);
+        const std::string result = stream->Read(length);
         read = result.length();
         std::memcpy(buffer, result.data(), read);
     } else {
@@ -136,15 +130,13 @@ int AFF4_read(int handle, uint64_t offset, void* buffer, int length) {
 }
 
 int AFF4_close(int handle) {
-    if(resolver == nullptr){
-        AFF4_init();
-    }
+    aff4::MemoryDataStore& resolver = get_resolver();
     aff4::URN urn;
     if (GetHandle(handle, &urn)) {
-        auto obj = resolver->AFF4FactoryOpen<aff4::AFF4Object>(urn);
-        if (obj.get() != nullptr) {
-            resolver->Close(obj);
-            get_handles()->erase(handle);
+        auto obj = resolver.AFF4FactoryOpen<aff4::AFF4Object>(urn);
+        if (obj.get()) {
+            resolver.Close(obj);
+            get_handles().erase(handle);
         }
     }
     return 0;
