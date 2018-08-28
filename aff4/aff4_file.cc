@@ -420,10 +420,19 @@ AFF4Status AFF4BuiltInStreams::LoadFromURN() {
 
     // Right now we only support writing to stdout.
     if (type == "stdout") {
-        fd = STDOUT_FILENO;
         properties.seekable = false;
         properties.writable = true;
         properties.sizeable = false;
+
+#ifdef _WIN32
+        // On windows stdout is set to text mode, we need to force it
+        // to binary mode or else it will corrupt the output (issue
+        // #31)
+        fd = _fileno( stdout );
+        _setmode (fd, _O_BINARY);
+#else
+        fd = STDOUT_FILENO;
+#endif
 
         return STATUS_OK;
     }

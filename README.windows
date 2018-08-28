@@ -34,7 +34,7 @@ make -j4 install
 cd ..
 
 apt-get source libtclap-dev
-cd tclap-1.2.1/
+cd tclap-1.2.2/
 ./configure --prefix=$PREFIX --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --host=i686-w64-mingw32 \
     CXXFLAGS="-static -mnop-fun-dllimport -DPCRE_STATIC"
 make -j4 install
