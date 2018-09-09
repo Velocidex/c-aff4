@@ -211,8 +211,31 @@ std::string FileBackedObject::Read(size_t length) {
     return std::string(result.get(), buffer_size);
 }
 
+AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
+    DWORD buf_length = (DWORD)*length;
 
-AFF4Status FileBackedObject::Write(const char* data, int length) {
+    if (properties.seekable) {
+        LARGE_INTEGER tmp;
+        tmp.QuadPart = readptr;
+        if (!SetFilePointerEx(fd, tmp, &tmp, FILE_BEGIN)) {
+            resolver->logger->info("Failed to seek: {}", GetLastErrorMessage());
+            return IO_ERROR;
+        }
+    }
+
+    if (!ReadFile(fd, data, buf_length, &buf_length, nullptr)) {
+        return IO_ERROR;
+    }
+
+    *length = buf_length;
+    readptr += *length;
+
+    return STATUS_OK;
+}
+
+
+
+AFF4Status FileBackedObject::Write(const char* data, size_t length) {
     // Dont even try to write on files we are not allowed to write on.
     if (!properties.writable) {
         return IO_ERROR;
@@ -344,7 +367,24 @@ std::string FileBackedObject::Read(size_t length) {
     return std::string(result.get(), res);
 }
 
-AFF4Status FileBackedObject::Write(const char* data, int length) {
+AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
+    if (!properties.writable) {
+        return IO_ERROR;
+    }
+
+    lseek(fd, readptr, SEEK_SET);
+    int res = read(fd, data, *length);
+    if (res >= 0) {
+        readptr += res;
+        *length = res;
+    } else {
+        return IO_ERROR;
+    }
+
+    return STATUS_OK;
+}
+
+AFF4Status FileBackedObject::Write(const char* data, size_t length) {
     if (!properties.writable) {
         return IO_ERROR;
     }
@@ -446,7 +486,7 @@ std::string AFF4BuiltInStreams::Read(size_t length) {
     return "";
 }
 
-AFF4Status AFF4BuiltInStreams::Write(const char* data, int length) {
+AFF4Status AFF4BuiltInStreams::Write(const char* data, size_t length) {
     int res = write(fd, data, length);
     if (res >= 0) {
         readptr += res;

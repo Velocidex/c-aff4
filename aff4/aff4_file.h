@@ -48,7 +48,8 @@ class FileBackedObject: public AFF4Stream {
     virtual ~FileBackedObject();
 
     std::string Read(size_t length) override;
-    AFF4Status Write(const char* data, int length) override;
+    AFF4Status ReadBuffer(char* data, size_t *length) override;
+    AFF4Status Write(const char* data, size_t length) override;
 
     /**
      * Load the file from a file:/ URN.
@@ -94,7 +95,7 @@ class AFF4BuiltInStreams : public AFF4Stream {
  public:
     explicit AFF4BuiltInStreams(DataStore *resolver): AFF4Stream(resolver) {}
     std::string Read(size_t length) override;
-    AFF4Status Write(const char* data, int length) override;
+    AFF4Status Write(const char* data, size_t length) override;
      AFF4Status LoadFromURN() override;
     AFF4Status Truncate() override;
 

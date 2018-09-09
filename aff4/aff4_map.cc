@@ -617,7 +617,7 @@ AFF4Status AFF4Map::GetBackingStream(URN& target) {
 }
 
 
-AFF4Status AFF4Map::Write(const char* data, int length) {
+AFF4Status AFF4Map::Write(const char* data, size_t length) {
     URN target;
     RETURN_IF_ERROR(GetBackingStream(target));
 
@@ -682,7 +682,6 @@ AFF4Status AFF4Map::WriteStream(AFF4Map* source, ProgressContext* progress) {
 
     return result;
 }
-
 
 static AFF4Registrar<AFF4Map> map1(AFF4_MAP_TYPE);
 static AFF4Registrar<AFF4Map> map2(AFF4_LEGACY_MAP_TYPE);

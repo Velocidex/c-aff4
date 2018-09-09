@@ -160,7 +160,7 @@ class AFF4Image: public AFF4Stream {
         AFF4Stream* source,
         ProgressContext* progress = nullptr) override;
 
-    AFF4Status Write(const char* data, int length) override;
+    AFF4Status Write(const char* data, size_t length) override;
 
     /**
      * Read data from the current read pointer.

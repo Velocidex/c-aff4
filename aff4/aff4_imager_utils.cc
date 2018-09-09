@@ -9,6 +9,8 @@
 #include <iostream>
 #include <string>
 #include <time.h>
+#include <memory>
+#include "spdlog/spdlog.h"
 
 namespace aff4 {
 
@@ -225,6 +227,18 @@ AFF4Status BasicImager::ProcessArgs() {
 
 
 AFF4Status BasicImager::handle_logging() {
+    if (Get("logfile")->isSet()) {
+        std::vector<spdlog::sink_ptr> sinks = resolver.logger->sinks();
+
+        auto new_sink = std::make_shared<spdlog::sinks::simple_file_sink_mt>(
+            GetArg<TCLAP::ValueArg<std::string>>(
+                "logfile")->getValue());
+        sinks.push_back(new_sink);
+
+        resolver.logger = std::make_shared<spdlog::logger>(
+                     "", sinks.begin(), sinks.end());
+    }
+
     int level = GetArg<TCLAP::MultiSwitchArg>("debug")->getValue();
     switch(level) {
     case 0:
@@ -450,26 +464,23 @@ AFF4Status BasicImager::handle_export() {
             resolver.logger->info("Found image {}", line);
         }
     } else {
-        const URN image_type = URN(AFF4_IMAGE_TYPE);
-        for (const URN& image: resolver.Query(AFF4_TYPE, &image_type)) {
-            if (aff4::fnmatch(
-                    export_pattern.c_str(),
-                    image.SerializeToString().c_str()) == 0) {
-                resolver.logger->info("Found image {}", image);
-                urns.push_back(image);
+        // These are all acceptable stream types.
+        for (const URN image_type : std::vector<URN>{
+                URN(AFF4_IMAGE_TYPE),
+                    URN(AFF4_MAP_TYPE),
+                    }) {
+            for (const URN& image: resolver.Query(AFF4_TYPE, &image_type)) {
+                if (aff4::fnmatch(
+                        export_pattern.c_str(),
+                        image.SerializeToString().c_str()) == 0) {
+                    resolver.logger->info("Found image {}", image);
+                    urns.push_back(image);
+                }
             }
         }
     }
 
     for (const URN& export_urn: urns) {
-        // Skip export URNs which are not an AFF4_IMAGE_TYPE.
-        const URN image_type = URN(AFF4_IMAGE_TYPE);
-        if (!resolver.HasURNWithAttributeAndValue(
-                export_urn, URN(AFF4_TYPE), image_type)) {
-            resolver.logger->info("Can not find URN {}, skipping", export_urn);
-            continue;
-        }
-
         // Prepend the domain (AFF4 volume) to the export directory to
         // make sure the exported stream is unique.
         URN output_urn = export_dir_urn.Append(export_urn.Domain()).Append(

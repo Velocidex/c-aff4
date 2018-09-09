@@ -699,7 +699,7 @@ AFF4Status ZipFileSegment::Truncate() {
     return StringIO::Truncate();
 }
 
-AFF4Status ZipFileSegment::Write(const char* data, int length) {
+AFF4Status ZipFileSegment::Write(const char* data, size_t length) {
     // The segment is mapped from the backing store and the user wants to modify
     // it. We need to make a local copy.
     if (_backing_store_start_offset > 0) {

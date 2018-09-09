@@ -173,7 +173,7 @@ class ZipFileSegment: public StringIO {
     AFF4Status Truncate() override;
 
     std::string Read(size_t length) override;
-    AFF4Status Write(const char* data, int length) override;
+    AFF4Status Write(const char* data, size_t length) override;
 
     aff4_off_t Size() override;
 

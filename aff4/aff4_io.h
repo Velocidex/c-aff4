@@ -74,6 +74,9 @@ class ProgressContext {
     // Total length for this operation.
     aff4_off_t length = 0;
 
+    // Total length read so far
+    aff4_off_t total_read = 0;
+
     // This will be called periodically to report the progress. Note that readptr
     // is specified relative to the start of the range operation (WriteStream and
     // CopyToStream)
@@ -136,8 +139,13 @@ class AFF4Stream: public AFF4Object {
         ProgressContext* progress = nullptr,
         size_t buffer_size = 10*1024*1024);
 
-    // Copies the entire source stream into this stream. This is the opposite of
-    // CopyToStream. By default we copy from the start to the end of the stream.
+    // Copies the entire source stream into this stream. This is the
+    // opposite of CopyToStream. By default we copy from the start to
+    // the end of the stream.  Error handling depends on the stream's
+    // implementation. If a stream in not capable of noting error
+    // (e.g. FileBackedObject) we propagate the source's errors. If
+    // the stream can note errors (e.g. Map) then it will contain its
+    // own errors and will not propagate them.
     virtual AFF4Status WriteStream(
         AFF4Stream* source,
         ProgressContext* progress = nullptr);
@@ -145,7 +153,10 @@ class AFF4Stream: public AFF4Object {
     // The following should be overriden by derived classes.
     virtual AFF4Status Seek(aff4_off_t offset, int whence);
     virtual std::string Read(size_t length);
-    virtual AFF4Status Write(const char* data, int length);
+
+    virtual AFF4Status ReadBuffer(char *data, size_t *length);
+
+    virtual AFF4Status Write(const char* data, size_t length);
     virtual aff4_off_t Tell();
     virtual aff4_off_t Size();
 
@@ -192,7 +203,7 @@ class StringIO: public AFF4Stream {
     }
 
     std::string Read(size_t length) override;
-    AFF4Status Write(const char* data, int length) override;
+    AFF4Status Write(const char* data, size_t length) override;
 
     AFF4Status Truncate() override;
     aff4_off_t Size() override;
