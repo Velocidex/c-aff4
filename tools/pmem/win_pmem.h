@@ -112,7 +112,10 @@ class WinPmemImager: public PmemImager {
    *
    * @return STATUS_OK if successful.
    */
-  virtual AFF4Status ImagePhysicalMemory();
+  AFF4Status ImagePhysicalMemory() override;
+
+  AFF4Status WriteMapObject_(
+      const URN &map_urn, const URN &output_urn) override;
 
   /**
    * Attemptes to unpack and install the driver.

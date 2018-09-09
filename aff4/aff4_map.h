@@ -72,7 +72,7 @@ class AFF4Map: public AFF4Stream {
     AFF4Status LoadFromURN() override;
 
     std::string Read(size_t length) override;
-    AFF4Status Write(const char* data, int length) override;
+    AFF4Status Write(const char* data, size_t length) override;
 
     AFF4Status WriteStream(
         AFF4Stream* source,

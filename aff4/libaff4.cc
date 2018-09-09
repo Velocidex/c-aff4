@@ -131,6 +131,16 @@ std::string AFF4Stream::Read(size_t length) {
     return "";
 }
 
+AFF4Status AFF4Stream::ReadBuffer(char* data, size_t *length) {
+    auto result = Read(*length);
+
+    *length = result.size();
+
+    memcpy(data, result.c_str(), *length);
+
+    return STATUS_OK;
+}
+
 AFF4Status AFF4Stream::Write(const std::string& data) {
     return Write(data.c_str(), data.size());
 }
@@ -139,7 +149,7 @@ AFF4Status AFF4Stream::Write(const char data[]) {
     return Write(data, strlen(data));
 }
 
-AFF4Status AFF4Stream::Write(const char* data, int length) {
+AFF4Status AFF4Stream::Write(const char* data, size_t length) {
     UNUSED(data);
     UNUSED(length);
     return NOT_IMPLEMENTED;
@@ -170,6 +180,8 @@ bool DefaultProgress::Report(aff4_off_t readptr) {
     uint64_t now = time_from_epoch();
 
     if (now > last_time + 1000000/4) {
+        total_read += readptr - last_offset;
+
         // Rate in MB/s.
         off_t rate = (readptr - last_offset) /
                      (now - last_time) * 1000000 / 1024/1024;
@@ -177,12 +189,12 @@ bool DefaultProgress::Report(aff4_off_t readptr) {
         if (length > 0) {
             resolver->logger->info(
                 " Reading {:x} {} MiB / {} ({} MiB/s)",
-                readptr, (readptr - start)/1024/1024,
+                readptr, total_read/1024/1024,
                 length/1024/1024, rate);
         } else {
             resolver->logger->info(
                 " Reading {:x} {} MiB ({} MiB/s)", readptr,
-                (readptr - start)/1024/1024, rate);
+                total_read/1024/1024, rate);
         }
         last_time = now;
         last_offset = readptr;
@@ -233,13 +245,15 @@ AFF4Status AFF4Stream::WriteStream(AFF4Stream* source,
     // Rewind the source to the start.
     source->Seek(0, SEEK_SET);
 
+    char buffer[AFF4_BUFF_SIZE];
     while (1) {
-        std::string data = source->Read(AFF4_BUFF_SIZE);
-        if (data.size() == 0) {
+        size_t length = AFF4_BUFF_SIZE;
+        RETURN_IF_ERROR(source->ReadBuffer(buffer, &length));
+        if (length == 0) {
             break;
         }
 
-        RETURN_IF_ERROR(Write(data));
+        RETURN_IF_ERROR(Write(buffer, length));
 
         // Report the data read from the source.
         if (!progress->Report(source->Tell())) {
@@ -307,7 +321,7 @@ int AFF4Stream::sprintf(std::string fmt, ...) {
     }
 }
 
-AFF4Status StringIO::Write(const char* data, int length) {
+AFF4Status StringIO::Write(const char* data, size_t length) {
     MarkDirty();
 
     buffer.replace(readptr, length, data, length);

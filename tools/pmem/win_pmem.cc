@@ -24,8 +24,10 @@ specific language governing permissions and limitations under the License.
 
 #include <yaml-cpp/yaml.h>
 
+#define PAGE_SIZE (1<<12)
 
-#define BUFF_SIZE 1024*1024
+// For efficiency we read several pages at the time.
+#define BUFF_SIZE (PAGE_SIZE * 256)
 
 namespace aff4 {
 
@@ -346,6 +348,145 @@ AFF4Status WinPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
 
     map->AddRange(range.start, range.start, range.length, device_urn);
     *length += range.length;
+  }
+
+  return STATUS_OK;
+}
+
+
+AFF4Status WinPmemImager::WriteMapObject_(
+    const URN &map_urn, const URN &output_urn) {
+
+  std::vector<std::string> unreadable_pages;
+
+  // Get the device object
+  AFF4ScopedPtr<AFF4Stream> device_stream = resolver.AFF4FactoryOpen<
+      AFF4Stream>(device_urn);
+
+  if (!device_stream)
+    return IO_ERROR;
+
+  // Create the map object.
+  AFF4ScopedPtr<AFF4Map> map_stream = AFF4Map::NewAFF4Map(
+      &resolver, map_urn, output_urn);
+
+  if (!map_stream)
+    return IO_ERROR;
+
+  // Read data from the memory device and write it directly to the
+  // map's backing urn.
+  URN data_stream_urn;
+  RETURN_IF_ERROR(map_stream->GetBackingStream(data_stream_urn));
+
+  AFF4ScopedPtr<AFF4Stream> data_stream = resolver.AFF4FactoryOpen<
+      AFF4Stream>(data_stream_urn);
+
+  if (!data_stream) {
+      return IO_ERROR;
+  }
+
+  // Set the user's preferred compression method on the data stream.
+  resolver.Set(data_stream_urn, AFF4_IMAGE_COMPRESSION, new URN(
+      CompressionMethodToURN(compression)));
+
+
+  // Get the ranges from the memory device.
+  PmemMemoryInfo info;
+  AFF4Status res = GetMemoryInfo(&info);
+  if (res != STATUS_OK)
+    return res;
+
+  aff4_off_t total_length = 0;
+
+  // How much data do we expect?
+  for (unsigned int i = 0; i < info.NumberOfRuns; i++) {
+    total_length += info.Runs[i].length;
+  }
+
+  DefaultProgress progress(&resolver);
+  progress.length = total_length;
+
+  // Now copy the data one page at the time to be able to properly trap IO errors.
+  for (unsigned int i = 0; i < info.NumberOfRuns; i++) {
+    PHYSICAL_MEMORY_RANGE range = info.Runs[i];
+
+    std::cout << "Dumping Range " << i << " (Starts at " << std::hex <<
+        range.start << ", length " << range.length << ")\n";
+
+    progress.start = range.start;
+    progress.last_offset = range.start;
+
+    char buf[BUFF_SIZE];
+    aff4_off_t unreadable_offset = 0;
+
+    for (aff4_off_t j=range.start; j<range.start + range.length; j += BUFF_SIZE) {
+        size_t to_read = min(range.start + range.length - j, BUFF_SIZE);
+        size_t buffer_len = to_read;
+        device_stream->Seek(j, SEEK_SET);
+
+        // Report the data read from the source.
+        if (!progress.Report(j)) {
+                return ABORTED;
+        }
+
+        AFF4Status res = device_stream->ReadBuffer(buf, &buffer_len);
+        if (res == STATUS_OK) {
+            auto data_stream_offset = data_stream->Tell();
+
+            // Append the data to the end of the data stream.
+            data_stream->Write(buf, buffer_len);
+            map_stream->AddRange(j, data_stream_offset, buffer_len, data_stream_urn);
+        } else {
+            // This will happen when windows is running in VSM mode -
+            // some of the physical pages are not actually accessible.
+
+            // One of the pages in the range is unreadable - repeat
+            // the read for each page.
+            for (aff4_off_t k = j; k < j + to_read; k += PAGE_SIZE) {
+                buffer_len = PAGE_SIZE;
+                AFF4Status res = device_stream->ReadBuffer(buf, &buffer_len);
+                if (res == STATUS_OK) {
+                    auto data_stream_offset = data_stream->Tell();
+
+                    // Append the data to the end of the data stream.
+                    data_stream->Write(buf, buffer_len);
+                    map_stream->AddRange(k, data_stream_offset, buffer_len, data_stream_urn);
+                } else {
+                    resolver.logger->debug("Reading failed at offset {:x}: {}",
+                                           k, GetLastErrorMessage());
+
+                    // Error occured - map the error stream.
+                    map_stream->AddRange(
+                        k,
+                        unreadable_offset,
+                        PAGE_SIZE,
+                        AFF4_IMAGESTREAM_UNREADABLE);
+
+                    // We need to map consecutive blocks in the
+                    // unreadable stream to allow the map to merge
+                    // these into single ranges. If we e.g. always map
+                    // to the start of the unreadable stream, the map
+                    // will contain an entry for each page and wont be
+                    // able to merge them.
+                    unreadable_offset += PAGE_SIZE;
+                    unreadable_pages.push_back(aff4_sprintf(" %#08llx", (k / PAGE_SIZE)));
+                }
+            }
+        }
+    }
+
+  }
+
+  if (unreadable_pages.size() > 0) {
+      resolver.logger->error(
+          "There were {} page read errors in total.", unreadable_pages.size());
+
+      std::string message;
+      for (int i=0; i<unreadable_pages.size(); i++) {
+          message += unreadable_pages[i];
+      }
+
+      resolver.logger->info("Unreadable pages: {}", message);
   }
 
   return STATUS_OK;

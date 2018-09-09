@@ -228,7 +228,11 @@ class BasicImager {
                    "where to find the stream. Specifying a relative URN "
                    "implies a stream residing in a loaded volume. E.g.\n"
 
-                   " -e /dev/sda -o /tmp/myfile my_volume.aff4",
+                   " -e /dev/sda -D /tmp/ my_volume.aff4",
+                   false, "", "string"));
+
+        AddArg(new TCLAP::ValueArg<std::string>(
+                   "", "logfile", "Specify a file to store log messages to",
                    false, "", "string"));
 
         AddArg(new TCLAP::ValueArg<std::string>(

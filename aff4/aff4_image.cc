@@ -446,7 +446,7 @@ AFF4Status AFF4Image::FlushBevy() {
 }
 
 
-AFF4Status AFF4Image::Write(const char* data, int length) {
+AFF4Status AFF4Image::Write(const char* data, size_t length) {
     if (length <= 0) return STATUS_OK;
 
     // Prepare a bevy writer to collect the first bevy.
