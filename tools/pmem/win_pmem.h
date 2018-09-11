@@ -124,6 +124,7 @@ class WinPmemImager: public PmemImager {
    * @return STATUS_OK if the driver was correctly installed.
    */
   AFF4Status InstallDriver();
+  AFF4Status _InstallDriver(std::string driver_path);
 
   /**
    * Extract a file from the imager's AFF4 volume somewhere in the filesystem.

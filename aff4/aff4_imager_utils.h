@@ -214,12 +214,17 @@ class BasicImager {
         AddArg(new TCLAP::MultiArgToNextFlag(
                    "i", "input", "File to image. If specified we copy these file to the "
                    "output volume located at --output. If there is no AFF4 volume on "
-                   "--output yet, we create a new volume on it. An filename of @ means "
+                   "--output yet, we create a new volume on it. A filename of @ means "
                    "to read filenames from stdin (In this case no glob expansion will "
                    "occur). \n"
                    "This can be specified multiple times with shell expansion. e.g.:\n"
                    "-i /bin/*",
                    false, "/path/to/file/or/device"));
+
+        AddArg(new TCLAP::SwitchArg(
+                   "", "relative", "If specified all files will be written relative to "
+                   "the current directory. By default we write all files' absolute paths",
+                   false));
 
         AddArg(new TCLAP::ValueArg<std::string>(
                    "e", "export", "Name of the streams to export. If specified we try "

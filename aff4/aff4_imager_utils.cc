@@ -366,13 +366,23 @@ AFF4Status BasicImager::process_input() {
             AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<
                 AFF4Volume>(volume_urn);
 
+            URN image_urn;
             // Create a new AFF4Image in this volume.
-            URN image_urn = volume_urn.Append(input_urn.Parse().path);
+            if (GetArg<TCLAP::SwitchArg>("relative")->getValue()) {
+                char cwd[PATH_MAX];
+                if (getcwd(cwd, PATH_MAX) == NULL) {
+                    return IO_ERROR;
+                }
 
-            // Store the original filename.
-            resolver.Set(image_urn, AFF4_STREAM_ORIGINAL_FILENAME,
-                         new XSDString(input));
+                URN current_dir_urn = URN::NewURNFromFilename(cwd, false);
+                image_urn.Set(volume_urn.Append(current_dir_urn.RelativePath(input_urn)));
+            } else {
+                image_urn.Set(volume_urn.Append(input_urn.Parse().path));
 
+                // Store the original filename.
+                resolver.Set(image_urn, AFF4_STREAM_ORIGINAL_FILENAME,
+                             new XSDString(input));
+            }
             // For very small streams, it is more efficient to just store them without
             // compression. Also if the user did not ask for compression, there is no
             // advantage in storing a Bevy based image, just store it in one piece.
@@ -387,6 +397,11 @@ AFF4Status BasicImager::process_input() {
 
                 // If the underlying stream supports compression, lets do that.
                 image_stream->compression_method = compression;
+
+                // We only support deflate compression on zip segments.
+                if (compression != AFF4_IMAGE_COMPRESSION_ENUM_STORED) {
+                    image_stream->compression_method = AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE;
+                }
 
                 // Copy the input stream to the output stream.
                 ProgressContext progress(&resolver);
