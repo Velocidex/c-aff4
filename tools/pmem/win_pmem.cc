@@ -94,8 +94,6 @@ static std::string _GetTempPath(DataStore &resolver) {
       return "";
   }
 
-  resolver.logger->info("Temp path {}", path);
-
   // filename is now the random path.
   GetTempFileNameA(path, "pmem", 0, filename);
 
@@ -114,11 +112,11 @@ static DWORD _GetSystemArch() {
 static std::string GetDriverName(DataStore &resolver) {
   switch (_GetSystemArch()) {
     case PROCESSOR_ARCHITECTURE_AMD64:
-      return "winpmem_x64.sys";
+      return "winpmem_64.sys";
       break;
 
     case PROCESSOR_ARCHITECTURE_INTEL:
-      return "winpmem_x86.sys";
+      return "winpmem_86.sys";
       break;
 
     default:
@@ -147,7 +145,7 @@ AFF4Status WinPmemImager::GetMemoryInfo(PmemMemoryInfo *info) {
     if (_GetSystemArch() == PROCESSOR_ARCHITECTURE_AMD64) {
       acquisition_mode = PMEM_MODE_PTE;
     } else {
-      acquisition_mode = PMEM_MODE_PHYSICAL;
+      acquisition_mode = PMEM_MODE_IOSPACE;
     }
   }
 
@@ -444,6 +442,8 @@ AFF4Status WinPmemImager::WriteMapObject_(
             // the read for each page.
             for (aff4_off_t k = j; k < j + to_read; k += PAGE_SIZE) {
                 buffer_len = PAGE_SIZE;
+
+                device_stream->Seek(k, SEEK_SET);
                 AFF4Status res = device_stream->ReadBuffer(buf, &buffer_len);
                 if (res == STATUS_OK) {
                     auto data_stream_offset = data_stream->Tell();
@@ -575,8 +575,8 @@ AFF4Status WinPmemImager::ExtractFile_(URN input_file, URN output_file) {
       <AFF4Stream>(input_file);
 
   if (!input_file_stream) {
-      resolver.logger->critical("Unable to extract the correct driver - "
-                                "maybe the binary is damaged?");
+      resolver.logger->critical("Unable to extract the correct driver ({}) - "
+                                "maybe the binary is damaged?", input_file);
       abort();
   }
 
@@ -611,30 +611,7 @@ AFF4Status WinPmemImager::ExtractFile_(URN input_file, URN output_file) {
 }
 
 
-AFF4Status WinPmemImager::InstallDriver() {
-    std::string driver_path;
-
-  // We need to extract the driver somewhere temporary.
-  if (!Get("driver")->isSet()) {
-    driver_path = _GetTempPath(resolver);
-    if (driver_path.size() == 0)
-      return IO_ERROR;
-
-    URN filename_urn = URN::NewURNFromFilename(driver_path);
-    AFF4Status res = ExtractFile_(
-        imager_urn.Append(GetDriverName(resolver)),   // Driver URN relative to imager.
-        filename_urn);   // Where to store the driver.
-
-    if (res != STATUS_OK)
-      return res;
-
-    // Remove this file when we are done.
-    to_be_removed.push_back(filename_urn);
-  } else {
-    // Use the driver the user told us to.
-      driver_path = GetArg<TCLAP::ValueArg<std::string>>("driver")->getValue();
-  }
-
+AFF4Status WinPmemImager::_InstallDriver(std::string driver_path) {
   // Now install the driver.
   UninstallDriver();   // First ensure the driver is not already installed.
 
@@ -683,6 +660,57 @@ AFF4Status WinPmemImager::InstallDriver() {
     }
   }
 
+  CloseServiceHandle(service);
+  CloseServiceHandle(scm);
+
+  return STATUS_OK;
+}
+
+AFF4Status WinPmemImager::InstallDriver() {
+  std::string driver_path;
+  AFF4Status res;
+
+  // We need to extract the driver somewhere temporary.
+  if (!Get("driver")->isSet()) {
+    driver_path = _GetTempPath(resolver);
+    if (driver_path.size() == 0)
+      return IO_ERROR;
+
+    // It is not clear to me when to use attestation signed drivers
+    // and when not to - We try to load the attestation signed ones
+    // first, and if that fails we try the other ones. On modern win10
+    // systems the attestation signed drivers are required, while on
+    // windows 7 they can not be loaded.
+    URN filename_urn = URN::NewURNFromFilename(driver_path);
+    RETURN_IF_ERROR(ExtractFile_(
+        imager_urn.Append("att_" + GetDriverName(resolver)),   // Driver URN relative to imager.
+        filename_urn));   // Where to store the driver.
+
+    // Remove this file when we are done.
+    to_be_removed.push_back(filename_urn);
+
+    res = _InstallDriver(filename_urn.ToFilename());
+    if (res != STATUS_OK) {
+        resolver.logger->info("Trying to load non-attestation signed driver.");
+        driver_path = _GetTempPath(resolver);
+        if (driver_path.size() == 0)
+            return IO_ERROR;
+
+        URN filename_urn = URN::NewURNFromFilename(driver_path);
+        RETURN_IF_ERROR(
+            ExtractFile_(
+                imager_urn.Append(GetDriverName(resolver)),   // Driver URN relative to imager.
+                filename_urn));   // Where to store the driver.
+
+        to_be_removed.push_back(filename_urn);
+        RETURN_IF_ERROR(_InstallDriver(filename_urn.ToFilename()));
+    }
+  } else {
+      // Use the driver the user told us to.
+      driver_path = GetArg<TCLAP::ValueArg<std::string>>("driver")->getValue();
+      RETURN_IF_ERROR(_InstallDriver(driver_path));
+  }
+
   // Remember this so we can safely unload it.
   driver_installed_ = true;
 
@@ -698,17 +726,12 @@ AFF4Status WinPmemImager::InstallDriver() {
 
   if (!device_stream) {
       resolver.logger->error("Unable to open device: {}", GetLastErrorMessage());
-    CloseServiceHandle(service);
-    CloseServiceHandle(scm);
     return IO_ERROR;
   }
 
-  CloseServiceHandle(service);
-  CloseServiceHandle(scm);
-
   // Now print some info about the driver.
   PmemMemoryInfo info;
-  AFF4Status res = GetMemoryInfo(&info);
+  res = GetMemoryInfo(&info);
   if (res != STATUS_OK)
     return res;
 
