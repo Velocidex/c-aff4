@@ -116,7 +116,7 @@ static std::string GetDriverName(DataStore &resolver) {
       break;
 
     case PROCESSOR_ARCHITECTURE_INTEL:
-      return "winpmem_86.sys";
+      return "winpmem_32.sys";
       break;
 
     default:
