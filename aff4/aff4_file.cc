@@ -456,7 +456,7 @@ AFF4Registrar<FileBackedObject> file2(AFF4_FILE_TYPE);
 
 
 AFF4Status AFF4BuiltInStreams::LoadFromURN() {
-    auto type = urn.Parse().domain;
+    auto type = urn.Domain();
 
     // Right now we only support writing to stdout.
     if (type == "stdout") {

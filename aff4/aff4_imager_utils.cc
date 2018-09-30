@@ -55,7 +55,7 @@ AFF4Status ImageStream(DataStore& resolver, const std::vector<URN>& input_urns,
         }
 
         // Create a new image in this volume.
-        URN image_urn = zip->urn.Append(input_urn.Parse().path);
+        URN image_urn = zip->urn.Append(input_urn.Path());
 
         AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
                                              &resolver, image_urn, zip->urn);
@@ -377,7 +377,7 @@ AFF4Status BasicImager::process_input() {
                 URN current_dir_urn = URN::NewURNFromFilename(cwd, false);
                 image_urn.Set(volume_urn.Append(current_dir_urn.RelativePath(input_urn)));
             } else {
-                image_urn.Set(volume_urn.Append(input_urn.Parse().path));
+                image_urn.Set(volume_urn.Append(input_urn.Path()));
 
                 // Store the original filename.
                 resolver.Set(image_urn, AFF4_STREAM_ORIGINAL_FILENAME,
@@ -498,8 +498,9 @@ AFF4Status BasicImager::handle_export() {
     for (const URN& export_urn: urns) {
         // Prepend the domain (AFF4 volume) to the export directory to
         // make sure the exported stream is unique.
-        URN output_urn = export_dir_urn.Append(export_urn.Domain()).Append(
-            export_urn.Path());
+        URN output_urn = export_dir_urn.Append(
+            export_urn.Domain()).Append(
+                export_urn.Path());
         resolver.logger->info("Writing to {}", output_urn);
 
         // Hold all the volumes in use while we extract the streams

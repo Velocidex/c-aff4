@@ -19,11 +19,16 @@ LEXICON_DEFINE(AFF4_LEGACY_NAMESPACE, "http://afflib.org/2009/aff4#");
  * The default AFF4 prefix for AFF4 objects.
  */
 LEXICON_DEFINE(AFF4_PREFIX, "aff4://");
+LEXICON_DEFINE(FILE_PREFIX, "file://");
 
 // Attributes in this namespace will never be written to persistant
 // storage. They are simply used as a way for storing metadata about an AFF4
 // object internally.
 LEXICON_DEFINE(AFF4_VOLATILE_NAMESPACE, "http://aff4.org/VolatileSchema#");
+
+// We just store the member_name -> URN mapping so we can ensure the
+// right member is opened.
+LEXICON_DEFINE(AFF4_SEGMENT_FOR_URN, "http://aff4.org/VolatileSchema#segment_for_urn");
 
 // Commonly used RDF types.
 LEXICON_DEFINE(URNType, "URN");
