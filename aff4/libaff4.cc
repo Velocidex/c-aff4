@@ -429,7 +429,12 @@ URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method) {
 }
 
 
-// Utilities
+// Utilities.
+
+// Convert a member's name into a URN. NOTE: This function is not
+// unicode safe and may mess up the zip segment name if the URN
+// contains unicode chars. Ultimately it does not matter as the member
+// name is just a convenience to the URN.
 std::string member_name_for_urn(const URN member, const URN base_urn,
                                 bool slash_ok) {
     std::string filename = base_urn.RelativePath(member);
@@ -440,10 +445,10 @@ std::string member_name_for_urn(const URN member, const URN base_urn,
         filename = filename.substr(1, filename.size());
     }
 
-    // Now escape any chars which are non printable.
+    // Now escape any chars which are forbidden.
     for (unsigned int i = 0; i < filename.size(); i++) {
         char j = filename[i];
-        if ((!std::isprint(j) || j == '!' || j == '$' ||
+        if ((j == '!' || j == '$' ||
                 j == '\\' || j == ':' || j == '*' || j == '%' ||
                 j == '?' || j == '"' || j == '<' || j == '>' || j == '|') ||
                 (!slash_ok && j == '/')) {
@@ -510,7 +515,6 @@ std::vector<std::string>& split(const std::string& s, char delim,
     return elems;
 }
 
-
 std::vector<std::string> split(const std::string& s, char delim) {
     std::vector<std::string> elems;
     split(s, delim, elems);
@@ -571,8 +575,5 @@ int fnmatch(const char *pattern, const char *string) {
 }
 
 #endif
-
-
-
 
 } // namespace aff4

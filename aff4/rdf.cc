@@ -20,7 +20,6 @@ specific language governing permissions and limitations under the License.
 #include <pcre++.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <uriparser/Uri.h>
 #include <cerrno>
 #include <spdlog/fmt/ostr.h>
 
@@ -118,75 +117,45 @@ raptor_term* XSDString::GetRaptorTerm(raptor_world* world) const {
     return result;
 }
 
-
-uri_components URN::Parse() const {
-    UriParserStateA state;
-    UriUriA uri;
-    uri_components result;
-
-    state.uri = &uri;
-
-    if(uriParseUriA(&state, value.c_str()) != URI_SUCCESS) {
-        //LOG(INFO) << "Failed to parse " << value << " as a URN";
-    } else {
-        result.scheme.assign(
-            uri.scheme.first, uri.scheme.afterLast - uri.scheme.first);
-
-        result.domain.assign(
-            uri.hostText.first, uri.hostText.afterLast - uri.hostText.first);
-
-        result.fragment.assign(
-            uri.fragment.first, uri.fragment.afterLast - uri.fragment.first);
-
-        for(auto it=uri.pathHead; it!=0; it=it->next)
-            result.path += URN_PATH_SEPARATOR + std::string(
-                               it->text.first, it->text.afterLast - it->text.first);
+std::string URN::Scheme() const {
+    // We only support aff4 and file URNs:
+    if (value.compare(0, strlen(AFF4_PREFIX), AFF4_PREFIX) == 0) {
+        return "aff4";
     }
 
-    uriFreeUriMembersA(&uri);
-    return result;
+    if (value.compare(0, strlen(FILE_PREFIX), FILE_PREFIX) == 0) {
+        return "file";
+    }
+
+    return "";
 }
 
-
-URN::URN(const char* data): URN() {
-    UriParserStateA state;
-    UriUriA uri;
-
-    state.uri = &uri;
-
-    if(uriParseUriA(&state, data) != URI_SUCCESS) {
-        //LOG(INFO) << "Failed to parse " << data << " as a URN";
-    };
-
-    // No scheme specified - assume this is a filename.
-    if(uri.pathHead && !uri.scheme.first) {
-        value = NewURNFromFilename(data).SerializeToString();
-        goto exit;
-    };
-
-    if (uriNormalizeSyntaxA(&uri) != URI_SUCCESS) {
-        //LOG(INFO) << "Failed to normalize";
+std::string URN::Path() const {
+    if (Scheme() == "file") {
+        return value.substr(strlen(FILE_PREFIX));
     }
 
-    int charsRequired;
-    if (uriToStringCharsRequiredA(&uri, &charsRequired) == URI_SUCCESS) {
-        charsRequired++;
+    if (Scheme() == "aff4") {
+        return value.substr(strlen(AFF4_PREFIX) + Domain().size() + 1);
+    }
 
-        char* tmp = new char[charsRequired * sizeof(char) + 10];
-        memset(tmp, 0, charsRequired * sizeof(char) + 10);
+    return "";
+}
 
-        if (uriToStringA(tmp, &uri, charsRequired, nullptr) != URI_SUCCESS) {
-            printf("Failed\n");
-            //LOG(INFO) << "Failed";
-        };
+std::string URN::Domain() const {
+    if (Scheme() == "aff4") {
+        auto components = split(
+            value.substr(strlen(AFF4_PREFIX)), PATH_SEP);
+        if (components.size() > 0) {
+            return components[1];
+        }
+    }
 
-        tmp[charsRequired * sizeof(char) + 1] = 0;
-        value = tmp;
-        delete[] tmp;
-    };
+    return "";
+}
 
-exit:
-    uriFreeUriMembersA(&uri);
+URN::URN(const char* data): URN() {
+    value = std::string(data);
 }
 
 

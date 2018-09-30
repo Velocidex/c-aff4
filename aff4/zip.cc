@@ -333,6 +333,13 @@ AFF4Status ZipFile::parse_cd() {
             resolver->Set(member_urn, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
             resolver->Set(member_urn, AFF4_STORED, new URN(urn));
 
+            // Store the URL->member name mapping so we can open the
+            // right member if the URN is opened. This is because the
+            // member_name_for_urn and urn_from_member_name are not
+            // exactly symmetrical in all cases.
+            resolver->Set(member_urn, AFF4_SEGMENT_FOR_URN, new XSDString(
+                              zip_info->filename));
+
             members[zip_info->filename] = std::move(zip_info);
         }
 
@@ -727,7 +734,17 @@ AFF4Status ZipFileSegment::LoadFromURN() {
         return IO_ERROR;
     }
 
-    const std::string member_name = member_name_for_urn(urn, owner_urn, true);
+    std::string member_name;
+
+    // If we already know the member name for this URN, then just use
+    // it, otherwise make a new reasonable member name.
+    XSDString member;
+    if (resolver->Get(urn, AFF4_SEGMENT_FOR_URN, member) == STATUS_OK) {
+        member_name = member.SerializeToString();
+    } else {
+        member_name = member_name_for_urn(urn, owner_urn, true);
+    }
+
     return LoadFromZipFile(member_name, *owner);
 }
 

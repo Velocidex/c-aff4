@@ -504,7 +504,6 @@ class DataStore {
         }
 
         std::unique_ptr<AFF4Object> obj;
-        const uri_components components = urn.Parse();
 
         // Check if there is a resolver triple for it.
         std::vector<std::shared_ptr<RDFValue>> types;
@@ -530,7 +529,8 @@ class DataStore {
 
         // Try to instantiate the handler based on the URN scheme alone.
         if (!obj) {
-            obj = GetAFF4ClassFactory()->CreateInstance(components.scheme, this, &urn);
+            obj = GetAFF4ClassFactory()->CreateInstance(
+                urn.Scheme(), this, &urn);
             if (obj) {
                 obj->urn = urn;
                 if (obj->LoadFromURN() != STATUS_OK) {

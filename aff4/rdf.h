@@ -274,20 +274,12 @@ class URN: public XSDString {
     URN Append(const std::string& component) const;
 
     raptor_term* GetRaptorTerm(raptor_world* world) const;
-    uri_components Parse() const;
 
-    // Convenience methods for Parse()
-    std::string Scheme() const {
-        return Parse().scheme;
-    }
-
-    std::string Path() const {
-        return Parse().path;
-    }
-
-    std::string Domain() const {
-        return Parse().domain;
-    }
+    // Returns the URN's Scheme, Path and Domain parts. NOTE: This is
+    // not a complete URI parser! It only supports AFF4 and FILE urls.
+    std::string Scheme() const;
+    std::string Path() const;
+    std::string Domain() const;
 
     /**
      * returns the path of the URN relative to ourselves.
