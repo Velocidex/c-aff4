@@ -106,7 +106,7 @@ std::string AFF4Map::Read(size_t length) {
         // No range contains the current readptr - just pad it.
         if (map_it == map.end()) {
             result.resize(length);
-            //            readptr += length;
+            readptr += length;
             return result;
         }
 
