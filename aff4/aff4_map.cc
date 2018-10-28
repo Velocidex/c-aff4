@@ -106,24 +106,27 @@ std::string AFF4Map::Read(size_t length) {
         // No range contains the current readptr - just pad it.
         if (map_it == map.end()) {
             result.resize(length);
+            //            readptr += length;
             return result;
         }
 
         Range range = map_it->second;
         aff4_off_t length_to_start_of_range = std::min(
-                (aff4_off_t)length, (aff4_off_t)range.map_offset - readptr);
+            (aff4_off_t)length, (aff4_off_t)(range.map_offset - readptr));
         if (length_to_start_of_range > 0) {
             // Null pad it.
             result.resize(result.size() + length_to_start_of_range);
-            length = aff4::max(length - length_to_start_of_range, 0);
-            readptr = aff4::min(readptr + length_to_start_of_range, Size());
+            length = std::max((aff4_off_t)0,
+                              (aff4_off_t)length - length_to_start_of_range);
+            readptr = std::min((aff4_off_t)Size(),
+                               readptr + length_to_start_of_range);
             continue;
         }
 
         // The readptr is inside a range.
         URN target = targets[range.target_id];
-        size_t length_to_read_in_target = aff4::min(
-                length, range.map_end() - readptr);
+        size_t length_to_read_in_target = std::min(
+            length, (size_t)(range.map_end() - readptr));
 
         aff4_off_t offset_in_target = range.target_offset + (
                                           readptr - range.map_offset);
@@ -137,8 +140,8 @@ std::string AFF4Map::Read(size_t length) {
                                    target.value, urn.value, readptr);
             // Null pad
             result.resize(result.size() + length_to_read_in_target);
-            length = aff4::max(length - length_to_read_in_target, 0);
-            readptr = aff4::min(readptr + length_to_read_in_target, Size());
+            length = std::max((size_t)0, length - length_to_read_in_target);
+            readptr = std::min(Size(), readptr + length_to_read_in_target);
             continue;
         }
 
@@ -154,8 +157,8 @@ std::string AFF4Map::Read(size_t length) {
             };
             result += data;
         }
-        readptr = aff4::min(readptr + length_to_read_in_target, Size());
-        length = aff4::max(length - length_to_read_in_target, 0);
+        readptr = std::min(Size(), readptr + length_to_read_in_target);
+        length = std::max((size_t)0, length - length_to_read_in_target);
     }
 
     return result;

@@ -1053,6 +1053,11 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
             // Give the compressor more room.
             strm.next_out = reinterpret_cast<Bytef*>(c_buffer.get());
             strm.avail_out = AFF4_BUFF_SIZE;
+
+            // Report progress.
+            if (!progress->Report(stream.Tell())) {
+                return ABORTED;
+            }
         }
 
         // Give the compressor more room.
@@ -1092,6 +1097,11 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
                                      buffer.size());
 
             RETURN_IF_ERROR(backing_store->Write(buffer.data(), buffer.size()));
+
+            // Report progress.
+            if (!progress->Report(stream.Tell())) {
+                return ABORTED;
+            }
         }
     }
 

@@ -539,14 +539,6 @@ void aff4_init() {
 }
 
 
-aff4_off_t min(size_t x, aff4_off_t y) {
-    return std::min((aff4_off_t)x, y);
-}
-
-aff4_off_t max(size_t x, aff4_off_t y) {
-    return std::max((aff4_off_t)x, y);
-}
-
 std::shared_ptr<spdlog::logger> get_logger() {
     auto logger = spdlog::get("aff4");
 

@@ -66,9 +66,6 @@ extern "C" {
 }
 
 
-aff4_off_t min(size_t x, aff4_off_t y);
-aff4_off_t max(size_t x, aff4_off_t y);
-
 std::string aff4_sprintf(std::string fmt, ...);
 
 } // namespace aff4

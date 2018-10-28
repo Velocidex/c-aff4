@@ -726,7 +726,8 @@ std::string AFF4Image::Read(size_t length) {
         return "";
     }
 
-    length = std::min((aff4_off_t)length, aff4::max(0, Size() - readptr));
+    length = std::min((aff4_off_t)length,
+                      std::max((aff4_off_t)0, (aff4_off_t)Size() - readptr));
 
     int initial_chunk_offset = readptr % chunk_size;
     unsigned int initial_chunk_id = readptr / chunk_size;
@@ -757,7 +758,7 @@ std::string AFF4Image::Read(size_t length) {
     }
 
     result.resize(length);
-    readptr = aff4::min(readptr + length, Size());
+    readptr = std::min(readptr + length, (aff4_off_t)Size());
 
     return result;
 }
