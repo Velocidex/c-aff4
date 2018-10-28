@@ -231,8 +231,9 @@ AFF4Status PmemImager::WriteRawFormat_(
   AFF4ScopedPtr<AFF4Stream> target_stream = GetWritableStream_(
       target_urn, output_volume_urn);
 
-  if (!target_stream)
+  if (!target_stream) {
     return IO_ERROR;
+  }
 
   DefaultProgress progress(&resolver);
   progress.length = total_length;
@@ -281,6 +282,23 @@ AFF4Status PmemImager::WriteMapObject_(
 
 AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
     const URN &output_urn, const URN &volume_urn) {
+
+    // Raw containers should just be flat files.
+    if (!aff4::hasEnding(output_volume_backing_urn.SerializeToString(), ".aff4")) {
+
+        // Flat files can not store more than one stream so we must
+        // truncate them.
+        resolver.Set(output_volume_backing_urn,
+                     AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+        resolver.Set(output_volume_backing_urn,
+                     AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+        resolver.logger->info(
+            "Destination volume does not end with .aff4 - will use flat file {}.",
+            output_volume_backing_urn);
+
+        return resolver.AFF4FactoryOpen<AFF4Stream>(output_volume_backing_urn);
+    }
+
   AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
       volume_urn);
 
@@ -298,6 +316,18 @@ AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
   }
 
   return AFF4ScopedPtr<AFF4Stream>();
+}
+
+
+AFF4Status PmemImager::process_input() {
+    if (!aff4::hasEnding(output_volume_backing_urn.SerializeToString(), ".aff4")) {
+        resolver.logger->info(
+            "Output volume is flat file. Can not capture additional streams. "
+            "Choose an AFF4 volume to capture additional streams.");
+        return STATUS_OK;
+    }
+
+    return BasicImager::process_input();
 }
 
 
