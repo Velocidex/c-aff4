@@ -3,7 +3,7 @@ Building for windows.
 
 The following instructions are for building windows binaries, on a
 Linux system. On Ubuntu systems one must install the mingw platform
-first (using apt-get install g++-mingw-w64 mingw-w64).
+first (using apt-get install g++-mingw-w64-i686).
 
 This installs several flavors of compilers. We need the posix version
 so you will need to switch via ubuntu's alternatives version:
@@ -105,8 +105,9 @@ cmake -DCMAKE_TOOLCHAIN_FILE=Toolchain-mingw32.cmake -DCMAKE_INSTALL_PREFIX:PATH
 make install -j4
 cd ..
 
-git clone https://github.com/gabime/spdlog.git
-cd spdlog/
+wget https://github.com/gabime/spdlog/archive/v0.17.0.tar.gz
+tar -xvzf v0.17.0.tar.gz
+cd spdlog-0.17.0/
 cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX . && make install -j4
 cd ..
 

@@ -418,7 +418,8 @@ AFF4Status WinPmemImager::WriteMapObject_(
     aff4_off_t unreadable_offset = 0;
 
     for (aff4_off_t j=range.start; j<range.start + range.length; j += BUFF_SIZE) {
-        size_t to_read = min(range.start + range.length - j, BUFF_SIZE);
+        size_t to_read = std::min((aff4_off_t)(BUFF_SIZE),
+                                  (aff4_off_t)(range.start + range.length - j));
         size_t buffer_len = to_read;
         device_stream->Seek(j, SEEK_SET);
 

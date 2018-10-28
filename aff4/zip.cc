@@ -915,6 +915,25 @@ AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
     struct ZipFileHeader header;
     struct Zip64FileHeaderExtensibleField zip64header;
 
+    if (file_size < 0xFFFFFFFF) {
+        header.crc32_cs = crc32_cs;
+        header.compress_size = compress_size;
+        header.file_size = file_size;
+        header.flags = 0;
+        header.file_name_length = filename.length();
+        header.compression_method = compression_method;
+        header.lastmodtime = lastmodtime;
+        header.lastmoddate = lastmoddate;
+        header.extra_field_len = 0;
+        if (output.properties.seekable) {
+            RETURN_IF_ERROR(output.Seek(file_header_offset, SEEK_SET));
+        }
+        RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header), sizeof(header)));
+        RETURN_IF_ERROR(output.Write(filename));
+
+        return STATUS_OK;
+    }
+
     header.crc32_cs = crc32_cs;
     header.compress_size = 0xFFFFFFFF;
     header.file_size = 0xFFFFFFFF;
@@ -942,6 +961,24 @@ AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
 AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream& output) {
     struct CDFileHeader header;
     struct Zip64FileHeaderExtensibleField zip64header;
+
+    if (file_size < 0xFFFFFFFF && local_header_offset < 0xFFFFFFFF) {
+        header.compression_method = compression_method;
+        header.crc32_cs = crc32_cs;
+        header.file_name_length = filename.length();
+        header.dostime = lastmodtime;
+        header.dosdate = lastmoddate;
+        header.file_size = file_size;
+        header.compress_size = compress_size;
+        header.relative_offset_local_header = local_header_offset;
+        header.extra_field_len = 0;
+
+        RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header),
+                                     sizeof(header)));
+        RETURN_IF_ERROR(output.Write(filename));
+
+        return STATUS_OK;
+    }
 
     header.compression_method = compression_method;
     header.crc32_cs = crc32_cs;
@@ -1053,6 +1090,11 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
             // Give the compressor more room.
             strm.next_out = reinterpret_cast<Bytef*>(c_buffer.get());
             strm.avail_out = AFF4_BUFF_SIZE;
+
+            // Report progress.
+            if (!progress->Report(stream.Tell())) {
+                return ABORTED;
+            }
         }
 
         // Give the compressor more room.
@@ -1091,7 +1133,13 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
                                      reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
                                      buffer.size());
 
+            RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END))
             RETURN_IF_ERROR(backing_store->Write(buffer.data(), buffer.size()));
+
+            // Report progress.
+            if (!progress->Report(stream.Tell())) {
+                return ABORTED;
+            }
         }
     }
 
