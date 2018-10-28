@@ -498,11 +498,24 @@ AFF4Status WinPmemImager::WriteMapObject_(
 // pagefile then any files that may be required.
 AFF4Status WinPmemImager::ImagePhysicalMemory() {
   AFF4Status res;
+  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
 
   // First ensure that the driver is loaded.
   res = InstallDriver();
   if (res != CONTINUE)
     return res;
+
+  std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
+
+  if (!aff4::hasEnding(output_path, ".aff4")) {
+      output_volume_backing_urn = URN::NewURNFromFilename(output_path);
+
+      if (format == "raw") {
+          return WriteRawFormat_(output_volume_backing_urn, output_volume_backing_urn);
+      } else if (format == "elf") {
+          return WriteElfFormat_(output_volume_backing_urn, output_volume_backing_urn);
+      }
+  }
 
   URN output_urn;
   res = GetOutputVolumeURN(&output_volume_urn);
@@ -534,8 +547,6 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
 
   if (information_stream->Write(DumpMemoryInfoToYaml(info)) < 0)
     return IO_ERROR;
-
-  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
 
   if (format == "map") {
     res = WriteMapObject_(map_urn, output_volume_urn);

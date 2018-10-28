@@ -41,6 +41,8 @@ class PmemImager: public BasicImager {
     virtual AFF4Status handle_pagefiles();
     virtual AFF4Status handle_compression();
 
+    virtual AFF4Status process_input();
+
     /**
      * Actually create the image of physical memory.
      *
