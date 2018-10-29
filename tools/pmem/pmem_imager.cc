@@ -290,8 +290,6 @@ AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
         // truncate them.
         resolver.Set(output_volume_backing_urn,
                      AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
-        resolver.Set(output_volume_backing_urn,
-                     AFF4_STREAM_WRITE_MODE, new XSDString("append"));
         resolver.logger->info(
             "Destination volume does not end with .aff4 - will use flat file {}.",
             output_volume_backing_urn);
