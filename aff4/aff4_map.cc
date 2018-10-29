@@ -125,8 +125,11 @@ std::string AFF4Map::Read(size_t length) {
 
         // The readptr is inside a range.
         URN target = targets[range.target_id];
-        size_t length_to_read_in_target = std::min(
-            length, (size_t)(range.map_end() - readptr));
+        size_t length_to_read_in_target = length;
+
+        if (range.map_end() - readptr <= SIZE_MAX)
+            length_to_read_in_target = std::min(
+                length, (size_t)(range.map_end() - readptr));
 
         aff4_off_t offset_in_target = range.target_offset + (
                                           readptr - range.map_offset);
