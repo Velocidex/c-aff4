@@ -3,7 +3,7 @@ Building for windows.
 
 The following instructions are for building windows binaries, on a
 Linux system. On Ubuntu systems one must install the mingw platform
-first (using apt-get install g++-mingw-w64 mingw-w64).
+first (using apt-get install g++-mingw-w64-i686).
 
 This installs several flavors of compilers. We need the posix version
 so you will need to switch via ubuntu's alternatives version:
@@ -29,12 +29,13 @@ cd ..
 apt-get source libraptor2-dev
 cd raptor2-2.0.14/
 ./configure --prefix=$PREFIX --enable-static --without-www LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" \
+    CFLAGS="-DRAPTOR_STATIC" CPPFLAGS="-DRAPTOR_STATIC"
     --host=i686-w64-mingw32 --enable-parsers="turtle ntriples" --enable-serializers="turtle ntriples"
 make -j4 install
 cd ..
 
 apt-get source libtclap-dev
-cd tclap-1.2.1/
+cd tclap-1.2.2/
 ./configure --prefix=$PREFIX --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --host=i686-w64-mingw32 \
     CXXFLAGS="-static -mnop-fun-dllimport -DPCRE_STATIC"
 make -j4 install
@@ -78,8 +79,9 @@ cd uriparser-0.8.4/
 make -j4 install
 cd ..
 
-apt-get source libyaml-cpp-dev
-cd yaml-cpp-0.5.2/
+# We need the latest yaml-cpp
+git clone https://github.com/jbeder/yaml-cpp.git
+cd yaml-cpp
 echo "
 # the name of the target operating system
 SET(CMAKE_SYSTEM_NAME Windows)
@@ -100,18 +102,19 @@ set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
 set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 " > Toolchain-mingw32.cmake
 
-cmake -DCMAKE_TOOLCHAIN_FILE=Toolchain-mingw32.cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX .
+cmake -DCMAKE_TOOLCHAIN_FILE=Toolchain-mingw32.cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX . -DYAML_CPP_BUILD_TESTS=no
 make install -j4
 cd ..
 
-git clone https://github.com/gabime/spdlog.git
-cd spdlog/
+wget https://github.com/gabime/spdlog/archive/v0.17.0.tar.gz
+tar -xvzf v0.17.0.tar.gz
+cd spdlog-0.17.0/
 cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX . && make install -j4
 cd ..
 
 cd aff4
-./configure --prefix=$PREFIX --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --host=i686-w64-mingw32 \
-            CXXFLAGS="-static -mnop-fun-dllimport -I$PREFIX/include/" --enable-static-binaries
+./configure --prefix=$PREFIX --disable-shared --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --host=i686-w64-mingw32 \
+            CXXFLAGS="-static -mnop-fun-dllimport -I$PREFIX/include/ -DRAPTOR_STATIC" --enable-static-binaries
 make -j4 install
 cd ..
 
