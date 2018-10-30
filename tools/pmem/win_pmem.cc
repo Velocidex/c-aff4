@@ -528,9 +528,6 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
   AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
       output_volume_urn);
 
-  // This is a physical memory image.
-  resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
-
   // Write the information into the image.
   AFF4ScopedPtr<AFF4Stream> information_stream = volume->CreateMember(
       map_urn.Append("information.yaml"));
@@ -559,6 +556,9 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
   if (res != STATUS_OK) {
     return res;
   }
+
+  // This is a physical memory image.
+  resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
 
   actions_run.insert("memory");
 
