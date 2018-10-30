@@ -145,9 +145,9 @@ std::string URN::Path() const {
 std::string URN::Domain() const {
     if (Scheme() == "aff4") {
         auto components = split(
-            value.substr(strlen(AFF4_PREFIX)), PATH_SEP);
+            value.substr(strlen(AFF4_PREFIX)), '/');
         if (components.size() > 0) {
-            return components[1];
+            return components[0];
         }
     }
 
