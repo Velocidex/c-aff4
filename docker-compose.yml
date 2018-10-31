@@ -1,0 +1,9 @@
+version: '3.4'
+services:
+        builder-win32:
+                build:
+                        context: ./docker
+                        dockerfile: Dockerfile
+                        target: aff4-builder-win32
+                volumes:
+                        - ./:/src

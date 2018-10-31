@@ -1,0 +1,39 @@
+Tested on:
+- Windows 10
+- Docker version 18.03.0-ce, build 0520e24302
+- docker-compose version 1.20.1, build 5d8c71b2
+
+Notes:
+- Currently only supports building win32 targets.
+
+Building:
+- Install Docker Toolbox for Windows (https://docs.docker.com/toolbox/toolbox_install_windows/)
+  - Though deprecated in favor of "Docker CE Desktop for Windows, Docker Toolbox for Windows will run
+    on a Windows VM. Docker CE Desktop for Windows requires Hyper-V, which does not work well nested. 
+    It's likely that Docker CE Desktop for Windows will work just fine, if you can actually run it.
+- Launch "Docker Quickstart Terminal". A Mingw32 bash terminal will open up.
+- Within the terminal, change to the root directory of the c-aff4 source tree.
+- Run "docker-compose.exe build"
+  - This builds the docker image, which contains all of the dependencies.
+- To run configure step: "docker-compose.exe run --rm builder-win32 configure"
+  - Configure script is defined in docker/entrypoint.sh
+- To build: "docker-compose.exe run --rm builder-win32 build"
+  - stripped binaries can be found in build/win32
+  - Un-stripped binaries (with debugging symbols intact) can be found in the source tree (ex: tools/pmem/winpmem.exe)
+- To enter the container: "docker-compose.exe run --rm builder-win32 bash"
+
+Details:
+- The docker file definition, docker/Dockerfile, defines two images:
+  - aff4-builder-base (based off of ubuntu:18.04)
+    - Installs all of the basic build tools and dependency sources.
+    - Dependency sources are placed into /aff4-deps-src
+    - Defines an entrypoint script (docker/entrypoint.sh) that allows c-aff4 to be built easily.
+  - aff4-builder-win32 (based off of aff4-builder-base)
+    - Installs mingw32 build toolchain
+    - Defines many windows-specific environment variables
+    - Builds all of the dependencies contained in /aff4-deps-src, installing them to /aff4-deps. All of the dependencies are statically-linked.
+  - we should be able to easily create an "aff4-builder-linux" image, as well.
+- docker-compose is used to make the orchestrating of the images a bit easier.
+- When you execute "docker-compose run builder-win32 ...", the root of the c-aff4 source tree is mounted in the image as "/src". 
+- When building, the compiled binaries sit within your source tree just as though you had built them locally.
+- This means that the cycle of editing code, building, and testing becomes much shorter.
