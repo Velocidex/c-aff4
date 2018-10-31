@@ -115,7 +115,7 @@ cd ..
 cd aff4
 ./configure --prefix=$PREFIX --disable-shared --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --host=i686-w64-mingw32 \
             CXXFLAGS="-static -mnop-fun-dllimport -I$PREFIX/include/ -DRAPTOR_STATIC" --enable-static-binaries
-make -j4 install
+make -j4 install-strip
 cd ..
 
 On very old versions of windows the binary might fail with a message

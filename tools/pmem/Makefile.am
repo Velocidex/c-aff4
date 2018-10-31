@@ -42,7 +42,6 @@ winpmem_LDADD = -lrpcrt4 -lshlwapi $(top_srcdir)/aff4/libaff4.la -lyaml-cpp
 
 all-local: winpmem$(EXEEXT)
 	@echo Appending pmem AFF4 drivers to binary.
-	$(STRIP) winpmem$(EXEEXT)
 	cat resources/pmem.aff4 >> winpmem$(EXEEXT)
 endif
 
