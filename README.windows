@@ -29,6 +29,7 @@ cd ..
 apt-get source libraptor2-dev
 cd raptor2-2.0.14/
 ./configure --prefix=$PREFIX --enable-static --without-www LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" \
+    CFLAGS="-DRAPTOR_STATIC" CPPFLAGS="-DRAPTOR_STATIC"
     --host=i686-w64-mingw32 --enable-parsers="turtle ntriples" --enable-serializers="turtle ntriples"
 make -j4 install
 cd ..
@@ -112,8 +113,8 @@ cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX . && make install -j4
 cd ..
 
 cd aff4
-./configure --prefix=$PREFIX --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --host=i686-w64-mingw32 \
-            CXXFLAGS="-static -mnop-fun-dllimport -I$PREFIX/include/" --enable-static-binaries
+./configure --prefix=$PREFIX --disable-shared --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --host=i686-w64-mingw32 \
+            CXXFLAGS="-static -mnop-fun-dllimport -I$PREFIX/include/ -DRAPTOR_STATIC" --enable-static-binaries
 make -j4 install
 cd ..
 
