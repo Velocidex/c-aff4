@@ -64,6 +64,10 @@ class AFF4Map: public AFF4Stream {
     std::map<std::string, int> target_idx_map;
     std::map<aff4_off_t, Range> map;
 
+    // Specifies the fallback read-size to use when Read encounters
+    // an unreadable region.
+    size_t max_reread_size = 4096;
+
     explicit AFF4Map(DataStore* resolver): AFF4Stream(resolver) {}
 
     static AFF4ScopedPtr<AFF4Map> NewAFF4Map(

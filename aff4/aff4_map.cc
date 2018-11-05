@@ -169,7 +169,7 @@ std::string AFF4Map::Read(size_t length) {
 
                 size_t reread_total = 0;
                 while (reread_total < length_to_read_in_target) {
-                    size_t reread_want = std::min((size_t)(length_to_read_in_target - reread_total), (size_t)4096); // should be PAGE_SIZE
+                    size_t reread_want = std::min((size_t)(length_to_read_in_target - reread_total), max_reread_size);
                     int reread_actual = target_stream->ReadIntoBuffer((void *)buffer, reread_want);
                     if (reread_actual < reread_want) {
                         resolver->logger->info(
