@@ -152,11 +152,39 @@ std::string AFF4Map::Read(size_t length) {
         {
             std::string data = target_stream->Read(length_to_read_in_target);
             if (data.size() < length_to_read_in_target) {
-                resolver->logger->error(
-                    "Map target {} can not produced required {} bytes. Null padding "
-                    "{} bytes!", target_stream->urn.SerializeToString(),
-                    length_to_read_in_target, length_to_read_in_target - data.size());
+                // Failed to read some portion of memory. On Windows platforms, this is usually
+                // due to Virtual Secure Mode (VSM) memory. Re-read memory in smaller units,
+                // while leaving the unreadable regions null-padded.
+                resolver->logger->info(
+                    "Map target {} can not produced required {} bytes at offset 0x{:x}. Got {} bytes. Will re-read one page at a time.",
+                    target_stream->urn.SerializeToString(),
+                    length_to_read_in_target, offset_in_target, data.size());
+
+                // Reset target_strem back to original position, and then re-read one page at a time.
+                target_stream->Seek(offset_in_target, SEEK_SET);
+
+                // Grow the data buffer to the expected size, filled to the end with null bytes.
                 data.resize(length_to_read_in_target, 0);
+                const char* buffer = data.data();
+
+                size_t reread_total = 0;
+                while (reread_total < length_to_read_in_target) {
+                    size_t reread_want = std::min((size_t)(length_to_read_in_target - reread_total), max_reread_size);
+                    int reread_actual = target_stream->ReadIntoBuffer((void *)buffer, reread_want);
+                    if (reread_actual < reread_want) {
+                        resolver->logger->info(
+                            "Map target {}: Read error starting at offset 0x{:x} of {} bytes. Expected {} bytes. Null padding.",
+                            target_stream->urn.SerializeToString(),
+                            offset_in_target+reread_total,
+                            reread_actual, reread_want);
+                    }
+                    reread_total += reread_want;
+                    // Advance the pointer in the buffer.
+                    buffer += reread_want;
+
+                    // ensure that we seek to the correct position in target_stream
+                    target_stream->Seek(offset_in_target+reread_total, SEEK_SET);
+                }
             };
             result += data;
         }

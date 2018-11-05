@@ -200,7 +200,7 @@ std::string FileBackedObject::Read(size_t length) {
     }
 
     if (!ReadFile(fd, result.get(), buffer_size, &buffer_size, nullptr)) {
-        resolver->logger->error("Reading failed at {:x}: {}", readptr,
+        resolver->logger->warn("Reading failed at {:x}: {}", readptr,
                                 GetLastErrorMessage());
 
         return "";
