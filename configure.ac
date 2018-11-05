@@ -72,6 +72,24 @@ AC_ARG_WITH([yaml], [AS_HELP_STRING([--with-yaml], [Enable YAML support (default
 AC_ARG_ENABLE([static-binaries],
    AS_HELP_STRING([--enable-static-binaries], [Build completely static binaries]))
 
+has_compiler_strip_flag=no
+AX_CHECK_COMPILE_FLAG([-s],
+    [has_compiler_strip_flag=yes])
+
+AC_ARG_ENABLE([strip],
+   AS_HELP_STRING([--disable-strip], [Disable the stripping of symbols from binaries]))
+test no = "$enable_strip" || enable_strip=yes
+  
+if test "x$enable_strip" = "xyes"; then
+  if test "x$has_compiler_strip_flag" = "xyes"; then
+    CXXFLAGS="$CXXFLAGS -s"
+  fi
+else
+  # Disable strip binary
+  AC_SUBST(STRIP,/bin/true)
+fi
+
+
 # Check for optional libraries
 AS_IF([test "x$WITH_YAML" = "xyes"],
   [PKG_CHECK_MODULES([YAML_CPP], [yaml-cpp],

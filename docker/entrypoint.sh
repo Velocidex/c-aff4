@@ -1,18 +1,25 @@
 #!/bin/bash
 
+export EXTRA_CXXFLAGS=
+export EXTRA_LDFLAGS=
+export EXTRA_CONFIG_FLAGS=
+
 function do_configure() {
+    ./autogen.sh
     ./configure --prefix="${AFF4_BUILD_OUTPUT_PATH}" --disable-shared --enable-static --enable-static-binaries \
-        LDFLAGS="${LDFLAGS}" \
-        CXXFLAGS="${CXXFLAGS} -g3 -static" \
+        LDFLAGS="${LDFLAGS} ${EXTRA_LDFLAGS}" \
+        CXXFLAGS="${CXXFLAGS} ${EXTRA_CXXFLAGS} -static" \
+        ${EXTRA_CONFIG_FLAGS} \
         ${AUTOCONF_HOSTFLAG}
+    make clean
 }
 
 function do_build() {
-    make -j4 install-strip
+    make -j4 install
 }
 
 function do_help() {
-    echo Valid commands are 'configure', 'build', and 'help'.
+    echo Valid commands are 'configure', 'configure-debug', 'build', and 'help'.
     echo If no command is specified, 'configure' and then 'build' will be run.
     echo Any other commands will be executed by the shell.
     exit 0
@@ -30,6 +37,15 @@ if [ "$#" -eq 0 ]; then
     exit 0
 elif [ "$#" -eq 1 ]; then
     if [ "$1" == "configure" ]; then
+        # Disable debugging symbols completely
+        export EXTRA_CXXFLAGS="-g0 -O2"
+        export EXTRA_LDFLAGS="-g0"
+        do_configure
+        exit 0
+    elif [ "$1" == "configure-debug" ]; then
+        export EXTRA_CXXFLAGS="-ggdb3 -O0"
+        export EXTRA_LDFLAGS="-ggdb3"
+        export EXTRA_CONFIG_FLAGS="--disable-strip"
         do_configure
         exit 0
     elif [ "$1" == "build" ]; then

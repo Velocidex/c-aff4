@@ -17,6 +17,7 @@ Building:
   - This builds the docker image, which contains all of the dependencies.
 - To run configure step: "docker-compose.exe run --rm builder-win32 configure"
   - Configure script is defined in docker/entrypoint.sh
+  - Alternatively, if you'd like to create a debug build: "docker-compose.exe run --rm builder-win32 configure-debug"
 - To build: "docker-compose.exe run --rm builder-win32 build"
   - stripped binaries can be found in build/win32
   - Un-stripped binaries (with debugging symbols intact) can be found in the source tree (ex: tools/pmem/winpmem.exe)

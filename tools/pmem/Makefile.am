@@ -35,7 +35,7 @@ if WINDOWS
 bin_PROGRAMS = winpmem
 
 winpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
-winpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
+winpmem_CXXFLAGS = -std=c++11 -Wall
 winpmem_SOURCES = pmem_imager.cc win_pmem.cc
 winpmem_LDADD = -lrpcrt4 -lshlwapi $(top_srcdir)/aff4/libaff4.la -lyaml-cpp
 
@@ -48,7 +48,7 @@ endif
 if LINUX
 bin_PROGRAMS = linpmem
 linpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
-linpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
+linpmem_CXXFLAGS = -std=c++11 -Wall
 linpmem_SOURCES = pmem_imager.cc linux_pmem.cc
 linpmem_LDADD = $(top_srcdir)/aff4/libaff4.la
 all-local: linpmem
@@ -58,7 +58,7 @@ if OSX
 bin_PROGRAMS = osxpmem
 
 osxpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
-osxpmem_CXXFLAGS = -std=c++11 -g -Wall -O0
+osxpmem_CXXFLAGS = -std=c++11 -Wall
 osxpmem_SOURCES = pmem_imager.cc osxpmem.cc
 osxpmem_LDADD = $(top_srcdir)/aff4/libaff4.la -lyaml-cpp
 
