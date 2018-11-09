@@ -75,14 +75,28 @@ int AFF4_open(char* filename) {
             return -1;
         }
     }
-    auto image = resolver->AFF4FactoryOpen<aff4::AFF4StdImage>(*(images.begin()));
-    if (!image) {
-        resolver->Close(zip);
-        errno = ENOENT;
-        return -1;
+
+    // Sort URNs so that we have some sort of determinism
+    std::vector<aff4::URN> sorted_images{images.begin(), images.end()};
+    std::sort(sorted_images.begin(), sorted_images.end());
+
+    // Make sure we only load an image that is stored in the filename provided
+    for (const auto & image : sorted_images) {
+        if (!resolver->HasURNWithAttributeAndValue(image, aff4::AFF4_STORED, zip->urn)) {
+            continue;
+        }
+
+        if(!resolver->AFF4FactoryOpen<aff4::AFF4StdImage>(image)) {
+            continue;
+        }
+
+        (*get_handles())[handle] = image;
+        return handle;
     }
-    (*get_handles())[handle] = *(images.begin());
-    return handle;
+
+    resolver->Close(zip);
+    errno = ENOENT;
+    return -1;
 }
 
 uint64_t AFF4_object_size(int handle) {
