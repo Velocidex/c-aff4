@@ -23,7 +23,6 @@
  */
 #include "aff4/config.h"
 
-#include <pcre++.h>
 #include <sstream>
 #include <iomanip>
 #include "aff4/zip.h"
