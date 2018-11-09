@@ -758,7 +758,7 @@ std::string AFF4Image::Read(size_t length) {
     }
 
     result.resize(length);
-    readptr = std::min(readptr + length, (aff4_off_t)Size());
+    readptr = std::min((aff4_off_t)(readptr + length), Size());
 
     return result;
 }
