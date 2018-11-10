@@ -61,6 +61,13 @@ AFF4Status PmemImager::ParseArgs() {
       return INVALID_INPUT;
   }
 
+  volume_type = GetArg<TCLAP::ValueArg<std::string>>(
+      "volume_format")->getValue();
+  if (result == CONTINUE && volume_type != "aff4" && volume_type != "raw") {
+      resolver.logger->error("Volume format {} not supported.", volume_type);
+      return INVALID_INPUT;
+  }
+
   return result;
 }
 
@@ -105,7 +112,8 @@ AFF4Status PmemImager::handle_compression() {
         "compression")->getValue();
 
   if (format == "elf" || format == "raw") {
-    std::cout << "Output format is " << format << " - compression disabled.\n";
+    resolver.logger->info(
+        "Output format is {} - compression disabled.", format );
     compression = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
 
     return CONTINUE;
@@ -284,14 +292,22 @@ AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
     const URN &output_urn, const URN &volume_urn) {
 
     // Raw containers should just be flat files.
-    if (!aff4::hasEnding(output_volume_backing_urn.SerializeToString(), ".aff4")) {
+    if (volume_type == "raw") {
+
+        std::string output_path = GetArg<TCLAP::ValueArg<std::string>>(
+            "output")->getValue();
+
+        if (output_path == "-") {
+            output_volume_backing_urn = URN("builtin://stdout");
+        }
 
         // Flat files can not store more than one stream so we must
         // truncate them.
         resolver.Set(output_volume_backing_urn,
                      AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+
         resolver.logger->info(
-            "Destination volume does not end with .aff4 - will use flat file {}.",
+            "Destination volume will be a flat file {}.",
             output_volume_backing_urn);
 
         return resolver.AFF4FactoryOpen<AFF4Stream>(output_volume_backing_urn);
@@ -318,9 +334,9 @@ AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
 
 
 AFF4Status PmemImager::process_input() {
-    if (!aff4::hasEnding(output_volume_backing_urn.SerializeToString(), ".aff4")) {
+    if (volume_type != "aff4") {
         resolver.logger->info(
-            "Output volume is flat file. Can not capture additional streams. "
+            "Output volume is not an AFF4 file. Can not capture additional streams. "
             "Choose an AFF4 volume to capture additional streams.");
         return STATUS_OK;
     }

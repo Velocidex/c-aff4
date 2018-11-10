@@ -29,7 +29,7 @@ cd ..
 apt-get source libraptor2-dev
 cd raptor2-2.0.14/
 ./configure --prefix=$PREFIX --enable-static --without-www LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" \
-    CFLAGS="-DRAPTOR_STATIC" CPPFLAGS="-DRAPTOR_STATIC"
+    CFLAGS="-DRAPTOR_STATIC" CPPFLAGS="-DRAPTOR_STATIC" \
     --host=i686-w64-mingw32 --enable-parsers="turtle ntriples" --enable-serializers="turtle ntriples"
 make -j4 install
 cd ..

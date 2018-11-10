@@ -16,7 +16,7 @@ specific language governing permissions and limitations under the License.
 #ifndef TOOLS_PMEM_PMEM_H_
 #define TOOLS_PMEM_PMEM_H_
 
-#define PMEM_VERSION "3.1rc3";
+#define PMEM_VERSION "3.1rc9";
 
 #include <vector>
 #include "aff4/libaff4.h"
@@ -29,6 +29,7 @@ class PmemImager: public BasicImager {
   // A list of files to be removed when we exit.
     std::vector<URN> to_be_removed;
     std::vector<std::string> pagefiles;
+    std::string volume_type;
 
     virtual std::string GetName() {
         return "The Pmem physical memory imager. Copyright 2014 Google Inc.";
@@ -83,6 +84,13 @@ class PmemImager: public BasicImager {
                    "If this option is used together with the --export option it "
                    "specifies the output format of the exported stream.",
                    false, "map", "map, elf, raw"));
+
+        AddArg(new TCLAP::ValueArg<std::string>(
+                   "", "volume_format", "Specify the output format type:\n"
+                   "  aff4: The output will be an AFF4 volume\n"
+                   "  raw: The output will be a raw file. NOTE: Only one "
+                   "stream can be written in this case.\n",
+                   false, "aff4", "aff4, raw"));
 
         AddArg(new TCLAP::SwitchArg(
                    "m", "acquire-memory", "Normally pmem will only acquire memory if "

@@ -127,6 +127,10 @@ std::string URN::Scheme() const {
         return "file";
     }
 
+    if (value.compare(0, strlen(BUILTIN_PREFIX), BUILTIN_PREFIX) == 0) {
+        return "builtin";
+    }
+
     return "";
 }
 
@@ -143,9 +147,16 @@ std::string URN::Path() const {
 }
 
 std::string URN::Domain() const {
-    if (Scheme() == "aff4") {
+    if (Scheme() == "aff4" ) {
         auto components = split(
             value.substr(strlen(AFF4_PREFIX)), '/');
+        if (components.size() > 0) {
+            return components[0];
+        }
+    }
+    if (Scheme() == "builtin" ) {
+        auto components = split(
+            value.substr(strlen(BUILTIN_PREFIX)), '/');
         if (components.size() > 0) {
             return components[0];
         }
