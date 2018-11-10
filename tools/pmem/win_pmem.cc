@@ -171,7 +171,8 @@ AFF4Status WinPmemImager::GetMemoryInfo(PmemMemoryInfo *info) {
   return STATUS_OK;
 }
 
-static void print_memory_info_(const PmemMemoryInfo &info) {
+static void print_memory_info_(
+    DataStore *resolver, const PmemMemoryInfo &info) {
   StringIO output_stream;
 
   output_stream.sprintf("CR3: 0x%010llX\n %d memory ranges:\n", info.CR3,
@@ -182,7 +183,7 @@ static void print_memory_info_(const PmemMemoryInfo &info) {
                           info.Runs[i].start, info.Runs[i].length);
   }
 
-  std::cout << output_stream.buffer.c_str();
+  resolver->logger->info(output_stream.buffer.c_str());
 }
 
 
@@ -296,7 +297,7 @@ AFF4Status WinPmemImager::ImagePageFile() {
       return res;
     }
 
-    std::cout << "Preparing to run " << command_line.c_str() << "\n";
+    resolver.logger->info("Preparing to run {}", command_line.c_str());
     std::string buffer(BUFF_SIZE, 0);
     URN volume_urn;
     AFF4Status res = GetOutputVolumeURN(&volume_urn);
@@ -306,8 +307,8 @@ AFF4Status WinPmemImager::ImagePageFile() {
     URN pagefile_urn = volume_urn.Append(
         URN::NewURNFromFilename(pagefile_path).Path());
 
-    std::cout << "Output will go to " <<
-        pagefile_urn.SerializeToString() << "\n";
+    resolver.logger->info("Output will go to {}",
+                          pagefile_urn.SerializeToString());
 
     AFF4ScopedPtr<AFF4Stream> output_stream = GetWritableStream_(
         pagefile_urn, volume_urn);
@@ -341,9 +342,8 @@ AFF4Status WinPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
   for (unsigned int i = 0; i < info.NumberOfRuns; i++) {
     PHYSICAL_MEMORY_RANGE range = info.Runs[i];
 
-    std::cout << "Dumping Range " << i << " (Starts at " << std::hex <<
-        range.start << ", length " << range.length << ")\n";
-
+    resolver.logger->info("Dumping Range {} (Starts at {:#08x}, length {:#08x}",
+                          i, range.start, range.length);
     map->AddRange(range.start, range.start, range.length, device_urn);
     *length += range.length;
   }
@@ -408,8 +408,8 @@ AFF4Status WinPmemImager::WriteMapObject_(
   for (unsigned int i = 0; i < info.NumberOfRuns; i++) {
     PHYSICAL_MEMORY_RANGE range = info.Runs[i];
 
-    std::cout << "Dumping Range " << i << " (Starts at " << std::hex <<
-        range.start << ", length " << range.length << ")\n";
+    resolver.logger->info("Dumping Range {} (Starts at {:#08x}, length {:#08x}",
+                          i, range.start, range.length);
 
     progress.start = range.start;
     progress.last_offset = range.start;
@@ -507,14 +507,20 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
 
   std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
 
-  if (!aff4::hasEnding(output_path, ".aff4")) {
+  // When the output volume is raw - we image in raw or elf format.
+  if (volume_type == "raw") {
       output_volume_backing_urn = URN::NewURNFromFilename(output_path);
+      if (output_path == "-") {
+          output_volume_backing_urn = URN("builtin://stdout");
+      }
 
-      if (format == "raw") {
-          return WriteRawFormat_(output_volume_backing_urn, output_volume_backing_urn);
-      } else if (format == "elf") {
+      resolver.Set(output_volume_backing_urn, AFF4_STREAM_WRITE_MODE,
+                   new XSDString("truncate"));
+
+      if (format == "elf") {
           return WriteElfFormat_(output_volume_backing_urn, output_volume_backing_urn);
       }
+      return WriteRawFormat_(output_volume_backing_urn, output_volume_backing_urn);
   }
 
   URN output_urn;
@@ -747,7 +753,7 @@ AFF4Status WinPmemImager::InstallDriver() {
   if (res != STATUS_OK)
     return res;
 
-  print_memory_info_(info);
+  print_memory_info_(&resolver, info);
 
   actions_run.insert("load-driver");
   return CONTINUE;
@@ -771,7 +777,15 @@ AFF4Status WinPmemImager::UninstallDriver() {
 
   DeleteService(service);
   CloseServiceHandle(service);
-  std::cout << "Driver Unloaded.\n";
+  CloseServiceHandle(scm);
+  resolver.logger->info("Driver Unloaded.");
+
+  // Close the handle to the device so we can remove it.
+  AFF4ScopedPtr<AFF4Stream> device = resolver.AFF4FactoryOpen<AFF4Stream>(
+      device_urn);
+  if (device.get()) {
+      resolver.Close(device);
+  }
 
   actions_run.insert("unload-driver");
   return CONTINUE;
@@ -853,8 +867,9 @@ WinPmemImager::~WinPmemImager() {
   // it to be left behind.
   if (driver_installed_) {
     if (Get("load-driver")->isSet()) {
-      std::cout << "Memory access driver left loaded since you specified "
-          "the -l flag.\n";
+      resolver.logger->warn(
+          "Memory access driver left loaded since you specified "
+          "the -l flag.");
     } else {
       UninstallDriver();
     }

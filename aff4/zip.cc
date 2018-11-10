@@ -915,7 +915,7 @@ AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
     struct ZipFileHeader header;
     struct Zip64FileHeaderExtensibleField zip64header;
 
-    if (file_size < 0xFFFFFFFF) {
+    if (0 && file_size < 0xFFFFFFFF) {
         header.crc32_cs = crc32_cs;
         header.compress_size = compress_size;
         header.file_size = file_size;
@@ -962,7 +962,7 @@ AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream& output) {
     struct CDFileHeader header;
     struct Zip64FileHeaderExtensibleField zip64header;
 
-    if (file_size < 0xFFFFFFFF && local_header_offset < 0xFFFFFFFF) {
+    if (0 && file_size < 0xFFFFFFFF && local_header_offset < 0xFFFFFFFF) {
         header.compression_method = compression_method;
         header.crc32_cs = crc32_cs;
         header.file_name_length = filename.length();

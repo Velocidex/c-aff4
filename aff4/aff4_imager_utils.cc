@@ -592,7 +592,7 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN* volume_urn) {
 
     if (!output_stream) {
         resolver.logger->error("Failed to create output file: {}: {}",
-                               output_path,
+                               output_volume_backing_urn,
                                GetLastErrorMessage());
 
         return IO_ERROR;

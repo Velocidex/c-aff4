@@ -96,7 +96,8 @@ class AFF4BuiltInStreams : public AFF4Stream {
     explicit AFF4BuiltInStreams(DataStore *resolver): AFF4Stream(resolver) {}
     std::string Read(size_t length) override;
     AFF4Status Write(const char* data, size_t length) override;
-     AFF4Status LoadFromURN() override;
+    AFF4Status Seek(aff4_off_t offset, int whence) override;
+    AFF4Status LoadFromURN() override;
     AFF4Status Truncate() override;
 
  private:

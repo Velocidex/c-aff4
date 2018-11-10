@@ -20,6 +20,7 @@ LEXICON_DEFINE(AFF4_LEGACY_NAMESPACE, "http://afflib.org/2009/aff4#");
  */
 LEXICON_DEFINE(AFF4_PREFIX, "aff4://");
 LEXICON_DEFINE(FILE_PREFIX, "file://");
+LEXICON_DEFINE(BUILTIN_PREFIX, "builtin://");
 
 // Attributes in this namespace will never be written to persistant
 // storage. They are simply used as a way for storing metadata about an AFF4

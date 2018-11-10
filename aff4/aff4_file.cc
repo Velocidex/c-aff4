@@ -249,8 +249,8 @@ AFF4Status FileBackedObject::Write(const char* data, size_t length) {
 
     DWORD tmp = length;
     while (!WriteFile(fd, data, tmp, &tmp, nullptr)) {
-        std::cout << "Unable to write to disk. Is it full? "
-                  "Please try to free space to continue.\r";
+        resolver->logger->warn("Unable to write to disk. Is it full? "
+                  "Please try to free space to continue.");
         Sleep(1000);
     }
 
@@ -505,6 +505,18 @@ AFF4Status AFF4BuiltInStreams::Truncate() {
     return IO_ERROR;
 }
 
+
+AFF4Status AFF4BuiltInStreams::Seek(aff4_off_t offset, int whence) {
+    if (whence == SEEK_END && offset == 0) {
+        return STATUS_OK;
+    }
+
+    if (whence == SEEK_SET && offset == 0) {
+        return STATUS_OK;
+    }
+
+    return IO_ERROR;
+}
 
 AFF4Registrar<AFF4BuiltInStreams> builtin("builtin");
 
