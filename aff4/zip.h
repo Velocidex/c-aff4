@@ -73,7 +73,7 @@ struct CDFileHeader {
 struct ZipFileHeader {
     uint32_t magic = 0x4034b50;
     uint16_t version = 0x14;
-    uint16_t flags = 0x8;
+    uint16_t flags = 0x8;   // We ALWAYS write a data descriptor header.
     uint16_t compression_method;
     uint16_t lastmodtime;
     uint16_t lastmoddate;
@@ -84,6 +84,12 @@ struct ZipFileHeader {
     uint16_t extra_field_len;
 } __attribute__((packed));
 
+struct Zip64DataDescriptorHeader {
+    uint32_t magic = 0x08074b50;
+    uint32_t crc32_cs;
+    uint64_t compress_size;
+    uint64_t file_size;
+} __attribute__((packed));
 
 struct Zip64FileHeaderExtensibleField {
     uint16_t header_id = 1;
@@ -213,6 +219,7 @@ class ZipInfo {
 
     AFF4Status WriteFileHeader(AFF4Stream& output);
     AFF4Status WriteCDFileHeader(AFF4Stream& output);
+    AFF4Status WriteDataDescriptor(AFF4Stream& output);
 };
 
 /**

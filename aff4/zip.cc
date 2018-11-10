@@ -920,28 +920,10 @@ AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
     struct ZipFileHeader header;
     struct Zip64FileHeaderExtensibleField zip64header;
 
-    if (0 && file_size < 0xFFFFFFFF) {
-        header.crc32_cs = crc32_cs;
-        header.compress_size = compress_size;
-        header.file_size = file_size;
-        header.flags = 0;
-        header.file_name_length = filename.length();
-        header.compression_method = compression_method;
-        header.lastmodtime = lastmodtime;
-        header.lastmoddate = lastmoddate;
-        header.extra_field_len = 0;
-        if (output.properties.seekable) {
-            RETURN_IF_ERROR(output.Seek(file_header_offset, SEEK_SET));
-        }
-        RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header), sizeof(header)));
-        RETURN_IF_ERROR(output.Write(filename));
-
-        return STATUS_OK;
-    }
-
-    header.crc32_cs = crc32_cs;
-    header.compress_size = 0xFFFFFFFF;
-    header.file_size = 0xFFFFFFFF;
+    // Set these to 0 because we will add them in the DataDescriptorHeader.
+    header.crc32_cs = 0;
+    header.compress_size = 0;
+    header.file_size = 0;
     header.file_name_length = filename.length();
     header.compression_method = compression_method;
     header.lastmodtime = lastmodtime;
@@ -963,27 +945,21 @@ AFF4Status ZipInfo::WriteFileHeader(AFF4Stream& output) {
     return STATUS_OK;
 }
 
+AFF4Status ZipInfo::WriteDataDescriptor(AFF4Stream& output) {
+    struct Zip64DataDescriptorHeader header;
+    header.crc32_cs = crc32_cs;
+    header.compress_size = compress_size;
+    header.file_size = file_size;
+
+    RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header),
+                                 sizeof(header)));
+
+    return STATUS_OK;
+}
+
 AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream& output) {
     struct CDFileHeader header;
     struct Zip64FileHeaderExtensibleField zip64header;
-
-    if (0 && file_size < 0xFFFFFFFF && local_header_offset < 0xFFFFFFFF) {
-        header.compression_method = compression_method;
-        header.crc32_cs = crc32_cs;
-        header.file_name_length = filename.length();
-        header.dostime = lastmodtime;
-        header.dosdate = lastmoddate;
-        header.file_size = file_size;
-        header.compress_size = compress_size;
-        header.relative_offset_local_header = local_header_offset;
-        header.extra_field_len = 0;
-
-        RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header),
-                                     sizeof(header)));
-        RETURN_IF_ERROR(output.Write(filename));
-
-        return STATUS_OK;
-    }
 
     header.compression_method = compression_method;
     header.crc32_cs = crc32_cs;
@@ -1030,8 +1006,10 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
         return IO_ERROR;
     }
 
+    bool is_backing_store_seekable = backing_store->properties.seekable;
+
     // Append member at the end of the file.
-    if (backing_store->properties.seekable) {
+    if (is_backing_store_seekable) {
         RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
     }
 
@@ -1044,12 +1022,13 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
     zip_info->filename = member_name_for_urn(member_urn, urn, true);
     zip_info->local_header_offset = backing_store->Tell() - global_offset;
 
-    // For now we do not support streamed writing so we need to seek back
-    // to this position later with an updated crc32.
-    RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
-
+    // For now we only support ZIP_DEFLATE on seekable files. Ignore
+    // requested method if we write on unseekable backing store.
     if (compression_method == AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE) {
         zip_info->compression_method = ZIP_DEFLATE;
+
+        RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
+        RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
 
         z_stream strm;
 
@@ -1121,9 +1100,14 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
 
         deflateEnd(&strm);
 
+        RETURN_IF_ERROR(zip_info->WriteDataDescriptor(*backing_store));
+
         // Compression method not known - ignore and store uncompressed.
     } else {
         zip_info->compression_method = ZIP_STORED;
+
+        RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
+        RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
 
         while (1) {
             std::string buffer(stream.Read(AFF4_BUFF_SIZE));
@@ -1134,11 +1118,10 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
             zip_info->compress_size += buffer.size();
             zip_info->file_size += buffer.size();
             zip_info->crc32_cs = crc32(
-                                     zip_info->crc32_cs,
-                                     reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
-                                     buffer.size());
+                zip_info->crc32_cs,
+                reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
+                buffer.size());
 
-            RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END))
             RETURN_IF_ERROR(backing_store->Write(buffer.data(), buffer.size()));
 
             // Report progress.
@@ -1146,10 +1129,9 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
                 return ABORTED;
             }
         }
-    }
 
-    // Update the local file header now that CRC32 is calculated.
-    RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
+        RETURN_IF_ERROR(zip_info->WriteDataDescriptor(*backing_store));
+    }
 
     members[zip_info->filename] = std::move(zip_info);
 

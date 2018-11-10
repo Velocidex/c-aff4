@@ -396,12 +396,7 @@ AFF4Status BasicImager::process_input() {
                 }
 
                 // If the underlying stream supports compression, lets do that.
-                image_stream->compression_method = compression;
-
-                // We only support deflate compression on zip segments.
-                if (compression != AFF4_IMAGE_COMPRESSION_ENUM_STORED) {
-                    image_stream->compression_method = AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE;
-                }
+                image_stream->compression_method = AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE;
 
                 // Copy the input stream to the output stream.
                 ProgressContext progress(&resolver);
