@@ -17,7 +17,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4/lexicon.h"
 #include "aff4/rdf.h"
 #include <limits.h>
-#include <pcre++.h>
+#include <regex>
 #include <stdlib.h>
 #include <unistd.h>
 #include <cerrno>
@@ -270,9 +270,9 @@ static std::string abspath(std::string path) {
 std::string URN::ToFilename() const {
     // Alas Microsoft's implementation is also incomplete. Here we check for some
     // edge cases and manually hack around them.
-    pcrepp::Pcre volume_regex("^file://./([a-zA-Z]):$");  // file://./c: -> \\.\c:
-    if (volume_regex.search(value)) {
-        return volume_regex.replace(value, "\\\\.\\$1:");
+    std::regex volume_regex("^file://./([a-zA-Z]):$");  // file://./c: -> \\.\c:
+    if (std::regex_match(value, volume_regex)) {
+        return std::regex_replace(value, volume_regex, "\\\\.\\$1:");
     }
 
     const int bytesNeeded = std::max(value.size() + 1, (size_t)MAX_PATH);

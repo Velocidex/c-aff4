@@ -302,6 +302,10 @@ class URN: public XSDString {
         value = data;
         return STATUS_OK;
     }
+
+    bool operator<(const URN& other) const noexcept {
+        return value < other.value;
+    }
 };
 
 } // namespace aff4

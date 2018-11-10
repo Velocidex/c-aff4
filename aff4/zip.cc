@@ -23,7 +23,6 @@
  */
 #include "aff4/config.h"
 
-#include <pcre++.h>
 #include <sstream>
 #include <iomanip>
 #include "aff4/zip.h"
@@ -180,6 +179,12 @@ AFF4Status ZipFile::parse_cd() {
         std::string urn_string = backing_store->Read(end_cd->comment_len);
         resolver->logger->info("Loaded AFF4 volume URN {} from zip file.",
                                urn_string);
+
+        // Sometimes the comment string includes the null terminator.  We need to
+        // handle this case.
+        if (urn_string.back() == '\x00') {
+            urn_string.pop_back();
+        }
 
         // There is a catch 22 here - before we parse the ZipFile we dont know the
         // Volume's URN, but we need to know the URN so the AFF4FactoryOpen() can

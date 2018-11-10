@@ -60,7 +60,6 @@ fi
 PKG_CHECK_MODULES([RAPTOR2], [raptor2], [], [AC_MSG_ERROR([raptor RDF library (libraptor2-dev) not found])])
 
 PKG_CHECK_MODULES([ZLIB], [zlib], [], [AC_MSG_ERROR([zlib library (zlib1g-dev) not found])])
-AC_CHECK_LIB([pcre++], [main], [], [AC_MSG_ERROR([pcre++ library (libpcre++-dev) not found])])
 AC_CHECK_LIB([snappy], [main], [], [AC_MSG_ERROR([Google Snappy Compression library (libsnappy-dev) not found])])
 AC_CHECK_LIB([pthread], [pthread_create], [], [AC_MSG_ERROR([pthread library not found])])
 
