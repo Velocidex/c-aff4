@@ -22,11 +22,10 @@ specific language governing permissions and limitations under the License.
 #include <unistd.h>
 #include <cerrno>
 #include <spdlog/fmt/ostr.h>
+#include <uriparser/Uri.h>
 
 #ifdef _WIN32
 #include <shlwapi.h>
-#else
-#include <uriparser/Uri.h>
 #endif
 
 namespace aff4 {

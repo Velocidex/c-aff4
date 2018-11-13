@@ -339,3 +339,5 @@ xcuserdata/
 #
 
 .gdb_history
+
+m4/libtool.m4
