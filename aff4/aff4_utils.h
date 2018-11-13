@@ -18,7 +18,6 @@ specific language governing permissions and limitations under the License.
 
 #include "aff4/config.h"
 
-#include <sys/time.h>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -30,12 +29,6 @@ namespace aff4 {
 #define UNUSED(x) (void)x
 
 std::string aff4_sprintf(std::string fmt, ...);
-
-inline uint64_t time_from_epoch() {
-    struct timeval tv;
-    gettimeofday(&tv, nullptr);
-    return tv.tv_sec * 1000000 + tv.tv_usec;
-}
 
 std::string GetLastErrorMessage();
 

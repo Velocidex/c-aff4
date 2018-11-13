@@ -177,23 +177,25 @@ void AFF4Stream::reserve(size_t size) {
 
 
 bool DefaultProgress::Report(aff4_off_t readptr) {
-    uint64_t now = time_from_epoch();
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+    std::chrono::duration<double> delta = std::chrono::duration_cast<std::chrono::duration<double>>(now - last_time);
 
-    if (now > last_time + 1000000/4) {
+    // At least 1/4 second has elapsed
+    if (delta.count() >= 0.25 ) {
         total_read += readptr - last_offset;
 
         // Rate in MB/s.
-        off_t rate = (readptr - last_offset) /
-                     (now - last_time) * 1000000 / 1024/1024;
+        double rate = (double)(readptr - last_offset) / (1024.0*1024.0)
+                     / delta.count();
 
         if (length > 0) {
             resolver->logger->info(
-                " Reading {:x} {} MiB / {} ({} MiB/s)",
+                " Reading {:x} {} MiB / {} ({:.0f} MiB/s)",
                 readptr, total_read/1024/1024,
                 length/1024/1024, rate);
         } else {
             resolver->logger->info(
-                " Reading {:x} {} MiB ({} MiB/s)", readptr,
+                " Reading {:x} {} MiB ({:.0f} MiB/s)", readptr,
                 total_read/1024/1024, rate);
         }
         last_time = now;

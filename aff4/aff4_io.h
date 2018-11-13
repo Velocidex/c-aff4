@@ -24,6 +24,7 @@ specific language governing permissions and limitations under the License.
 #include <memory>
 #include <fstream>
 #include <cstdio>
+#include <chrono>
 #include "aff4/aff4_base.h"
 #include "aff4/data_store.h"
 #include "aff4/aff4_utils.h"
@@ -62,7 +63,6 @@ struct AFF4VolumeProperties {
 class ProgressContext {
   public:
     // Maintained by the callback.
-    uint64_t last_time = 0;
     aff4_off_t last_offset = 0;
 
     // The following are set in advance by users in order to get accurate progress
@@ -101,8 +101,14 @@ extern ProgressContext empty_progress;
 // Some default progress functions that come out of the box.
 class DefaultProgress: public ProgressContext {
  public:
-    explicit DefaultProgress(DataStore *resolver): ProgressContext(resolver) {}
+    explicit DefaultProgress(DataStore *resolver): ProgressContext(resolver) {
+        last_time = std::chrono::steady_clock::now();
+    }
     virtual bool Report(aff4_off_t readptr);
+
+ protected:
+    // Managed internally by Report
+    std::chrono::steady_clock::time_point last_time;
 };
 
 class AFF4Stream: public AFF4Object {
