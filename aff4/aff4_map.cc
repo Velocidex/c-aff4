@@ -553,6 +553,8 @@ AFF4Status AFF4Map::Flush() {
             RETURN_IF_ERROR(map_stream->Write(range_it->SerializeToString()));
         }
 
+        resolver->Close(map_stream);
+
         AFF4ScopedPtr<AFF4Stream> idx_stream = volume->CreateMember(
                 urn.Append("idx"));
         if (!idx_stream) {
@@ -562,6 +564,8 @@ AFF4Status AFF4Map::Flush() {
         for (auto it : targets) {
             idx_stream->sprintf("%s\n", it.SerializeToString().c_str());
         }
+
+        resolver->Close(idx_stream);
     }
 
     return AFF4Stream::Flush();

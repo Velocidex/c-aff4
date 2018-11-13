@@ -20,7 +20,6 @@ specific language governing permissions and limitations under the License.
 #include <spdlog/fmt/ostr.h>
 #include <string>
 #include <string>
-#include <uriparser/Uri.h>
 
 #include "aff4/config.h"
 #include "aff4/aff4_errors.h"

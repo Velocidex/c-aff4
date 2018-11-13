@@ -25,6 +25,8 @@ specific language governing permissions and limitations under the License.
 
 #ifdef _WIN32
 #include <shlwapi.h>
+#else
+#include <uriparser/Uri.h>
 #endif
 
 namespace aff4 {

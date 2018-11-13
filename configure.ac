@@ -78,7 +78,7 @@ AX_CHECK_COMPILE_FLAG([-s],
 AC_ARG_ENABLE([strip],
    AS_HELP_STRING([--disable-strip], [Disable the stripping of symbols from binaries]))
 test no = "$enable_strip" || enable_strip=yes
-  
+
 if test "x$enable_strip" = "xyes"; then
   if test "x$has_compiler_strip_flag" = "xyes"; then
     CXXFLAGS="$CXXFLAGS -s"
