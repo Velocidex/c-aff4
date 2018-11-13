@@ -478,6 +478,10 @@ AFF4Status WinPmemImager::WriteMapObject_(
 
   }
 
+  // Free some memory ASAP.
+  resolver.Close(data_stream);
+  resolver.Close(map_stream);
+
   if (unreadable_pages.size() > 0) {
       resolver.logger->error(
           "There were {} page read errors in total.", unreadable_pages.size());

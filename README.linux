@@ -32,7 +32,8 @@ apt-get install libtool-bin libboost-dev
 
 apt-get source uuid-dev
 cd util-linux-2.30.1
-./configure --prefix=$PREFIX  --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++ -static-libgcc" --enable-libuuid --disable-all-programs --disable-python --disable-bash-completion
+./configure --prefix=$PREFIX  --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++ -static-libgcc" \
+  --enable-libuuid --disable-all-programs --disable-python --disable-bash-completion
 make install -j4
 cd..
 

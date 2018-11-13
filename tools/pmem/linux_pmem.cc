@@ -15,7 +15,7 @@ specific language governing permissions and limitations under the License.
 
 #include "linux_pmem.h"
 #include "elf.h"
-#include <pcre++.h>
+#include <regex>
 
 namespace aff4 {
 
@@ -32,16 +32,16 @@ AFF4Status LinuxPmemImager::ParseIOMap_(std::vector<ram_range> *ram) {
         return IO_ERROR;
     }
 
-    auto data = stream->Read(0x10000);
-    pcrepp::Pcre RAM_regex("(([0-9a-f]+)-([0-9a-f]+) : System RAM)");
-    int offset = 0;
-    while (RAM_regex.search(data, offset)) {
-        aff4_off_t start = strtoll(RAM_regex.get_match(1).c_str(), nullptr, 16);
-        aff4_off_t end = strtoll(RAM_regex.get_match(2).c_str(), nullptr, 16);
+    std::string data = stream->Read(0x10000);
+    std::regex RAM_regex("(([0-9a-f]+)-([0-9a-f]+) : System RAM)");
+    auto begin = std::sregex_iterator(data.begin(), data.end(), RAM_regex);
+    auto end = std::sregex_iterator();
+    for (std::sregex_iterator i = begin; i != end; ++i) {
+        aff4_off_t start = strtoll((*i)[1].str().c_str(), nullptr, 16);
+        aff4_off_t end = strtoll((*i)[2].str().c_str(), nullptr, 16);
         resolver.logger->info("System RAM {:x} - {:x}", start, end);
 
         ram->push_back({start, end-start});
-        offset = RAM_regex.get_match_end(0);
     }
 
     if (ram->size() == 0) {
