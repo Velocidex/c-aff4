@@ -34,7 +34,7 @@ std::string aff4_sprintf(std::string fmt, ...);
 inline uint64_t time_from_epoch() {
     struct timeval tv;
     gettimeofday(&tv, nullptr);
-    return tv.tv_sec * 1000000 + tv.tv_usec;
+    return ((uint64_t) tv.tv_sec * 1000000) + tv.tv_usec;
 }
 
 std::string GetLastErrorMessage();
