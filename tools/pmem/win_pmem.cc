@@ -16,6 +16,7 @@ specific language governing permissions and limitations under the License.
 #undef ERROR
 
 #include "win_pmem.h"
+#include "resources/winpmem/resources.cc"
 
 #include <functional>
 #include <string>
@@ -109,21 +110,38 @@ static DWORD _GetSystemArch() {
   return sys_info.wProcessorArchitecture;
 }
 
-static std::string GetDriverName(DataStore &resolver) {
+const unsigned char *GetDriverAtt(DataStore &resolver, size_t *file_size) {
   switch (_GetSystemArch()) {
     case PROCESSOR_ARCHITECTURE_AMD64:
-      return "winpmem_64.sys";
-      break;
+        *file_size = sizeof(att_winpmem_64);
+        return att_winpmem_64;
 
     case PROCESSOR_ARCHITECTURE_INTEL:
-      return "winpmem_32.sys";
-      break;
+        *file_size = sizeof(att_winpmem_32);
+        return att_winpmem_32;
 
     default:
         resolver.logger->critical("I dont know what arch I am running on?");
         abort();
   }
 }
+
+const unsigned char *GetDriverNonAtt(DataStore &resolver, size_t *file_size) {
+  switch (_GetSystemArch()) {
+    case PROCESSOR_ARCHITECTURE_AMD64:
+        *file_size = sizeof(winpmem_64);
+        return winpmem_64;
+
+    case PROCESSOR_ARCHITECTURE_INTEL:
+        *file_size = sizeof(winpmem_32);
+        return winpmem_32;
+
+    default:
+        resolver.logger->critical("I dont know what arch I am running on?");
+        abort();
+  }
+}
+
 
 AFF4Status WinPmemImager::GetMemoryInfo(PmemMemoryInfo *info) {
   // We issue a DeviceIoControl() on the raw device handle to get the metadata.
@@ -256,8 +274,7 @@ AFF4Status WinPmemImager::ImagePageFile() {
 
   URN fcat_urn = URN::NewURNFromFilename(fcat_path);
   resolver.logger->info("fcat_urn {}", fcat_urn);
-  AFF4Status res = ExtractFile_(imager_urn.Append("fcat.exe"),
-                                fcat_urn);
+  AFF4Status res = ExtractFile_(fcat, sizeof(fcat), fcat_urn);
 
   if (res != STATUS_OK)
     return res;
@@ -591,45 +608,36 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
 }
 
 // Extract the driver file from our own volume.
-AFF4Status WinPmemImager::ExtractFile_(URN input_file, URN output_file) {
-  // We extract our own files from the private resolver.
-  AFF4ScopedPtr<AFF4Stream> input_file_stream = private_resolver.AFF4FactoryOpen
-      <AFF4Stream>(input_file);
+AFF4Status WinPmemImager::ExtractFile_(
+    const unsigned char input_file[],
+    size_t input_file_length,
+    URN output_file) {
 
-  if (!input_file_stream) {
-      resolver.logger->critical("Unable to extract the correct driver ({}) - "
-                                "maybe the binary is damaged?", input_file);
-      abort();
-  }
+    private_resolver.Set(output_file, AFF4_STREAM_WRITE_MODE,
+                         new XSDString("truncate"));
 
-  private_resolver.Set(output_file, AFF4_STREAM_WRITE_MODE,
-                       new XSDString("truncate"));
-
-  AFF4ScopedPtr<AFF4Stream> outfile = private_resolver.AFF4FactoryOpen
+    AFF4ScopedPtr<AFF4Stream> outfile = private_resolver.AFF4FactoryOpen
       <AFF4Stream>(output_file);
 
-  if (!outfile) {
-      resolver.logger->critical("Unable to create driver file.");
-      abort();
-  }
+    if (!outfile) {
+        resolver.logger->critical("Unable to create driver file.");
+        abort();
+    }
 
-  resolver.logger->info("Extracted {} to {}", input_file, output_file);
+    resolver.logger->info("Extracted {} bytes into {}", input_file_length, output_file);
+    // These files should be small so dont worry about progress.
+    AFF4Status res = outfile->Write((const char *)input_file, input_file_length);
+    if (res == STATUS_OK) {
+        // We must make sure to close the file or we will not be able to load it
+        // while we hold a handle to it.
+        res = private_resolver.Close<AFF4Stream>(outfile);
+    }
 
-  // These files should be small so dont worry about progress.
-  ProgressContext empty_progress(&resolver);
-  AFF4Status res = input_file_stream->CopyToStream(
-      *outfile, input_file_stream->Size(), &empty_progress);
+    if (res != STATUS_OK) {
+        resolver.logger->error("Unable to extract {}: {}", output_file, res);
+    }
 
-  if (res == STATUS_OK)
-    // We must make sure to close the file or we will not be able to load it
-    // while we hold a handle to it.
-    res = private_resolver.Close<AFF4Stream>(outfile);
-
-  if (res != STATUS_OK) {
-      resolver.logger->error("Unable to extract {}", input_file);
-  }
-
-  return res;
+    return res;
 }
 
 
@@ -704,9 +712,12 @@ AFF4Status WinPmemImager::InstallDriver() {
     // systems the attestation signed drivers are required, while on
     // windows 7 they can not be loaded.
     URN filename_urn = URN::NewURNFromFilename(driver_path);
+    size_t file_size;
+    const unsigned char* file_contents = GetDriverAtt(resolver, &file_size);
     RETURN_IF_ERROR(ExtractFile_(
-        imager_urn.Append("att_" + GetDriverName(resolver)),   // Driver URN relative to imager.
-        filename_urn));   // Where to store the driver.
+                        file_contents,
+                        file_size,
+                        filename_urn));   // Where to store the driver.
 
     // Remove this file when we are done.
     to_be_removed.push_back(filename_urn);
@@ -719,10 +730,12 @@ AFF4Status WinPmemImager::InstallDriver() {
             return IO_ERROR;
 
         URN filename_urn = URN::NewURNFromFilename(driver_path);
-        RETURN_IF_ERROR(
-            ExtractFile_(
-                imager_urn.Append(GetDriverName(resolver)),   // Driver URN relative to imager.
-                filename_urn));   // Where to store the driver.
+        size_t file_size;
+        const unsigned char* file_contents = GetDriverNonAtt(resolver, &file_size);
+        RETURN_IF_ERROR(ExtractFile_(
+                            file_contents,
+                            file_size,
+                            filename_urn));   // Where to store the driver.
 
         to_be_removed.push_back(filename_urn);
         RETURN_IF_ERROR(_InstallDriver(filename_urn.ToFilename()));
@@ -797,6 +810,8 @@ AFF4Status WinPmemImager::UninstallDriver() {
 
 
 AFF4Status WinPmemImager::handle_driver() {
+    return CONTINUE;
+
     resolver.logger->info("Extracting WinPmem drivers from binary.");
   // We need to load the AFF4 volume attached to our own executable.
   HMODULE hModule = GetModuleHandleW(NULL);

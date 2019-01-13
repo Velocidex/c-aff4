@@ -134,7 +134,9 @@ class WinPmemImager: public PmemImager {
    *
    * @return
    */
-  AFF4Status ExtractFile_(URN input, URN output);
+  AFF4Status ExtractFile_(const unsigned char* input_file,
+                          size_t input_file_length,
+                          URN output);
 
   /**
    * Unloads the driver.

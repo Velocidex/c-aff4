@@ -36,13 +36,8 @@ bin_PROGRAMS = winpmem
 
 winpmem_LDFLAGS = $(STATIC_LINKERLDFLAGS)
 winpmem_CXXFLAGS = -std=c++11 -Wall
-winpmem_SOURCES = pmem_imager.cc win_pmem.cc
+winpmem_SOURCES = pmem_imager.cc win_pmem.cc resources/winpmem/resources.cc
 winpmem_LDADD = -lrpcrt4 -lshlwapi $(top_srcdir)/aff4/libaff4.la -lyaml-cpp
-
-
-all-local: winpmem$(EXEEXT)
-	@echo Appending pmem AFF4 drivers to binary.
-	cat resources/pmem.aff4 >> winpmem$(EXEEXT)
 endif
 
 if LINUX
