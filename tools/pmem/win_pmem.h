@@ -134,7 +134,9 @@ class WinPmemImager: public PmemImager {
    *
    * @return
    */
-  AFF4Status ExtractFile_(URN input, URN output);
+  AFF4Status ExtractFile_(const unsigned char* input_file,
+                          size_t input_file_length,
+                          URN output);
 
   /**
    * Unloads the driver.
@@ -168,7 +170,6 @@ class WinPmemImager: public PmemImager {
     return PmemImager::RegisterArgs();
   }
 
-  virtual AFF4Status handle_driver();
   virtual AFF4Status handle_pagefiles();
   virtual AFF4Status handle_acquisition_mode();
   virtual AFF4Status ParseArgs();
