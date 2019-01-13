@@ -809,32 +809,6 @@ AFF4Status WinPmemImager::UninstallDriver() {
 }
 
 
-AFF4Status WinPmemImager::handle_driver() {
-    return CONTINUE;
-
-    resolver.logger->info("Extracting WinPmem drivers from binary.");
-  // We need to load the AFF4 volume attached to our own executable.
-  HMODULE hModule = GetModuleHandleW(NULL);
-  CHAR path[MAX_PATH];
-  GetModuleFileNameA(hModule, path, MAX_PATH);
-
-  AFF4ScopedPtr<ZipFile> volume = ZipFile::NewZipFile(
-      &private_resolver, URN::NewURNFromFilename(path));
-
-  if (!volume) {
-      resolver.logger->critical(
-          "Unable to extract drivers. Maybe the executable is damaged?");
-      abort();
-  }
-
-  resolver.logger->info("Openning driver AFF4 volume: {}", volume->urn);
-
-  imager_urn = volume->urn;
-
-  return CONTINUE;
-}
-
-
 AFF4Status WinPmemImager::ParseArgs() {
   AFF4Status result = PmemImager::ParseArgs();
 
@@ -843,10 +817,6 @@ AFF4Status WinPmemImager::ParseArgs() {
   // Configure our private resolver like the global one.
   private_resolver.logger->set_level(resolver.logger->level());
   private_resolver.logger->set_pattern("%Y-%m-%d %T %L %v");
-
-  if (result == CONTINUE) {
-      result = handle_driver();
-  }
 
   // Sanity checks.
   if (result == CONTINUE && Get("load-driver")->isSet() &&
