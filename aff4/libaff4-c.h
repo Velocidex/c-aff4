@@ -39,6 +39,34 @@ const char* AFF4_version();
 void AFF4_init();
 
 /**
+ * Get messages logged since the last call to any C API function other than
+ * AFF4_message or AFF4_message_free.
+ * @return String containing messsages
+ */
+char* AFF4_message();
+
+/**
+ * Free message string returned by AFF4_message().
+ * @param msg The message string pointer
+ */
+void AFF4_message_free(char* msg);
+
+/**
+ * Set the verbosity level for logging.
+ * Levels are:
+ *    0 trace
+ *    1 debug
+ *    2 info
+ *    3 warning
+ *    4 error
+ *    5 critical
+ *    6 off
+ *
+ * @param level The verbosity level
+ */
+void AFF4_verbosity(unsigned int level);
+
+/**
  * Open the given filename, and access the first aff4:Image in the container.
  * @param filename The filename to open.
  * @return Object handle, or -1 on error. See errno
