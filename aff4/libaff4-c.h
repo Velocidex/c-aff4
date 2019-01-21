@@ -39,17 +39,28 @@ const char* AFF4_version();
 void AFF4_init();
 
 /**
- * Get messages logged since the last call to any C API function other than
- * AFF4_message or AFF4_message_free.
- * @return String containing messsages
+ * The message struct. Follow the next pointer for the next message; the last
+ * message will have a null next pointer. The pointer returned by
+ * AFF4_get_messages() MUST be freed by AFF4_free_messages().
  */
-char* AFF4_message();
+typedef struct AFF4_Message {
+    unsigned int level;
+    char* message;
+    struct AFF4_Message* next;
+} AFF4_Message;
 
 /**
- * Free message string returned by AFF4_message().
- * @param msg The message string pointer
+ * Get messages logged since the last call to any C API function. The message
+ * pointer must be freed with AFF4_free_messages().
+ * @return The message pointer
  */
-void AFF4_message_free(char* msg);
+AFF4_Message* AFF4_get_messages();
+
+/**
+ * Free message list returned by AFF4_get_messages().
+ * @param msg The message pointer
+ */
+void AFF4_free_messages(AFF4_Message* msg);
 
 /**
  * Set the verbosity level for logging.
@@ -64,7 +75,7 @@ void AFF4_message_free(char* msg);
  *
  * @param level The verbosity level
  */
-void AFF4_verbosity(unsigned int level);
+void AFF4_set_verbosity(unsigned int level);
 
 /**
  * Open the given filename, and access the first aff4:Image in the container.

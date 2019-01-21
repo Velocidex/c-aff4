@@ -15,26 +15,61 @@
 
 #include <cstring>
 #include <memory>
-#include <sstream>
 #include <unordered_map>
 
 #include <spdlog/spdlog.h>
-#include <spdlog/sinks/ostream_sink.h>
+#include <spdlog/sinks/sink.h>
 
 #include "aff4/lexicon.h"
 #include "aff4/libaff4.h"
 #include "aff4/libaff4-c.h"
 
+
+class LogSink: public spdlog::sinks::sink {
+public:
+    virtual ~LogSink() {
+        AFF4_free_messages(head);
+    }
+
+    virtual void log(const spdlog::details::log_msg& msg) override {
+        char* str = new char[msg.formatted.size()+1];
+        std::strncpy(str, msg.formatted.data(), msg.formatted.size());
+        str[msg.formatted.size()] = '\0';
+
+        AFF4_Message* m = new AFF4_Message{msg.level, str, nullptr};
+
+        if (tail) {
+            tail->next = m;
+        }
+        else {
+            head = m;
+        }
+        tail = m;
+    }
+
+    virtual void flush() override {}
+
+    AFF4_Message* take() {
+        AFF4_Message* msg = head;
+        head = tail = nullptr;
+        return msg;
+    }
+
+    void reset() {
+        AFF4_free_messages(head);
+        head = tail = nullptr;
+    }
+
+private:
+    AFF4_Message* head = nullptr;
+    AFF4_Message* tail = nullptr;
+};
+
 struct Holder {
     Holder():
+        log{std::make_shared<LogSink>()},
         resolver(
-            aff4::DataStoreOptions{
-                spdlog::create(
-                    "aff4",
-                     std::make_shared<spdlog::sinks::ostream_sink_mt>(logstream)
-                ),
-                1
-            }
+            aff4::DataStoreOptions{spdlog::create("aff4", log), 1}
         )
     {}
 
@@ -47,11 +82,7 @@ struct Holder {
         return true;
     }
 
-    std::string getLog() { return logstream.str(); }
-
-    void resetLog() { logstream.str(""); }
-
-    std::ostringstream logstream;
+    std::shared_ptr<LogSink> log;
     aff4::MemoryDataStore resolver;
     std::unordered_map<int, aff4::URN> handles;
     int nextHandle = 0;
@@ -63,44 +94,46 @@ Holder& get_holder() {
 }
 
 const spdlog::level::level_enum LEVEL_TO_ENUM[] = {
-  spdlog::level::trace,
-  spdlog::level::debug,
-  spdlog::level::info,
-  spdlog::level::warn,
-  spdlog::level::err,
-  spdlog::level::critical,
-  spdlog::level::off
+    spdlog::level::trace,
+    spdlog::level::debug,
+    spdlog::level::info,
+    spdlog::level::warn,
+    spdlog::level::err,
+    spdlog::level::critical,
+    spdlog::level::off
 };
 
 extern "C" {
 
-void AFF4_verbosity(unsigned int level) {
+void AFF4_set_verbosity(unsigned int level) {
     Holder&h = get_holder();
-    h.resetLog();
+    h.log->reset();
 
-    const spdlog::level::level_enum e = level >= sizeof(LEVEL_TO_ENUM)/sizeof(LEVEL_TO_ENUM[0]) ? spdlog::level::off : LEVEL_TO_ENUM[level];
+    const spdlog::level::level_enum e =
+        level >= sizeof(LEVEL_TO_ENUM)/sizeof(LEVEL_TO_ENUM[0]) ?
+        spdlog::level::off : LEVEL_TO_ENUM[level];
     h.resolver.logger->set_level(e);
     h.resolver.logger->debug(
         "Set logging level to {}", spdlog::level::to_str(e)
     );
 }
 
-char* AFF4_message() {
-    Holder&h = get_holder();
-    const std::string logstr = h.getLog();
-    h.resetLog();
-    char* msg = new char[logstr.length()+1];
-    std::strcpy(msg, logstr.c_str());
-    return msg;
+AFF4_Message* AFF4_get_messages() {
+    return get_holder().log->take();
 }
 
-void AFF4_message_free(char* msg) {
-    delete[] msg;
+void AFF4_free_messages(AFF4_Message* msg) {
+    while (msg) {
+        AFF4_Message* next = msg->next;
+        delete[] msg->message;
+        delete msg;
+        msg = next;
+    }
 }
 
 int AFF4_open(char* filename) {
     Holder& h = get_holder();
-    h.resetLog();
+    h.log->reset();
 
     aff4::URN urn = aff4::URN::NewURNFromFilename(filename);
     aff4::AFF4ScopedPtr<aff4::ZipFile> zip = aff4::ZipFile::NewZipFile(
@@ -150,7 +183,7 @@ int AFF4_open(char* filename) {
 
 uint64_t AFF4_object_size(int handle) {
     Holder& h = get_holder();
-    h.resetLog();
+    h.log->reset();
 
     aff4::URN urn;
     if (h.getHandle(handle, urn)) {
@@ -164,7 +197,7 @@ uint64_t AFF4_object_size(int handle) {
 
 int AFF4_read(int handle, uint64_t offset, void* buffer, int length) {
     Holder& h = get_holder();
-    h.resetLog();
+    h.log->reset();
 
     aff4::URN urn;
 
@@ -185,7 +218,7 @@ int AFF4_read(int handle, uint64_t offset, void* buffer, int length) {
 
 int AFF4_close(int handle) {
     Holder& h = get_holder();
-    h.resetLog();
+    h.log->reset();
 
     aff4::URN urn;
     if (h.getHandle(handle, urn)) {
