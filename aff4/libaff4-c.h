@@ -92,7 +92,7 @@ uint64_t AFF4_object_size(int handle, AFF4_Message** msg);
  * @param msg A pointer to log messages.
  * @return The number of bytes placed into the buffer.
  */
-int AFF4_read(int handle, uint64_t offset, void* buffer, int length, AFF4_Message** msg);
+ssize_t AFF4_read(int handle, uint64_t offset, void* buffer, size_t length, AFF4_Message** msg);
 
 /**
  * Close the given handle.

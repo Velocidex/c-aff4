@@ -188,27 +188,12 @@ AFF4Status FileBackedObject::LoadFromURN() {
 }
 
 std::string FileBackedObject::Read(size_t length) {
-    DWORD buffer_size = length;
-    std::unique_ptr<char[]> result(new char[length]);
-
-    if (properties.seekable) {
-        LARGE_INTEGER tmp;
-        tmp.QuadPart = readptr;
-        if (!SetFilePointerEx(fd, tmp, &tmp, FILE_BEGIN)) {
-            resolver->logger->info("Failed to seek: {}", GetLastErrorMessage());
-        }
+    std::string result(length, '\0');
+    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
+      return "";
     }
-
-    if (!ReadFile(fd, result.get(), buffer_size, &buffer_size, nullptr)) {
-        resolver->logger->warn("Reading failed at {:x}: {}", readptr,
-                                GetLastErrorMessage());
-
-        return "";
-    }
-
-    readptr += buffer_size;
-
-    return std::string(result.get(), buffer_size);
+    result.resize(length);
+    return result;
 }
 
 AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
@@ -224,6 +209,9 @@ AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
     }
 
     if (!ReadFile(fd, data, buf_length, &buf_length, nullptr)) {
+        resolver->logger->warn("Reading failed at {:x}: {}", readptr,
+                                GetLastErrorMessage());
+
         return IO_ERROR;
     }
 
@@ -232,8 +220,6 @@ AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
 
     return STATUS_OK;
 }
-
-
 
 AFF4Status FileBackedObject::Write(const char* data, size_t length) {
     // Dont even try to write on files we are not allowed to write on.

@@ -20,6 +20,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/sink.h>
 
+#include "aff4/aff4_errors.h"
 #include "aff4/lexicon.h"
 #include "aff4/libaff4.h"
 #include "aff4/libaff4-c.h"
@@ -209,7 +210,7 @@ uint64_t AFF4_object_size(int handle, AFF4_Message** msg) {
     return 0;
 }
 
-int AFF4_read(int handle, uint64_t offset, void* buffer, int length, AFF4_Message** msg) {
+ssize_t AFF4_read(int handle, uint64_t offset, void* buffer, size_t length, AFF4_Message** msg) {
     Holder& h = get_holder();
     get_log_handler().use(msg);
 
@@ -217,17 +218,18 @@ int AFF4_read(int handle, uint64_t offset, void* buffer, int length, AFF4_Messag
     if (!h.getURN(handle, urn)) return -1;
 
     auto stream = h.resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
-    int read = 0;
     if (stream.get()) {
-        stream->Seek(offset, SEEK_SET);
-        const std::string result = stream->Read(length);
-        read = result.length();
-        std::memcpy(buffer, result.data(), read);
-    } else {
+        if (stream->Seek(offset, SEEK_SET) != aff4::STATUS_OK ||
+            stream->ReadBuffer(static_cast<char*>(buffer), &length) != aff4::STATUS_OK)
+        {
+            errno = EIO;
+        }
+    }
+    else {
         errno = ENOENT;
         return -1;
     }
-    return read;
+    return length;
 }
 
 int AFF4_close(int handle, AFF4_Message** msg) {
