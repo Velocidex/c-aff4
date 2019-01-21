@@ -73,7 +73,7 @@ struct Holder {
         )
     {}
 
-    bool getHandle(int handle, aff4::URN& urn) {
+    bool getURN(int handle, aff4::URN& urn) {
         const auto& it = handles.find(handle);
         if (it == handles.end()) {
             return false;
@@ -186,7 +186,7 @@ uint64_t AFF4_object_size(int handle) {
     h.log->reset();
 
     aff4::URN urn;
-    if (h.getHandle(handle, urn)) {
+    if (h.getURN(handle, urn)) {
         auto stream = h.resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
         if (stream.get()) {
             return stream->Size();
@@ -200,8 +200,7 @@ int AFF4_read(int handle, uint64_t offset, void* buffer, int length) {
     h.log->reset();
 
     aff4::URN urn;
-
-    if (!h.getHandle(handle, urn)) return -1;
+    if (!h.getURN(handle, urn)) return -1;
 
     auto stream = h.resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
     int read = 0;
@@ -221,7 +220,7 @@ int AFF4_close(int handle) {
     h.log->reset();
 
     aff4::URN urn;
-    if (h.getHandle(handle, urn)) {
+    if (h.getURN(handle, urn)) {
         auto obj = h.resolver.AFF4FactoryOpen<aff4::AFF4Object>(urn);
         if (obj.get()) {
             h.resolver.Close(obj);
