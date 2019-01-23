@@ -105,13 +105,8 @@ spdlog::level::level_enum enum_for_level(unsigned int level) {
         return spdlog::level::info;
     case 3:
         return spdlog::level::warn;
-    case 4:
-        return spdlog::level::err;
-    case 5:
-        return spdlog::level::critical;
-    case 6:
     default:
-        return spdlog::level::off;
+        return spdlog::level::err;
     }
 }
 
