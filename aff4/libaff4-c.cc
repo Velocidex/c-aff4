@@ -32,12 +32,14 @@ public:
     }
 
     virtual void log(const spdlog::details::log_msg& msg) override {
-        char* str = new char[msg.formatted.size()+1];
-        std::strncpy(str, msg.formatted.data(), msg.formatted.size());
-        str[msg.formatted.size()] = '\0';
+        // populate our message struct
+        char* str = new char[msg.raw.size()+1];
+        std::strncpy(str, msg.raw.data(), msg.raw.size());
+        str[msg.raw.size()] = '\0';
 
         AFF4_Message* m = new AFF4_Message{msg.level, str, nullptr};
 
+        // append it to the list
         if (tail) {
             tail->next = m;
         }
