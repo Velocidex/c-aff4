@@ -93,15 +93,25 @@ Holder& get_holder() {
     return the_holder;
 }
 
-const spdlog::level::level_enum LEVEL_TO_ENUM[] = {
-    spdlog::level::trace,
-    spdlog::level::debug,
-    spdlog::level::info,
-    spdlog::level::warn,
-    spdlog::level::err,
-    spdlog::level::critical,
-    spdlog::level::off
-};
+spdlog::level::level_enum enum_for_level(unsigned int level) {
+    switch (level) {
+    case 0:
+        return spdlog::level::trace;
+    case 1:
+        return spdlog::level::debug;
+    case 2:
+        return spdlog::level::info;
+    case 3:
+        return spdlog::level::warn;
+    case 4:
+        return spdlog::level::err;
+    case 5:
+        return spdlog::level::critical;
+    case 6:
+    default:
+        return spdlog::level::off;
+    }
+}
 
 extern "C" {
 
@@ -109,9 +119,7 @@ void AFF4_set_verbosity(unsigned int level) {
     Holder&h = get_holder();
     h.log->reset();
 
-    const spdlog::level::level_enum e =
-        level >= sizeof(LEVEL_TO_ENUM)/sizeof(LEVEL_TO_ENUM[0]) ?
-        spdlog::level::off : LEVEL_TO_ENUM[level];
+    const spdlog::level::level_enum e = enum_for_level(level);
     h.resolver.logger->set_level(e);
     h.resolver.logger->debug(
         "Set logging level to {}", spdlog::level::to_str(e)
