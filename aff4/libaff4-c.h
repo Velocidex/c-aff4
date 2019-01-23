@@ -40,8 +40,8 @@ void AFF4_init();
 
 /**
  * The message struct. Follow the next pointer for the next message; the last
- * message will have a null next pointer. The pointer returned by
- * AFF4_get_messages() MUST be freed by AFF4_free_messages().
+ * message will have a null next pointer. Every AFF4_Message* produced by the
+ * C API MUST be freed by AFF4_free_messages().
  */
 typedef struct AFF4_Message {
     unsigned int level;
@@ -50,14 +50,7 @@ typedef struct AFF4_Message {
 } AFF4_Message;
 
 /**
- * Get messages logged since the last call to any C API function. The message
- * pointer must be freed with AFF4_free_messages().
- * @return The message pointer
- */
-AFF4_Message* AFF4_get_messages();
-
-/**
- * Free message list returned by AFF4_get_messages().
+ * Free message list.
  * @param msg The message pointer
  */
 void AFF4_free_messages(AFF4_Message* msg);
@@ -80,14 +73,15 @@ void AFF4_set_verbosity(unsigned int level);
 /**
  * Open the given filename, and access the first aff4:Image in the container.
  * @param filename The filename to open.
+ * @param msg A pointer to log messages.
  * @return Object handle, or -1 on error. See errno
  */
-int AFF4_open(char* filename);
+int AFF4_open(const char* filename, AFF4_Message** msg);
 
 /**
  * Get the size of the AFF4 Object that was opened.
  */
-uint64_t AFF4_object_size(int handle);
+uint64_t AFF4_object_size(int handle, AFF4_Message** msg);
 
 /**
  * Read a block from the given handle.
@@ -95,15 +89,18 @@ uint64_t AFF4_object_size(int handle);
  * @param offset the offset into the stream
  * @param buffer Pointer to a buffer of length.
  * @param length The length of the buffer to fill.
+ * @param msg A pointer to log messages.
  * @return The number of bytes placed into the buffer.
  */
-int AFF4_read(int handle, uint64_t offset, void* buffer, int length);
+int AFF4_read(int handle, uint64_t offset, void* buffer, int length, AFF4_Message** msg);
 
 /**
  * Close the given handle.
  * @param handle The Object handle to close.
+ * @param msg A pointer to log messages.
+ * @return 0, or -1 on error.
  */
-int AFF4_close(int handle);
+int AFF4_close(int handle, AFF4_Message** msg);
 
 #ifdef __cplusplus
 }
