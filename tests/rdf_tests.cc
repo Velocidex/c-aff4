@@ -12,13 +12,7 @@ void URNVerifySerialization(std::string url) {
 
 
 TEST(URNTest, SerializeURN) {
-        std::string url = "http://www.google.com/path/to/element#hash_data";
-  uri_components components = URN(url).Parse();
-
-  EXPECT_EQ(components.scheme, "http");
-  EXPECT_EQ(components.domain, "www.google.com");
-  EXPECT_EQ(components.path, "/path/to/element");
-  EXPECT_EQ(components.fragment, "hash_data");
+  std::string url = "http://www.google.com/path/to/element#hash_data";
   URNVerifySerialization(url);
 
   // First some valid input.
@@ -58,7 +52,6 @@ TEST(URNTest, SerializeURN) {
     EXPECT_EQ(URN("etc/passwd").SerializeToString(),
                 std::string("file://") + cwd_string + "/etc/passwd");
   };
-  components = URN("http:www.google.com").Parse();
 }
 
 

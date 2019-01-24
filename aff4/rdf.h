@@ -211,17 +211,6 @@ class XSDBoolean: public RDFValue {
 };
 
 /**
- * Once a URN is parsed we place its components into one easy to use struct.
- *
- */
-struct uri_components {
-    std::string scheme;
-    std::string domain;
-    std::string fragment;
-    std::string path;
-};
-
-/**
  * An RDFValue to store and parse a URN.
  *
  */
