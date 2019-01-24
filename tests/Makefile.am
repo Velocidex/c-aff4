@@ -17,15 +17,14 @@ STATIC_LINKERLDFLAGS = -static  -static-libstdc++ -static-libgcc
 endif
 
 ## unittests to run when people type 'make check'.
-TESTS = aff4-test
+check_PROGRAMS = aff4-test
+TESTS = $(check_PROGRAMS)
 TESTS_ENVIRONMENT =
 
 check_SCRIPTS =
 
 # Every time you add a unittest to check_SCRIPTS, add it here too
 noinst_SCRIPTS =
-
-noinst_PROGRAMS = aff4-test
 
 aff4_test_SOURCES =  \
 	aff4tests.cc  \
