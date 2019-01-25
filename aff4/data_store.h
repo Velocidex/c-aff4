@@ -629,6 +629,10 @@ class MemoryDataStore: public DataStore {
     std::unordered_map<std::string, AFF4_Attributes> store;
 
   public:
+    MemoryDataStore() = default;
+
+    MemoryDataStore(DataStoreOptions options): DataStore(options) {}
+
     virtual ~MemoryDataStore();
 
     /**

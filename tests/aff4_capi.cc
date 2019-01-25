@@ -20,7 +20,7 @@
 namespace aff4 {
 
 
-void printBuffer(char* buffer, int size) {
+void printBuffer(const char* buffer, int size) {
     for (int i = 0; i < size; i++) {
         if (i > 0) {
             printf(":");
@@ -42,79 +42,76 @@ TEST_F(AFF4CAPI, Sample1URN) {
 
     AFF4_init();
 
-    int handle = AFF4_open(const_cast<char*>(filename.c_str()));
+    int handle = AFF4_open(filename.c_str(), nullptr);
     ASSERT_NE(-1, handle);
 
-    uint64_t size = AFF4_object_size(handle);
+    uint64_t size = AFF4_object_size(handle, nullptr);
     ASSERT_EQ(268435456, size);
 
-    void* buffer = malloc(32);
+    char* buffer = (char*) malloc(32);
     memset(buffer, 0, 32);
-    int read = AFF4_read(handle, 0, buffer, 32);
+    int read = AFF4_read(handle, 0, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
 
-    printBuffer((char*) buffer, 32);
+    printBuffer(buffer, 32);
     free(buffer);
-    AFF4_close(handle);
-
+    AFF4_close(handle, nullptr);
 }
 
 TEST_F(AFF4CAPI, Sample2URN) {
     std::string filename = reference_images + "AFF4Std/Base-Allocated.aff4";
     AFF4_init();
 
-    int handle = AFF4_open(const_cast<char*>(filename.c_str()));
+    int handle = AFF4_open(filename.c_str(), nullptr);
     ASSERT_NE(-1, handle);
 
-    uint64_t size = AFF4_object_size(handle);
+    uint64_t size = AFF4_object_size(handle, nullptr);
     ASSERT_EQ(268435456, size);
 
-    void* buffer = malloc(32);
+    char* buffer = (char*) malloc(32);
     memset(buffer, 0, 32);
 
     // Start
-    int read = AFF4_read(handle, 0, buffer, 32);
+    int read = AFF4_read(handle, 0, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
-    printBuffer((char*) buffer, 32);
+    printBuffer(buffer, 32);
 
     // Unreadable
     memset(buffer, 0, 32);
-    read = AFF4_read(handle, 32326 * 512, buffer, 32);
+    read = AFF4_read(handle, 32326 * 512, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
-    printBuffer((char*) buffer, 32);
+    printBuffer(buffer, 32);
 
     free(buffer);
-    AFF4_close(handle);
-
+    AFF4_close(handle, nullptr);
 }
 
 TEST_F(AFF4CAPI, Sample3URN) {
     std::string filename = reference_images + "AFF4Std/Base-Linear-ReadError.aff4";
     AFF4_init();
 
-    int handle = AFF4_open(const_cast<char*>(filename.c_str()));
+    int handle = AFF4_open(filename.c_str(), nullptr);
     ASSERT_NE(-1, handle);
 
-    uint64_t size = AFF4_object_size(handle);
+    uint64_t size = AFF4_object_size(handle, nullptr);
     ASSERT_EQ(268435456, size);
 
-    void* buffer = malloc(32);
+    char* buffer = (char*) malloc(32);
     memset(buffer, 0, 32);
 
     // Start...
-    int read = AFF4_read(handle, 0, buffer, 32);
+    int read = AFF4_read(handle, 0, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
-    printBuffer((char*) buffer, 32);
+    printBuffer(buffer, 32);
 
     // Unreadable
     memset(buffer, 0, 32);
-    read = AFF4_read(handle, 32326 * 512, buffer, 32);
+    read = AFF4_read(handle, 32326 * 512, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
-    printBuffer((char*) buffer, 32);
+    printBuffer(buffer, 32);
 
     free(buffer);
-    AFF4_close(handle);
-
+    AFF4_close(handle, nullptr);
 }
 
 } // namespace aff4

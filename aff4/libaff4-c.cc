@@ -14,49 +14,139 @@
 */
 
 #include <cstring>
+#include <memory>
+#include <unordered_map>
+
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/sink.h>
+
 #include "aff4/lexicon.h"
 #include "aff4/libaff4.h"
 #include "aff4/libaff4-c.h"
 
-// The application resolver
-static aff4::MemoryDataStore* resolver = nullptr;
 
+class LogHandler {
+public:
+    void log(const spdlog::details::log_msg& msg) {
+        if (!head) {
+            // C API function was called with null msg, so don't log messages
+            return;
+        }
 
-// The next handle.
-static int nextHandle = 0;
+        // populate our message struct
+        char* str = new char[msg.raw.size()+1];
+        std::strncpy(str, msg.raw.data(), msg.raw.size());
+        str[msg.raw.size()] = '\0';
 
-std::unordered_map<int, aff4::URN> *get_handles() {
-    // The map of handles to AFF4 Map instances.
-    static auto* handles = new std::unordered_map<int, aff4::URN>();
-    return handles;
+        AFF4_Message* m = new AFF4_Message{msg.level, str, nullptr};
+
+        // append it to the list
+        if (tail) {
+            tail->next = m;
+        }
+        else {
+            *head = m;
+        }
+        tail = m;
+    }
+
+    void use(AFF4_Message** msg) {
+      // set where to store messages, if any
+      head = msg;
+      tail = nullptr;
+    }
+
+private:
+    AFF4_Message** head = nullptr;
+    AFF4_Message* tail = nullptr;
+};
+
+LogHandler& get_log_handler() {
+    static thread_local LogHandler log_handler;
+    return log_handler;
 }
 
-bool GetHandle(int handle, aff4::URN *urn) {
-    auto handles = get_handles();
-    const auto& it = handles->find(handle);
-    if (it == handles->end())
-        return false;
+class LogSink: public spdlog::sinks::sink {
+public:
+    virtual ~LogSink() {}
 
-    *urn = it->second;
+    virtual void log(const spdlog::details::log_msg& msg) override {
+        // trampoline to our thread-local log handler
+        get_log_handler().log(msg);
+    }
 
-    return true;
+    virtual void flush() override {}
+};
+
+struct Holder {
+    Holder():
+        resolver(
+            aff4::DataStoreOptions{
+                spdlog::create("aff4", std::make_shared<LogSink>()), 1
+            }
+        )
+    {
+        resolver.logger->set_level(spdlog::level::err);
+    }
+
+    bool getURN(int handle, aff4::URN& urn) {
+        const auto& it = handles.find(handle);
+        if (it == handles.end()) {
+            return false;
+        }
+        urn = it->second;
+        return true;
+    }
+
+    aff4::MemoryDataStore resolver;
+    std::unordered_map<int, aff4::URN> handles;
+    int nextHandle = 0;
+};
+
+Holder& get_holder() {
+    static Holder the_holder;
+    return the_holder;
 }
 
+spdlog::level::level_enum enum_for_level(unsigned int level) {
+    switch (level) {
+    case 0:
+        return spdlog::level::trace;
+    case 1:
+        return spdlog::level::debug;
+    case 2:
+        return spdlog::level::info;
+    case 3:
+        return spdlog::level::warn;
+    default:
+        return spdlog::level::err;
+    }
+}
 
 extern "C" {
 
-void AFF4_init() {
-    resolver = new aff4::MemoryDataStore();
+void AFF4_init() {}
+
+void AFF4_set_verbosity(unsigned int level) {
+    get_holder().resolver.logger->set_level(enum_for_level(level));
 }
 
-int AFF4_open(char* filename) {
-    if(resolver == nullptr){
-        AFF4_init();
+void AFF4_free_messages(AFF4_Message* msg) {
+    while (msg) {
+        AFF4_Message* next = msg->next;
+        delete[] msg->message;
+        delete msg;
+        msg = next;
     }
-    int handle = nextHandle++;
+}
+
+int AFF4_open(const char* filename, AFF4_Message** msg) {
+    Holder& h = get_holder();
+    get_log_handler().use(msg);
+
     aff4::URN urn = aff4::URN::NewURNFromFilename(filename);
     aff4::AFF4ScopedPtr<aff4::ZipFile> zip = aff4::ZipFile::NewZipFile(
-        resolver, urn);
+        &h.resolver, urn);
     if (!zip) {
         errno = ENOENT;
         return -1;
@@ -64,13 +154,13 @@ int AFF4_open(char* filename) {
 
     // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
     const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
-    std::unordered_set<aff4::URN> images = resolver->Query(aff4::AFF4_TYPE, &type);
+    std::unordered_set<aff4::URN> images = h.resolver.Query(aff4::AFF4_TYPE, &type);
 
     if (images.empty()) {
         const aff4::URN legacy_type(aff4::AFF4_LEGACY_IMAGE_TYPE);
-        images = resolver->Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
+        images = h.resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
         if (images.empty()) {
-            resolver->Close(zip);
+            h.resolver.Close(zip);
             errno = ENOENT;
             return -1;
         }
@@ -82,51 +172,50 @@ int AFF4_open(char* filename) {
 
     // Make sure we only load an image that is stored in the filename provided
     for (const auto & image : sorted_images) {
-        if (!resolver->HasURNWithAttributeAndValue(image, aff4::AFF4_STORED, zip->urn)) {
+        if (!h.resolver.HasURNWithAttributeAndValue(image, aff4::AFF4_STORED, zip->urn)) {
             continue;
         }
 
-        if(!resolver->AFF4FactoryOpen<aff4::AFF4StdImage>(image)) {
+        if (!h.resolver.AFF4FactoryOpen<aff4::AFF4StdImage>(image)) {
             continue;
         }
 
-        (*get_handles())[handle] = image;
+        const int handle = h.nextHandle++;
+        h.handles[handle] = image;
         return handle;
     }
 
-    resolver->Close(zip);
+    h.resolver.Close(zip);
     errno = ENOENT;
     return -1;
 }
 
-uint64_t AFF4_object_size(int handle) {
-    if(resolver == nullptr){
-        AFF4_init();
-    }
+uint64_t AFF4_object_size(int handle, AFF4_Message** msg) {
+    Holder& h = get_holder();
+    get_log_handler().use(msg);
 
     aff4::URN urn;
-    if (GetHandle(handle, &urn)) {
-        auto stream = resolver->AFF4FactoryOpen<aff4::AFF4Stream>(urn);
-        if (stream.get() != nullptr) {
+    if (h.getURN(handle, urn)) {
+        auto stream = h.resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
+        if (stream.get()) {
             return stream->Size();
         }
     }
     return 0;
 }
 
-int AFF4_read(int handle, uint64_t offset, void* buffer, int length) {
-    if(resolver == nullptr){
-        AFF4_init();
-    }
+int AFF4_read(int handle, uint64_t offset, void* buffer, int length, AFF4_Message** msg) {
+    Holder& h = get_holder();
+    get_log_handler().use(msg);
+
     aff4::URN urn;
+    if (!h.getURN(handle, urn)) return -1;
 
-    if (!GetHandle(handle, &urn)) return -1;
-
-    auto stream = resolver->AFF4FactoryOpen<aff4::AFF4Stream>(urn);
+    auto stream = h.resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
     int read = 0;
-    if (stream.get() != nullptr) {
+    if (stream.get()) {
         stream->Seek(offset, SEEK_SET);
-        std::string result = stream->Read(length);
+        const std::string result = stream->Read(length);
         read = result.length();
         std::memcpy(buffer, result.data(), read);
     } else {
@@ -135,16 +224,16 @@ int AFF4_read(int handle, uint64_t offset, void* buffer, int length) {
     return read;
 }
 
-int AFF4_close(int handle) {
-    if(resolver == nullptr){
-        AFF4_init();
-    }
+int AFF4_close(int handle, AFF4_Message** msg) {
+    Holder& h = get_holder();
+    get_log_handler().use(msg);
+
     aff4::URN urn;
-    if (GetHandle(handle, &urn)) {
-        auto obj = resolver->AFF4FactoryOpen<aff4::AFF4Object>(urn);
-        if (obj.get() != nullptr) {
-            resolver->Close(obj);
-            get_handles()->erase(handle);
+    if (h.getURN(handle, urn)) {
+        auto obj = h.resolver.AFF4FactoryOpen<aff4::AFF4Object>(urn);
+        if (obj.get()) {
+            h.resolver.Close(obj);
+            h.handles.erase(handle);
         }
     }
     return 0;
