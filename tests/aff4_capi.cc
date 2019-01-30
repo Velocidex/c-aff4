@@ -33,7 +33,7 @@ void printBuffer(const char* buffer, int size) {
 
 class AFF4CAPI : public ::testing::Test {
 protected:
-    const std::string reference_images = "tests/ReferenceImages/";
+    const std::string reference_images = "ReferenceImages/";
 };
 
 
@@ -52,8 +52,8 @@ TEST_F(AFF4CAPI, Sample1URN) {
     memset(buffer, 0, 32);
     int read = AFF4_read(handle, 0, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
+    ASSERT_STREQ("\x33\xC0\x8E\xD0\xBC\x00\x7C\x8E\xC0\x8E\xD8\xBE\x00\x7C\xBF\x00\x06\xB9\x00\x02\xFC\xF3\xA4\x50\x68\x1C\x06\xCB\xFB\xB9\x04\x00", buffer);
 
-    printBuffer(buffer, 32);
     free(buffer);
     AFF4_close(handle, nullptr);
 }
@@ -74,13 +74,13 @@ TEST_F(AFF4CAPI, Sample2URN) {
     // Start
     int read = AFF4_read(handle, 0, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
-    printBuffer(buffer, 32);
+    ASSERT_STREQ("\x33\xC0\x8E\xD0\xBC\x00\x7C\x8E\xC0\x8E\xD8\xBE\x00\x7C\xBF\x00\x06\xB9\x00\x02\xFC\xF3\xA4\x50\x68\x1C\x06\xCB\xFB\xB9\x04\x00", buffer);
 
     // Unreadable
     memset(buffer, 0, 32);
     read = AFF4_read(handle, 32326 * 512, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
-    printBuffer(buffer, 32);
+    ASSERT_STREQ("\x4D\xD9\x8B\x8C\xE2\x39\x44\x58\x6B\xA2\xA8\xDB\x04\x1C\x6D\x36\x81\x41\x36\x8B\x90\xA7\x16\xC2\x5E\x9A\x0C\xA6\xE6\xD9\x0B\x7E", buffer);
 
     free(buffer);
     AFF4_close(handle, nullptr);
@@ -102,13 +102,13 @@ TEST_F(AFF4CAPI, Sample3URN) {
     // Start...
     int read = AFF4_read(handle, 0, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
-    printBuffer(buffer, 32);
+    ASSERT_STREQ("\x33\xC0\x8E\xD0\xBC\x00\x7C\x8E\xC0\x8E\xD8\xBE\x00\x7C\xBF\x00\x06\xB9\x00\x02\xFC\xF3\xA4\x50\x68\x1C\x06\xCB\xFB\xB9\x04\x00", buffer);
 
     // Unreadable
     memset(buffer, 0, 32);
     read = AFF4_read(handle, 32326 * 512, buffer, 32, nullptr);
     ASSERT_EQ(32, read);
-    printBuffer(buffer, 32);
+    ASSERT_STREQ("\x55\x4E\x52\x45\x41\x44\x41\x42\x4C\x45\x44\x41\x54\x41\x55\x4E\x52\x45\x41\x44\x41\x42\x4C\x45\x44\x41\x54\x41\x55\x4E\x52\x45", buffer);
 
     free(buffer);
     AFF4_close(handle, nullptr);
