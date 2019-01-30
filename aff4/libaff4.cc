@@ -105,7 +105,7 @@ AFF4Status AFF4Stream::Seek(off_t offset, int whence) {
         new_offset += offset;
 
     } else if (whence == 2) {
-        // We can not seek relative to size for streams which are non sizeable.
+        // We cannot seek relative to size for streams which are non sizeable.
         if (!properties.sizeable) {
             return IO_ERROR;
         }

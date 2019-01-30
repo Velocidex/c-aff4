@@ -216,7 +216,7 @@ AFF4Status OSXPmemImager::ParseArgs() {
   if (result == CONTINUE && Get("load-driver")->isSet() &&
       Get("unload-driver")->isSet()) {
       resolver.logger->critical(
-          "You can not specify both the -l and -u options together.");
+          "You cannot specify both the -l and -u options together.");
     return INVALID_INPUT;
   }
 
@@ -277,12 +277,12 @@ std::string OSXPmemImager::get_driver_path() {
 
 void OSXPmemImager::fix_path(const std::string& path, mode_t mode) {
     if (lchown(path.c_str(), 0, 0) != 0) {
-        resolver.logger->info("Can not chown {} ({}). Driver may not load.",
+        resolver.logger->info("Cannot chown {} ({}). Driver may not load.",
                               path, strerror(errno));
     }
 
     if (chmod(path.c_str(), 07700 & mode) != 0) {
-        resolver.logger->info("Can not chmod {} ({}). Driver may not load.",
+        resolver.logger->info("Cannot chmod {} ({}). Driver may not load.",
                               path, strerror(errno));
     }
 }

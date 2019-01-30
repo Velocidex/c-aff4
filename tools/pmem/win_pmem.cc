@@ -153,7 +153,7 @@ AFF4Status WinPmemImager::GetMemoryInfo(PmemMemoryInfo *info) {
       <FileBackedObject>(device_urn);
 
   if (!device_stream) {
-      resolver.logger->error("Can not open device {}", device_urn);
+      resolver.logger->error("Cannot open device {}", device_urn);
       return IO_ERROR;
   }
 
@@ -647,7 +647,7 @@ AFF4Status WinPmemImager::_InstallDriver(std::string driver_path) {
 
   SC_HANDLE scm = OpenSCManager(NULL, NULL, SC_MANAGER_CREATE_SERVICE);
   if (!scm) {
-      resolver.logger->error("Can not open SCM. Are you administrator?");
+      resolver.logger->error("Cannot open SCM. Are you administrator?");
       return IO_ERROR;
   }
 
@@ -710,7 +710,7 @@ AFF4Status WinPmemImager::InstallDriver() {
     // and when not to - We try to load the attestation signed ones
     // first, and if that fails we try the other ones. On modern win10
     // systems the attestation signed drivers are required, while on
-    // windows 7 they can not be loaded.
+    // windows 7 they cannot be loaded.
     URN filename_urn = URN::NewURNFromFilename(driver_path);
     size_t file_size;
     const unsigned char* file_contents = GetDriverAtt(resolver, &file_size);
@@ -821,7 +821,7 @@ AFF4Status WinPmemImager::ParseArgs() {
   // Sanity checks.
   if (result == CONTINUE && Get("load-driver")->isSet() &&
       Get("unload-driver")->isSet()) {
-      resolver.logger->error("You can not specify both the -l and -u options together.");
+      resolver.logger->error("You cannot specify both the -l and -u options together.");
     return INVALID_INPUT;
   }
 

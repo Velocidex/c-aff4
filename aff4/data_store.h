@@ -85,8 +85,8 @@ struct AFF4ObjectCacheEntry {
     ~AFF4ObjectCacheEntry() {
         unlink();
 
-        // We can not call Flush on destruction because Flushing an object might try
-        // to access another object in the cache, which we can not guarantee is not
+        // We cannot call Flush on destruction because Flushing an object might try
+        // to access another object in the cache, which we cannot guarantee is not
         // already destroyed. Therefore we destroy the cache in two passes - first
         // we call Flush on all objects, then we destroy all objects without calling
         // their Flush methods.
@@ -110,7 +110,7 @@ class AFF4ObjectCache {
     std::shared_ptr<spdlog::logger> logger;
 
     // When objects are returned from Get() they are placed on this map. This
-    // ensures that they can not be deleted while in use. When objects are
+    // ensures that they cannot be deleted while in use. When objects are
     // returned to the cache with Return() they are placed in the normal lru.
     std::unordered_map<std::string, AFF4ObjectCacheEntry*> in_use;
     std::unordered_map<std::string, AFF4ObjectCacheEntry*> lru_map;
@@ -119,7 +119,7 @@ class AFF4ObjectCache {
     /**
      *   Trim the size of the cache if needed.
      *
-     * @return STATUS_OK if flushing objects is successful. Objects which can not
+     * @return STATUS_OK if flushing objects is successful. Objects which cannot
      * be flushed are not removed from the cache.
      */
     AFF4Status Trim_();
@@ -181,7 +181,7 @@ class AFF4ObjectCache {
      * @param urn
      *
      * @return STATUS_OK if Flushing the object worked. If there is an error the
-     * object can not be removed from the cache.
+     * object cannot be removed from the cache.
      */
     AFF4Status Remove(AFF4Object* object);
 
