@@ -205,7 +205,7 @@ LEXICON_DEFINE(AFF4_CONSTANT_CHAR, "http://aff4.org/Schema#constant_char");
 LEXICON_DEFINE(AFF4_DIRECTORY_TYPE, "http://aff4.org/Schema#directory");
 
 // An AFF4 Directory stores all members as files on the filesystem. Some
-// filesystems can not represent the URNs properly, hence we need a mapping
+// filesystems cannot represent the URNs properly, hence we need a mapping
 // between the URN and the filename. This attribute stores the _relative_ path
 // of the filename for the member URN relative to the container's path.
 LEXICON_DEFINE(AFF4_DIRECTORY_CHILD_FILENAME, "http://aff4.org/Schema#directory/filename");

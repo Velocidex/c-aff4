@@ -22,7 +22,7 @@ namespace aff4 {
 
 class AFF4ImageTest: public ::testing::Test {
  protected:
-  std::string filename = "/tmp/aff4_test.zip";
+  std::string filename = "file:///tmp/aff4_test.zip";
   std::string image_name = "image.dd";
   URN volume_urn;
   URN image_urn;
@@ -31,7 +31,7 @@ class AFF4ImageTest: public ::testing::Test {
 
   // Remove the file on teardown.
   virtual void TearDown() {
-      unlink(filename.c_str());
+      unlink(filename.c_str() + 7);
   }
 
   // Create an AFF4Image stream with some data in it.

@@ -32,6 +32,10 @@ TEST(URNTest, SerializeURN) {
       "/etc/passwd").SerializeToString(), "file:///etc/passwd");
 #endif
 
+#ifdef _WIN32
+  // FIXME: Due to a bug in uriparser handling of relative paths, we currently
+  // force all UNIX path names to be absolute.
+
   // Relative paths are relative to the current working directory.
   {
     char cwd[1024];
@@ -52,6 +56,7 @@ TEST(URNTest, SerializeURN) {
     EXPECT_EQ(URN("etc/passwd").SerializeToString(),
                 std::string("file://") + cwd_string + "/etc/passwd");
   };
+#endif
 }
 
 
@@ -80,7 +85,9 @@ TEST(URNTest, Append) {
             "http://www.google.com/aa/c");
 }
 
-
+#ifdef _WIN32
+// FIXME: Due to a bug in uriparser handling of relative paths, we currently
+// force all UNIX path names to be absolute.
 TEST(URNTest, RelativePath) {
   URN parent("aff4://e21659ea-c7d6-4f4d-8070-919178aa4c7b");
   URN child(
@@ -89,6 +96,7 @@ TEST(URNTest, RelativePath) {
 
   EXPECT_EQ(parent.RelativePath(child), "/bin/ls/00000000/index");
 }
+#endif
 
 // Test that XSDInteger can accomodate very large values.
 TEST(XSDIntegerTest, SerializeToString) {

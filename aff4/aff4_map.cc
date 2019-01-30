@@ -156,7 +156,7 @@ std::string AFF4Map::Read(size_t length) {
                 // due to Virtual Secure Mode (VSM) memory. Re-read memory in smaller units,
                 // while leaving the unreadable regions null-padded.
                 resolver->logger->info(
-                    "Map target {} can not produced required {} bytes at offset 0x{:x}. Got {} bytes. Will re-read one page at a time.",
+                    "Map target {} cannot produced required {} bytes at offset 0x{:x}. Got {} bytes. Will re-read one page at a time.",
                     target_stream->urn.SerializeToString(),
                     length_to_read_in_target, offset_in_target, data.size());
 

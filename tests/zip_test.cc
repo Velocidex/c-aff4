@@ -21,7 +21,7 @@ namespace aff4 {
 
 class ZipTest: public ::testing::Test {
  protected:
-        std::string filename = "/tmp/aff4_test.zip";
+        std::string filename = "file:///tmp/aff4_test.zip";
         std::string segment_name = "Foobar.txt";
         std::string data1 = "I am a segment!";
         std::string data2 = "I am another segment!";

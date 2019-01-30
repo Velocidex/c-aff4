@@ -23,7 +23,7 @@ namespace aff4 {
 
 class AFF4ImageRDFQuery : public ::testing::Test {
 protected:
-    const std::string reference_images = "tests/ReferenceImages/";
+    const std::string reference_images = "ReferenceImages/";
 };
 
 

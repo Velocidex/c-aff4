@@ -301,7 +301,7 @@ AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
             output_volume_backing_urn = URN("builtin://stdout");
         }
 
-        // Flat files can not store more than one stream so we must
+        // Flat files cannot store more than one stream so we must
         // truncate them.
         resolver.Set(output_volume_backing_urn,
                      AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
@@ -336,7 +336,7 @@ AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
 AFF4Status PmemImager::process_input() {
     if (volume_type != "aff4") {
         resolver.logger->info(
-            "Output volume is not an AFF4 file. Can not capture additional streams. "
+            "Output volume is not an AFF4 file. Cannot capture additional streams. "
             "Choose an AFF4 volume to capture additional streams.");
         return STATUS_OK;
     }

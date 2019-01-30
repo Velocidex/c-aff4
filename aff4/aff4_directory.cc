@@ -75,8 +75,8 @@ AFF4ScopedPtr<AFF4Stream> AFF4Directory::CreateMember(URN child) {
         return AFF4ScopedPtr<AFF4Stream>();
     }
 
-    // Use this filename. Note that since filesystems can not typically represent
-    // files and directories as the same path component we can not allow slashes
+    // Use this filename. Note that since filesystems cannot typically represent
+    // files and directories as the same path component we cannot allow slashes
     // in the filename. Otherwise we will fail to create e.g. stream/0000000 and
     // stream/0000000.index.
     std::string filename = member_name_for_urn(child, urn, false);

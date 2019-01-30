@@ -151,7 +151,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
 
     if (fd == INVALID_HANDLE_VALUE) {
         resolver->logger->error(
-            "Can not open file {} : {}", filename,
+            "Cannot open file {} : {}", filename,
             GetLastErrorMessage());
 
         return IO_ERROR;
@@ -332,7 +332,7 @@ AFF4Status FileBackedObject::LoadFromURN() {
               S_IRWXU | S_IRWXG | S_IRWXO);
 
     if (fd < 0) {
-        resolver->logger->error("Can not open file {}: {}", filename,
+        resolver->logger->error("Cannot open file {}: {}", filename,
                                 GetLastErrorMessage());
         return IO_ERROR;
     }
@@ -389,7 +389,7 @@ AFF4Status FileBackedObject::Write(const char* data, size_t length) {
         return IO_ERROR;
     }
 
-    // Since all file operations are synchronous this object can not be dirty.
+    // Since all file operations are synchronous this object cannot be dirty.
     if (properties.seekable) {
         lseek(fd, readptr, SEEK_SET);
     }

@@ -453,7 +453,7 @@ AFF4Status BasicImager::process_input() {
 AFF4Status BasicImager::handle_export() {
     if (Get("output")->isSet()) {
         resolver.logger->error(
-            "Can not specify an export and an output volume at the same time "
+            "Cannot specify an export and an output volume at the same time "
             "(did you mean --export_dir).");
         return INVALID_INPUT;
     }

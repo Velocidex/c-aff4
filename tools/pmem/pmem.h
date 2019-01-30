@@ -102,7 +102,7 @@ class PmemImager: public BasicImager {
         AddArg(new TCLAP::MultiArgToNextFlag(
                    "p", "pagefile", "Also capture the pagefile. Note that you must "
                    "provide this option rather than e.g. '--input c:\\pagefile.sys' "
-                   "because we can not normally read the pagefile directly. This "
+                   "because we cannot normally read the pagefile directly. This "
                    "option will use the sleuthkit to read the pagefile.",
                    false, "/path/to/pagefile"));
 
