@@ -80,11 +80,7 @@ public:
 
 struct Holder {
     Holder():
-        resolver(
-            aff4::DataStoreOptions{
-                spdlog::create("aff4", std::make_shared<LogSink>()), 1
-            }
-        )
+        resolver(Holder::make_resolver())
     {
         resolver.logger->set_level(spdlog::level::err);
     }
@@ -96,6 +92,15 @@ struct Holder {
         }
         urn = it->second;
         return true;
+    }
+
+    static aff4::MemoryDataStore make_resolver() {
+        spdlog::drop("aff4");
+        return aff4::MemoryDataStore(
+            aff4::DataStoreOptions{
+                spdlog::create("aff4", std::make_shared<LogSink>()), 1
+            }
+        );
     }
 
     aff4::MemoryDataStore resolver;

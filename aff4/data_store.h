@@ -324,6 +324,10 @@ class DataStore {
     DataStore(DataStoreOptions options);
     virtual ~DataStore() {}
 
+    DataStore(DataStore&&) = default;
+
+    DataStore& operator=(DataStore&&) = default;
+
     // All logging directives go through this handle. It can be
     // replaced with a different handler if needed.
     std::shared_ptr<spdlog::logger> logger;
@@ -630,6 +634,10 @@ class MemoryDataStore: public DataStore {
 
   public:
     MemoryDataStore() = default;
+
+    MemoryDataStore(MemoryDataStore&&) = default;
+
+    MemoryDataStore& operator=(MemoryDataStore&&) = default;
 
     MemoryDataStore(DataStoreOptions options): DataStore(options) {}
 
