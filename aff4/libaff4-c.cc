@@ -225,6 +225,7 @@ int AFF4_read(int handle, uint64_t offset, void* buffer, int length, AFF4_Messag
         std::memcpy(buffer, result.data(), read);
     } else {
         errno = ENOENT;
+        return -1;
     }
     return read;
 }
