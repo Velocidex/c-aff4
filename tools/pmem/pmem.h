@@ -31,11 +31,11 @@ class PmemImager: public BasicImager {
     std::vector<std::string> pagefiles;
     std::string volume_type;
 
-    virtual std::string GetName() {
+    virtual std::string GetName() const {
         return "The Pmem physical memory imager. Copyright 2014 Google Inc.";
     }
 
-    virtual std::string GetVersion() {
+    virtual std::string GetVersion() const {
         return PMEM_VERSION;
     }
 

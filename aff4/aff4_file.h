@@ -79,13 +79,15 @@ class AFF4ConstantStream: public AFF4Stream {
   public:
     explicit AFF4ConstantStream(DataStore* resolver): AFF4Stream(resolver) {}
 
-    aff4_off_t Size() override {
+    virtual aff4_off_t Size() const override {
         return -1;
     }
+
     AFF4Status LoadFromURN() override {
         size = Size();
         return STATUS_OK;
     }
+
     std::string Read(size_t length) override {
         return std::string(length, constant);
     }

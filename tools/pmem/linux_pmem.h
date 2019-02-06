@@ -28,7 +28,7 @@ struct ram_range {
 
 class LinuxPmemImager: public PmemImager {
  protected:
-    virtual std::string GetName() {
+    virtual std::string GetName() const {
         return "The LinuxPmem memory imager.  Copyright 2014 Google Inc.";
   }
 

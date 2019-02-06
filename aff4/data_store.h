@@ -229,7 +229,7 @@ class AFF4ScopedPtr {
         return ptr_;
     }
 
-    bool operator!(void)  {
+    bool operator!(void) const {
         return ptr_ ? false : true;
     }
 
@@ -686,8 +686,8 @@ class MemoryDataStore: public DataStore {
 
     AFF4Status LoadFromTurtle(AFF4Stream& output) override;
 
-    AFF4Status Clear() override;
-    AFF4Status Flush() override;
+    virtual AFF4Status Clear() override;
+    virtual AFF4Status Flush() override;
 };
 
 } // namespace aff4

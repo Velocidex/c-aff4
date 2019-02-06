@@ -25,13 +25,13 @@ class ClassFactory {
     std::unordered_map<
     std::string, std::function<T* (DataStore*, const URN*)> > factoryFunctionRegistry;
 
-    std::unique_ptr<T> CreateInstance(char* name, DataStore* resolver,
-                                      const URN* urn = nullptr) {
+    std::unique_ptr<T> CreateInstance(const char* name, DataStore* resolver,
+                                      const URN* urn = nullptr) const {
         return CreateInstance(std::string(name), resolver, urn);
     }
 
     std::unique_ptr<T> CreateInstance(std::string name, DataStore* data,
-                                      const URN* urn = nullptr) {
+                                      const URN* urn = nullptr) const {
         T* instance = nullptr;
 
         // find name in the registry and call factory method.

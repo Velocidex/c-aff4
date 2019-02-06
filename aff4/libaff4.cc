@@ -167,7 +167,7 @@ off_t AFF4Stream::Tell() {
     return readptr;
 }
 
-off_t AFF4Stream::Size() {
+off_t AFF4Stream::Size() const {
     return size;
 }
 
@@ -341,7 +341,7 @@ std::string StringIO::Read(size_t length) {
     return result;
 }
 
-off_t StringIO::Size() {
+off_t StringIO::Size() const {
     return buffer.size();
 }
 
@@ -393,7 +393,7 @@ std::string GetLastErrorMessage() {
 
 extern "C" {
     const char* AFF4_version() {
-        static std::string version = std::string("libaff4 version ") + AFF4_VERSION;
+        static const std::string version = std::string("libaff4 version ") + AFF4_VERSION;
         return version.c_str();
     }
 }
