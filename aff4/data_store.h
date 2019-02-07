@@ -206,7 +206,7 @@ class AFF4ScopedPtr {
     DataStore* resolver_;
 
   public:
-    AFF4ScopedPtr(): ptr_(0), resolver_(nullptr) {}
+    AFF4ScopedPtr(): ptr_(nullptr), resolver_(nullptr) {}
     explicit AFF4ScopedPtr(AFF4ObjectType* p, DataStore* resolver):
     ptr_(p), resolver_(resolver) {
         if (resolver == nullptr) abort();
@@ -225,7 +225,7 @@ class AFF4ScopedPtr {
     }
 
     AFF4ObjectType* operator->() const {
-        if(ptr_ == nullptr) abort();
+        if (ptr_ == nullptr) abort();
         return ptr_;
     }
 
@@ -251,9 +251,15 @@ class AFF4ScopedPtr {
         ptr_ = p;
     }
 
-    AFF4ScopedPtr(AFF4ScopedPtr&& other) {
+    AFF4ScopedPtr(AFF4ScopedPtr&& other):
+        ptr_(other.release()), resolver_(other.resolver_) {}
+
+    AFF4ScopedPtr& operator=(AFF4ScopedPtr&& other) {
+      if (this != &other) {
         ptr_ = other.release();
         resolver_ = other.resolver_;
+      }
+      return *this;
     }
 
     AFF4ScopedPtr(const AFF4ScopedPtr& other) = delete;
