@@ -23,6 +23,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4/aff4_utils.h"
 #include "aff4/rdf.h"
 
+#include <cstring>
+
 namespace aff4 {
 
 /*
