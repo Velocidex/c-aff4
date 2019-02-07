@@ -58,6 +58,8 @@ class AFF4Map: public AFF4Stream {
     // The URN that will be used as the target of the next Write() operation.
     URN last_target;
 
+    aff4_off_t size{}; // Logical size of the map stream
+
   public:
     // The target list.
     std::vector<URN> targets;
@@ -101,6 +103,7 @@ class AFF4Map: public AFF4Stream {
     void Clear();
 
     aff4_off_t Size() override;
+    void SetSize(aff4_off_t size);
 
     using AFF4Stream::Write;
 };
