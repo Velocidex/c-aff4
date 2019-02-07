@@ -383,11 +383,12 @@ AFF4Status BasicImager::process_input() {
                 resolver.Set(image_urn, AFF4_STREAM_ORIGINAL_FILENAME,
                              new XSDString(input));
             }
+
             // For very small streams, it is more efficient to just store them without
             // compression. Also if the user did not ask for compression, there is no
             // advantage in storing a Bevy based image, just store it in one piece.
             if (compression == AFF4_IMAGE_COMPRESSION_ENUM_STORED ||
-                    input_stream->Size() < 10 * 1024 * 1024) {
+                    (input_stream->Size() > 0 && input_stream->Size() < 10 * 1024 * 1024) ) {
                 AFF4ScopedPtr<AFF4Stream> image_stream = volume->CreateMember(
                             image_urn);
 
