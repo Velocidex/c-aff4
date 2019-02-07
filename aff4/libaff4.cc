@@ -337,8 +337,14 @@ AFF4Status StringIO::Write(const char* data, size_t length) {
 std::string StringIO::Read(size_t length) {
     std::string result = buffer.substr(readptr, length);
     readptr += result.size();
-
     return result;
+}
+
+AFF4Status StringIO::ReadBuffer(char* data, size_t* length) {
+    *length = std::min(*length, buffer.size() - readptr);
+    std::memcpy(data, buffer.data() + readptr, *length);
+    readptr += *length;
+    return STATUS_OK;
 }
 
 off_t StringIO::Size() const {
