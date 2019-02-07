@@ -467,11 +467,6 @@ AFF4Status AFF4BuiltInStreams::LoadFromURN() {
     return IO_ERROR;
 }
 
-std::string AFF4BuiltInStreams::Read(size_t length) {
-    UNUSED(length);
-    return "";
-}
-
 AFF4Status AFF4BuiltInStreams::Write(const char* data, size_t length) {
     int res = write(fd, data, length);
     if (res >= 0) {
