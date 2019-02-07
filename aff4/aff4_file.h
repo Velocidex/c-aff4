@@ -74,7 +74,7 @@ class FileBackedObject: public AFF4Stream {
 
 
 /*
-  A stream which just returns the same char over.
+  A stream which just returns the same char over and over.
  */
 class AFF4ConstantStream: public AFF4Stream {
     char constant = 0;
