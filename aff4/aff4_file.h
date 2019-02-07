@@ -49,8 +49,8 @@ class FileBackedObject: public AFF4Stream {
     explicit FileBackedObject(DataStore* resolver): AFF4Stream(resolver), fd(0){}
     virtual ~FileBackedObject();
 
-    std::string Read(size_t length) override;
-    AFF4Status ReadBuffer(char* data, size_t *length) override;
+    virtual std::string Read(size_t length) override;
+    virtual AFF4Status ReadBuffer(char* data, size_t *length) override;
     AFF4Status Write(const char* data, size_t length) override;
 
     /**

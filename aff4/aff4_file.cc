@@ -89,6 +89,18 @@ AFF4Status _CreateIntermediateDirectories(DataStore *resolver, std::string dir_n
     return _CreateIntermediateDirectories(resolver, split(dir_name, PATH_SEP));
 }
 
+std::string FileBackedObject::Read(size_t length) {
+    if (length == 0) {
+        return "";
+    }
+
+    std::string result(length, '\0');
+    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
+        return "";
+    }
+    result.resize(length);
+    return result;
+}
 
 // Windows files are read through the CreateFile() API so that devices can be
 // read.
@@ -185,19 +197,6 @@ AFF4Status FileBackedObject::LoadFromURN() {
     }
 
     return STATUS_OK;
-}
-
-std::string FileBackedObject::Read(size_t length) {
-    if (length == 0) {
-        return "";
-    }
-
-    std::string result(length, '\0');
-    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
-        return "";
-    }
-    result.resize(length);
-    return result;
 }
 
 AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
@@ -342,35 +341,16 @@ AFF4Status FileBackedObject::LoadFromURN() {
     return STATUS_OK;
 }
 
-std::string FileBackedObject::Read(size_t length) {
-    std::unique_ptr<char[]> result(new char[length]);
-    int res;
-
+AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
     lseek(fd, readptr, SEEK_SET);
-    res = read(fd, result.get(), length);
+    const int res = read(fd, data, *length);
     if (res < 0) {
-        return "";
+        *length = 0;
+        return IO_ERROR;
     }
 
     readptr += res;
-
-    return std::string(result.get(), res);
-}
-
-AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
-    if (!properties.writable) {
-        return IO_ERROR;
-    }
-
-    lseek(fd, readptr, SEEK_SET);
-    int res = read(fd, data, *length);
-    if (res >= 0) {
-        readptr += res;
-        *length = res;
-    } else {
-        return IO_ERROR;
-    }
-
+    *length = res;
     return STATUS_OK;
 }
 
