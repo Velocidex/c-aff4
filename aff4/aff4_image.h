@@ -60,10 +60,10 @@ namespace aff4 {
  */
 
 // Compression methods we support.
-AFF4Status CompressZlib_(const char* data, size_t length, std::string& output);
-AFF4Status DeCompressZlib_(const char* data, size_t length, std::string& output);
-AFF4Status CompressSnappy_(const char* data, size_t length, std::string& output);
-AFF4Status DeCompressSnappy_(const char* data, size_t length, std::string& output);
+AFF4Status CompressZlib_(const char* data, size_t length, std::string* output);
+AFF4Status DeCompressZlib_(const char* data, size_t length, std::string* output);
+AFF4Status CompressSnappy_(const char* data, size_t length, std::string* output);
+AFF4Status DeCompressSnappy_(const char* data, size_t length, std::string* output);
 
 
 // This is the type written to the map stream in this exact binary layout.
@@ -81,7 +81,7 @@ class AFF4Image: public AFF4Stream {
     AFF4Status FlushBevy();
 
     // Convert the legecy formatted bevvy data into the new format.
-    std::string _FixupBevyData(std::string& data);
+    std::string _FixupBevyData(std::string* data);
 
     int _ReadPartial(
         unsigned int chunk_id, int chunks_to_read, std::string& result);

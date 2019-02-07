@@ -23,29 +23,29 @@ specific language governing permissions and limitations under the License.
 namespace aff4 {
 
 
-AFF4Status CompressZlib_(const std::string &input, std::string& output) {
+AFF4Status CompressZlib_(const std::string &input, std::string* output) {
     uLongf c_length = compressBound(input.size()) + 1;
-    output.resize(c_length);
+    output->resize(c_length);
 
-    if (compress2(reinterpret_cast<Bytef*>(&output[0]),
+    if (compress2(reinterpret_cast<Bytef*>(&(*output)[0]),
                   &c_length,
                   reinterpret_cast<Bytef*>(const_cast<char*>(input.data())),
                   input.size(), 1) != Z_OK) {
         return MEMORY_ERROR;
     }
 
-    output.resize(c_length);
+    output->resize(c_length);
 
     return STATUS_OK;
 }
 
-AFF4Status DeCompressZlib_(const std::string &input, std::string& output) {
-    uLongf buffer_size = output.size();
+AFF4Status DeCompressZlib_(const std::string &input, std::string* output) {
+    uLongf buffer_size = output->size();
 
-    if (uncompress(reinterpret_cast<Bytef*>(&output[0]),
+    if (uncompress(reinterpret_cast<Bytef*>(&(*output)[0]),
                    &buffer_size,
                    (const Bytef*)input.data(), input.size()) == Z_OK) {
-        output.resize(buffer_size);
+        output->resize(buffer_size);
         return STATUS_OK;
     }
 
@@ -53,15 +53,15 @@ AFF4Status DeCompressZlib_(const std::string &input, std::string& output) {
 }
 
 
-AFF4Status CompressSnappy_(const std::string &input, std::string& output) {
-    snappy::Compress(input.data(), input.size(), &output);
+AFF4Status CompressSnappy_(const std::string &input, std::string* output) {
+    snappy::Compress(input.data(), input.size(), output);
 
     return STATUS_OK;
 }
 
 
-AFF4Status DeCompressSnappy_(const std::string &input, std::string& output) {
-    if (!snappy::Uncompress(input.data(), input.size(), &output)) {
+AFF4Status DeCompressSnappy_(const std::string &input, std::string* output) {
+    if (!snappy::Uncompress(input.data(), input.size(), output)) {
         return GENERIC_ERROR;
     }
 
@@ -148,12 +148,12 @@ private:
 
         switch (compression) {
         case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
-            RETURN_IF_ERROR(CompressZlib_(data, c_data));
+            RETURN_IF_ERROR(CompressZlib_(data, &c_data));
         }
             break;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
-            RETURN_IF_ERROR(CompressSnappy_(data, c_data));
+            RETURN_IF_ERROR(CompressSnappy_(data, &c_data));
         }
             break;
 
@@ -632,11 +632,11 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
     } else {
         switch (compression) {
         case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB:
-            res = DeCompressZlib_(cbuffer, buffer);
+            res = DeCompressZlib_(cbuffer, &buffer);
             break;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:
-            res = DeCompressSnappy_(cbuffer, buffer);
+            res = DeCompressSnappy_(cbuffer, &buffer);
             break;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
@@ -693,7 +693,7 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
 
         if (isAFF4Legacy) {
             // Massage the bevvy data format from the old into the new.
-            bevy_index_data = _FixupBevyData(bevy_index_data);
+            bevy_index_data = _FixupBevyData(&bevy_index_data);
             index_size = bevy_index->Size() / sizeof(uint32_t);
         }
 
@@ -800,10 +800,10 @@ static AFF4Registrar<AFF4Image> r2(AFF4_LEGACY_IMAGESTREAM_TYPE);
 
 void aff4_image_init() {}
 
-std::string AFF4Image::_FixupBevyData(std::string& data){
-    const uint32_t index_size = data.length() / sizeof(uint32_t);
+std::string AFF4Image::_FixupBevyData(std::string* data){
+    const uint32_t index_size = data->length() / sizeof(uint32_t);
     std::unique_ptr<BevyIndex[]> bevy_index_array(new BevyIndex[index_size]);
-    uint32_t* bevy_index_data = reinterpret_cast<uint32_t*>(&data[0]);
+    uint32_t* bevy_index_data = reinterpret_cast<uint32_t*>(&(*data)[0]);
 
     uint64_t cOffset = 0;
     uint32_t cLength = 0;
