@@ -223,6 +223,7 @@ ssize_t AFF4_read(int handle, uint64_t offset, void* buffer, size_t length, AFF4
             stream->ReadBuffer(static_cast<char*>(buffer), &length) != aff4::STATUS_OK)
         {
             errno = EIO;
+            return -1;
         }
     }
     else {
