@@ -359,6 +359,9 @@ AFF4Status AFF4Image::LoadFromURN() {
         }
     }
 
+    // By default we cache 32 MiB of bevys
+    chunk_cache_size = (32 * 1024 * 1024) / chunk_size;
+
     // Load the compression scheme. If it is not set we just default to ZLIB.
     URN compression_urn;
     if (STATUS_OK == resolver->Get(urn, AFF4_IMAGE_COMPRESSION, compression_urn)) {
@@ -598,6 +601,13 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
     unsigned int chunk_id_in_bevy = chunk_id % chunks_per_segment;
     BevyIndex entry;
 
+    // Check first to see if the chunk is in the cache
+    const auto it = chunk_cache.find(chunk_id);
+    if (it != chunk_cache.end()) {
+        result += it->second;
+        return STATUS_OK;
+    }
+
     if (index_size == 0) {
         resolver->logger->error("Index empty in {} : chunk {}",
                                urn, chunk_id);
@@ -657,6 +667,14 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
                                 urn, chunk_id);
         return res;
     }
+
+    // Empty the cache if it's full
+    if (chunk_cache.size() >= chunk_cache_size) {
+        chunk_cache.clear();
+    }
+
+    // Add the decompressed chunk to the cache
+    chunk_cache[chunk_id] = buffer;
 
     result += buffer;
     return STATUS_OK;
