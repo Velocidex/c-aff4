@@ -177,6 +177,8 @@ class AFF4Image: public AFF4Stream {
      */
     std::string Read(size_t length) override;
 
+    AFF4Status ReadBuffer(char* data, size_t* length) override;
+
     AFF4Status Flush() override;
 
     using AFF4Stream::Write;

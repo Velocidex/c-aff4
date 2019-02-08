@@ -776,20 +776,22 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
     return chunks_read;
 }
 
-std::string AFF4Image::Read(size_t length) {
-    if (length > AFF4_MAX_READ_LEN) {
-        return "";
+AFF4Status AFF4Image::ReadBuffer(char* data, size_t* length) {
+    if (*length > AFF4_MAX_READ_LEN) {
+        *length = 0;
+        return STATUS_OK; // FIXME?
     }
 
-    length = std::min((aff4_off_t)length,
-                      std::max((aff4_off_t)0, (aff4_off_t)Size() - readptr));
+    *length = std::min((aff4_off_t)*length,
+                       std::max((aff4_off_t)0, (aff4_off_t)Size() - readptr));
 
     int initial_chunk_offset = readptr % chunk_size;
     unsigned int initial_chunk_id = readptr / chunk_size;
-    unsigned int final_chunk_id = (readptr + length - 1) / chunk_size;
+    unsigned int final_chunk_id = (readptr + *length - 1) / chunk_size;
 
     // We read this many full chunks at once.
     int chunks_to_read = final_chunk_id - initial_chunk_id + 1;
+// TODO: write to the buffer, not a std::string
     unsigned int chunk_id = initial_chunk_id;
     std::string result;
 
@@ -800,7 +802,8 @@ std::string AFF4Image::Read(size_t length) {
         int chunks_read = _ReadPartial(chunk_id, chunks_to_read, result);
         // Error occured.
         if (chunks_read < 0) {
-            return "";
+            *length = 0;
+            return STATUS_OK; // FIXME?
         } else if (chunks_read == 0) {
             break;
         }
@@ -812,9 +815,23 @@ std::string AFF4Image::Read(size_t length) {
         result.erase(0, initial_chunk_offset);
     }
 
-    result.resize(length);
-    readptr = std::min((aff4_off_t)(readptr + length), Size());
+    std::memcpy(data, result.data(), *length);
+    readptr = std::min((aff4_off_t)(readptr + *length), Size());
+    return STATUS_OK;
+}
 
+// FIXME: move to base class
+std::string AFF4Image::Read(size_t length) {
+    if (length == 0) {
+        return "";
+    }
+
+    std::string result(length, '\0');
+    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
+        return "";
+    }
+
+    result.resize(length);
     return result;
 }
 
