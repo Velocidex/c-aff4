@@ -72,7 +72,7 @@ AFF4Status DeCompressSnappy_(const std::string &input, std::string* output) {
 AFF4Status CompressLZ4_(const std::string &input, std::string* output) {
     output->resize(LZ4_compressBound(input.size()));
 
-    int size = LZ4_compress_default(input.data(), const_cast<char *>(output->data()),
+    int size = LZ4_compress_default(input.data(), &(*output)[0],
                                     input.size(), output->size());
     if (size == 0) {
         return GENERIC_ERROR;
@@ -85,7 +85,7 @@ AFF4Status CompressLZ4_(const std::string &input, std::string* output) {
 
 
 AFF4Status DeCompressLZ4_(const std::string &input, std::string* output) {
-    int size = LZ4_decompress_safe(input.data(), const_cast<char *>(output->data()),
+    int size = LZ4_decompress_safe(input.data(), &(*output)[0],
                                    input.size(), output->size());
     if (size == 0) {
         return GENERIC_ERROR;
