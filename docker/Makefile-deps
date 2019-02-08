@@ -1,5 +1,6 @@
 # This makefile fetches and builds all of the dependencies for aff4.
 
+CONCURRENCY=14
 ZLIB_VERSION=1.2.11.dfsg
 ZLIB_SRC_PATH=zlib-${ZLIB_VERSION}
 RAPTOR_VERSION=2.0.14
@@ -22,9 +23,15 @@ GTEST_VERSION=1.8.1
 GTEST_SRC_PATH=googletest-release-${GTEST_VERSION}
 GLOG_VERSION=0.3.5
 GLOG_SRC_PATH=glog-${GLOG_VERSION}
-DEP_PATHS=${ZLIB_SRC_PATH} ${TCLAP_SRC_PATH} ${RAPTOR_SRC_PATH} ${PCRE3_SRC_PATH} ${LIBPCRE_CPP_SRC_PATH} ${SNAPPY_SRC_PATH} ${URIPARSER_SRC_PATH} ${YAML_CPP_SRC_PATH} ${GTEST_SRC_PATH} ${GLOG_SRC_PATH}
+LZ4_VERSION=1.8.3
+LZ4_SRC_PATH=lz4-${LZ4_VERSION}
+DEP_PATHS=${ZLIB_SRC_PATH} ${TCLAP_SRC_PATH} ${RAPTOR_SRC_PATH} ${PCRE3_SRC_PATH} ${LIBPCRE_CPP_SRC_PATH} ${SNAPPY_SRC_PATH} ${URIPARSER_SRC_PATH} ${YAML_CPP_SRC_PATH} ${GTEST_SRC_PATH} ${GLOG_SRC_PATH} ${LZ4_SRC_PATH}
 
 default: install-deps
+
+${LZ4_SRC_PATH}:
+	curl -L https://github.com/lz4/lz4/archive/v${LZ4_VERSION}.tar.gz -o lz4-${LZ4_VERSION}.tar.gz && \
+                tar xvzf lz4-${LZ4_VERSION}.tar.gz
 
 ${ZLIB_SRC_PATH}:
 	apt-get source zlib1g
@@ -46,112 +53,116 @@ ${URIPARSER_SRC_PATH}:
 
 ${YAML_CPP_SRC_PATH}:
 	\
-		curl -L https://github.com/jbeder/yaml-cpp/archive/yaml-cpp-${YAML_CPP_VERSION}.tar.gz -o yaml-cpp-${YAML_CPP_VERSION}.tar.gz && \
-		tar xvzf yaml-cpp-${YAML_CPP_VERSION}.tar.gz
+                curl -L https://github.com/jbeder/yaml-cpp/archive/yaml-cpp-${YAML_CPP_VERSION}.tar.gz -o yaml-cpp-${YAML_CPP_VERSION}.tar.gz && \
+                tar xvzf yaml-cpp-${YAML_CPP_VERSION}.tar.gz
 
 ${GTEST_SRC_PATH}:
 	\
-		curl -L https://github.com/google/googletest/archive/release-${GTEST_VERSION}.tar.gz -o googletest-release-${GTEST_VERSION}.tar.gz && \
-		tar xvzf googletest-release-${GTEST_VERSION}.tar.gz
+                curl -L https://github.com/google/googletest/archive/release-${GTEST_VERSION}.tar.gz -o googletest-release-${GTEST_VERSION}.tar.gz && \
+                tar xvzf googletest-release-${GTEST_VERSION}.tar.gz
 
 ${GLOG_SRC_PATH}:
 	\
-		curl -L https://github.com/google/glog/archive/v${GLOG_VERSION}.tar.gz -o glog-${GLOG_VERSION}.tar.gz && \
-		tar xvzf glog-${GLOG_VERSION}.tar.gz
+                curl -L https://github.com/google/glog/archive/v${GLOG_VERSION}.tar.gz -o glog-${GLOG_VERSION}.tar.gz && \
+                tar xvzf glog-${GLOG_VERSION}.tar.gz
 
 ${SPDLOG_SRC_PATH}:
 	\
-		curl -L https://github.com/gabime/spdlog/archive/v${SPDLOG_VERSION}.tar.gz -o spdlog-${SPDLOG_VERSION}.tar.gz && \
-		tar xvzf spdlog-${SPDLOG_VERSION}.tar.gz
+                curl -L https://github.com/gabime/spdlog/archive/v${SPDLOG_VERSION}.tar.gz -o spdlog-${SPDLOG_VERSION}.tar.gz && \
+                tar xvzf spdlog-${SPDLOG_VERSION}.tar.gz
 
 ${SNAPPY_SRC_PATH}:
 	\
-		curl -L https://github.com/google/snappy/archive/${SNAPPY_VERSION}.tar.gz -o snappy-${SNAPPY_VERSION}.tar.gz && \
-		tar xvzf snappy-${SNAPPY_VERSION}.tar.gz
+                curl -L https://github.com/google/snappy/archive/${SNAPPY_VERSION}.tar.gz -o snappy-${SNAPPY_VERSION}.tar.gz && \
+                tar xvzf snappy-${SNAPPY_VERSION}.tar.gz
+
+install-lz4: ${LZ4_SRC_PATH}
+	cd ${LZ4_SRC_PATH}/lib && \
+            CC="${CC}" PREFIX=${AFF4_DEPS_PATH} make -j${CONCURRENCY} install
 
 install-zlib: ${ZLIB_SRC_PATH}
 	cd ${ZLIB_SRC_PATH} && \
-		make -j4 -f win32/Makefile.gcc install PREFIX=i686-w64-mingw32- LDFLAGS="${LDFLAGS}" CC="${CC}" CXX="${CXX}" INCLUDE_PATH=${AFF4_DEPS_PATH}/include LIBRARY_PATH=${AFF4_DEPS_PATH}/lib BINARY_PATH=${AFF4_DEPS_PATH}/bin
+                make -j${CONCURRENCY} -f win32/Makefile.gcc install PREFIX=i686-w64-mingw32- LDFLAGS="${LDFLAGS}" CC="${CC}" CXX="${CXX}" INCLUDE_PATH=${AFF4_DEPS_PATH}/include LIBRARY_PATH=${AFF4_DEPS_PATH}/lib BINARY_PATH=${AFF4_DEPS_PATH}/bin
 
 install-raptor2: ${RAPTOR_SRC_PATH}
 	cd ${RAPTOR_SRC_PATH} && \
-		./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static --without-www \
-			${AUTOCONF_HOSTFLAG} --enable-parsers="turtle ntriples" --enable-serializers="turtle ntriples" \
-			LDFLAGS="${LDFLAGS}" \
-			CPPFLAGS="${CXX_FLAGS}" \
-			CFLAGS="${CFLAGS}" && \
-		make -j4 install
+                ./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static --without-www \
+                        ${AUTOCONF_HOSTFLAG} --enable-parsers="turtle ntriples" --enable-serializers="turtle ntriples" \
+                        LDFLAGS="${LDFLAGS}" \
+                        CPPFLAGS="${CXX_FLAGS}" \
+                        CFLAGS="${CFLAGS}" && \
+                make -j${CONCURRENCY} install
 
 install-tclap: ${TCLAP_SRC_PATH}
 	cd ${TCLAP_SRC_PATH} && \
-		./configure --prefix=${AFF4_DEPS_PATH} ${AUTOCONF_HOSTFLAG} \
-			LDFLAGS="${LDFLAGS}" \
-			CXXFLAGS="${CXXFLAGS} -static -DPCRE_STATIC" && \
-		make -j4 install
+                ./configure --prefix=${AFF4_DEPS_PATH} ${AUTOCONF_HOSTFLAG} \
+                        LDFLAGS="${LDFLAGS}" \
+                        CXXFLAGS="${CXXFLAGS} -static -DPCRE_STATIC" && \
+                make -j${CONCURRENCY} install
 
 install-pcre3: ${PCRE3_SRC_PATH} install-zlib
 	cd ${PCRE3_SRC_PATH} && \
-		./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static --disable-cpp ${AUTOCONF_HOSTFLAG} CFLAGS="${CFLAGS} -static" && \
-		cp -f /usr/bin/libtool ./libtool && \
-		make -j4 install
+                ./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static --disable-cpp ${AUTOCONF_HOSTFLAG} CFLAGS="${CFLAGS} -static" && \
+                cp -f /usr/bin/libtool ./libtool && \
+                make -j${CONCURRENCY} install
 
 install-libpcre_cpp: ${LIBPCRE_CPP_SRC_PATH} install-pcre3
 	cd ${LIBPCRE_CPP_SRC_PATH} && \
-		(./autogen.sh || true) && \
-		autoconf && \
-		./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static ${AUTOCONF_HOSTFLAG} \
-				CXXFLAGS="${CXXFLAGS} -static -DPCRE_STATIC" --with-pcre-include="${AFF4_DEPS_PATH}/include/" && \
-		cp -f /usr/bin/libtool ./libtool && \
-		cd "libpcre++" && \
-		make clean && \
-		make -j4 install
+                (./autogen.sh || true) && \
+                autoconf && \
+                ./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static ${AUTOCONF_HOSTFLAG} \
+                                CXXFLAGS="${CXXFLAGS} -static -DPCRE_STATIC" --with-pcre-include="${AFF4_DEPS_PATH}/include/" && \
+                cp -f /usr/bin/libtool ./libtool && \
+                cd "libpcre++" && \
+                make clean && \
+                make -j${CONCURRENCY} install
 
 install-snappy: ${SNAPPY_SRC_PATH}
 	cd ${SNAPPY_SRC_PATH}  && \
-		./autogen.sh && \
-		./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static ${AUTOCONF_HOSTFLAG} \
-			CXXFLAGS="${CXXFLAGS} -static" && \
-		make -j4 install-exec install-includeHEADERS
+                ./autogen.sh && \
+                ./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static ${AUTOCONF_HOSTFLAG} \
+                        CXXFLAGS="${CXXFLAGS} -static" && \
+                make -j${CONCURRENCY} install-exec install-includeHEADERS
 
 install-uriparser: ${URIPARSER_SRC_PATH}
 	# Strip sections of Makefile.am that would build (broken) tool/uriparse.c
 	# and then regenerate configure
 	cd ${URIPARSER_SRC_PATH} && \
-		rm -f Makefile src/Makefile test/Makefile && \
-		rm -fr src/.deps test/.deps && \
-		sed -i -e s/^bin_PROGRAMS.*// -e s/^uriparse_.*// Makefile.am && \
-		aclocal && \
-		autoheader && \
-		autoconf && \
-		automake -a
+                rm -f Makefile src/Makefile test/Makefile && \
+                rm -fr src/.deps test/.deps && \
+                sed -i -e s/^bin_PROGRAMS.*// -e s/^uriparse_.*// Makefile.am && \
+                aclocal && \
+                autoheader && \
+                autoconf && \
+                automake -a
 
 	cd ${URIPARSER_SRC_PATH} && \
-		./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static ${AUTOCONF_HOSTFLAG} \
-			CXXFLAGS="${CXXFLAGS} -static" --disable-test --disable-doc	&& \
-		make -j4 install
+                ./configure --prefix=${AFF4_DEPS_PATH} --disable-shared --enable-static ${AUTOCONF_HOSTFLAG} \
+                        CXXFLAGS="${CXXFLAGS} -static" --disable-test --disable-doc     && \
+                make -j${CONCURRENCY} install
 
 install-yaml-cpp: ${YAML_CPP_SRC_PATH}
 	cd ${YAML_CPP_SRC_PATH} && \
-		cmake ${AFF4_CMAKE_FLAGS} ${AFF4_CMAKE_TOOLCHAIN_FLAGS} -DYAML_CPP_BUILD_TESTS=no .  && \
-		make -j4 install
+                cmake ${AFF4_CMAKE_FLAGS} ${AFF4_CMAKE_TOOLCHAIN_FLAGS} -DYAML_CPP_BUILD_TESTS=no .  && \
+                make -j${CONCURRENCY} install
 
 install-spdlog: ${SPDLOG_SRC_PATH}
 	cd ${SPDLOG_SRC_PATH} && \
-		cmake ${AFF4_CMAKE_FLAGS} ${AFF4_CMAKE_TOOLCHAIN_FLAGS} -DSPDLOG_BUILD_TESTING:BOOL=Off .  && \
-		make -j4 install
+                cmake ${AFF4_CMAKE_FLAGS} ${AFF4_CMAKE_TOOLCHAIN_FLAGS} -DSPDLOG_BUILD_TESTING:BOOL=Off .  && \
+                make -j${CONCURRENCY} install
 
 install-gtest: ${GTEST_SRC_PATH}
 	cd ${GTEST_SRC_PATH} && \
-		cmake ${AFF4_CMAKE_FLAGS} ${AFF4_CMAKE_TOOLCHAIN_FLAGS} . && \
-		make -j4 install
+                cmake ${AFF4_CMAKE_FLAGS} ${AFF4_CMAKE_TOOLCHAIN_FLAGS} . && \
+                make -j${CONCURRENCY} install
 
 install-glog: ${GLOG_SRC_PATH}
 	# fix case for "basestd.h" because we're not actually building on windows,
 	# and our filesystem is case-sensitive.
 	cd ${GLOG_SRC_PATH} && \
-		sed -i "s/#include <BaseTsd\.h>/#include <basetsd.h>/" src/logging.cc && \
-		cmake ${AFF4_CMAKE_FLAGS} ${AFF4_CMAKE_TOOLCHAIN_FLAGS} .  && \
-		make -j4 install
+                sed -i "s/#include <BaseTsd\.h>/#include <basetsd.h>/" src/logging.cc && \
+                cmake ${AFF4_CMAKE_FLAGS} ${AFF4_CMAKE_TOOLCHAIN_FLAGS} .  && \
+                make -j${CONCURRENCY} install
 
 
 fetch-deps: ${DEP_PATHS}
@@ -159,7 +170,9 @@ fetch-deps: ${DEP_PATHS}
 clean:
 	-rm -fr ${DEP_PATHS}
 
-install-deps: install-zlib install-tclap install-raptor2 install-pcre3 install-libpcre_cpp install-snappy install-uriparser install-yaml-cpp install-spdlog install-gtest install-glog
+install-deps: install-zlib install-tclap install-raptor2 install-pcre3 \
+     install-libpcre_cpp install-snappy install-uriparser install-yaml-cpp \
+     install-spdlog install-gtest install-glog install-lz4
 
 
 .PHONY: default clean fetch-deps install-zlib install-tclap install-raptor2 install-pcre3 install-libpcre_cpp install-snappy install-uriparser install-yaml-cpp install-spdlog install-gtest install-glog

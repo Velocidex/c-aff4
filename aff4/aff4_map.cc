@@ -17,6 +17,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4/aff4_image.h"
 #include "aff4/libaff4.h"
 
+#include <memory>
+
 namespace aff4 {
 
 
@@ -79,13 +81,30 @@ AFF4Status AFF4Map::LoadFromURN() {
             // Clear the map so we start with a fresh map.
             Clear();
         } else {
-            // Note: The legacy AFF4 version, and AFF4 Standard use the same map format.
-            BinaryRange binary_range;
-            while (map_stream->ReadIntoBuffer(
-                        &binary_range, sizeof(binary_range)) == sizeof(binary_range)) {
-                Range range(binary_range);
+            // Calculate number of ranges
+            const auto n = map_stream->Size() / sizeof(BinaryRange);
+            auto buffer = new BinaryRange[n];
+
+            map_stream->ReadIntoBuffer(buffer, n * sizeof(BinaryRange));
+
+            for (size_t i = 0; i < n; i++) {
+                const auto & binary_range = buffer[i];
+                Range range{binary_range};
                 map[range.map_end()] = range;
             }
+
+            delete [] buffer;
+        }
+    }
+
+    // If the map has a STREAM_SIZE property we set the size based on that,
+    // otherwise we fall back to the last range in the map.
+    XSDInteger value;
+    if (resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
+        size = value.value;
+    } else {
+        if (!map.empty()) {
+            size = (--map.end())->second.map_end();
         }
     }
 
@@ -196,14 +215,12 @@ std::string AFF4Map::Read(size_t length) {
 }
 
 aff4_off_t AFF4Map::Size() const {
-    // The size of the stream is the end of the last range.
-    auto it = map.end();
-    if (it == map.begin()) {
-        return 0;
-    }
+    return size;
+}
 
-    it--;
-    return it->second.map_end();
+void AFF4Map::SetSize(aff4_off_t size) {
+    this->size = size;
+    MarkDirty();
 }
 
 static std::vector<Range> _MergeRanges(std::vector<Range>& ranges) {
@@ -521,6 +538,11 @@ AFF4Status AFF4Map::AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
         }
     }
 
+    const auto last_byte = (--map.end())->second.map_end();
+    if (size < last_byte) {
+        size = last_byte;
+    }
+
     MarkDirty();
 
     return STATUS_OK;
@@ -566,6 +588,9 @@ AFF4Status AFF4Map::Flush() {
         }
 
         resolver->Close(idx_stream);
+
+        // Add the stream size property to the map
+        resolver->Set(urn, AFF4_STREAM_SIZE, new XSDInteger(size));
     }
 
     return AFF4Stream::Flush();

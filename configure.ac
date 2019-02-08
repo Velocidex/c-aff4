@@ -61,6 +61,7 @@ PKG_CHECK_MODULES([RAPTOR2], [raptor2], [], [AC_MSG_ERROR([raptor RDF library (l
 
 PKG_CHECK_MODULES([ZLIB], [zlib], [], [AC_MSG_ERROR([zlib library (zlib1g-dev) not found])])
 AC_CHECK_LIB([snappy], [main], [], [AC_MSG_ERROR([Google Snappy Compression library (libsnappy-dev) not found])])
+AC_CHECK_LIB([lz4], [main], [], [AC_MSG_ERROR([LZ4 Compression library (liblz4-dev) not found])])
 AC_CHECK_LIB([pthread], [pthread_create], [], [AC_MSG_ERROR([pthread library not found])])
 
 #Check for cpp header only libs

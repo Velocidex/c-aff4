@@ -18,6 +18,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4/libaff4.h"
 #include <zlib.h>
 #include <snappy.h>
+#include <lz4.h>
 #include "aff4/aff4_utils.h"
 
 namespace aff4 {
@@ -64,6 +65,33 @@ AFF4Status DeCompressSnappy_(const std::string &input, std::string* output) {
     if (!snappy::Uncompress(input.data(), input.size(), output)) {
         return GENERIC_ERROR;
     }
+
+    return STATUS_OK;
+}
+
+AFF4Status CompressLZ4_(const std::string &input, std::string* output) {
+    output->resize(LZ4_compressBound(input.size()));
+
+    int size = LZ4_compress_default(input.data(), const_cast<char *>(output->data()),
+                                    input.size(), output->size());
+    if (size == 0) {
+        return GENERIC_ERROR;
+    }
+
+    output->resize(size);
+
+    return STATUS_OK;
+}
+
+
+AFF4Status DeCompressLZ4_(const std::string &input, std::string* output) {
+    int size = LZ4_decompress_safe(input.data(), const_cast<char *>(output->data()),
+                                   input.size(), output->size());
+    if (size == 0) {
+        return GENERIC_ERROR;
+    }
+
+    output->resize(size);
 
     return STATUS_OK;
 }
@@ -154,6 +182,11 @@ private:
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
             RETURN_IF_ERROR(CompressSnappy_(data, &c_data));
+        }
+            break;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_LZ4: {
+            RETURN_IF_ERROR(CompressLZ4_(data, &c_data));
         }
             break;
 
@@ -358,6 +391,9 @@ AFF4Status AFF4Image::LoadFromURN() {
             size = value.value;
         }
     }
+
+    // By default we cache 32 MiB of bevys
+    chunk_cache_size = (32 * 1024 * 1024) / chunk_size;
 
     // Load the compression scheme. If it is not set we just default to ZLIB.
     URN compression_urn;
@@ -598,6 +634,13 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
     unsigned int chunk_id_in_bevy = chunk_id % chunks_per_segment;
     BevyIndex entry;
 
+    // Check first to see if the chunk is in the cache
+    const auto it = chunk_cache.find(chunk_id);
+    if (it != chunk_cache.end()) {
+        result += it->second;
+        return STATUS_OK;
+    }
+
     if (index_size == 0) {
         resolver->logger->error("Index empty in {} : chunk {}",
                                urn, chunk_id);
@@ -639,6 +682,10 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
             res = DeCompressSnappy_(cbuffer, &buffer);
             break;
 
+        case AFF4_IMAGE_COMPRESSION_ENUM_LZ4:
+            res = DeCompressLZ4_(cbuffer, &buffer);
+            break;
+
         case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
             buffer = cbuffer;
             res = STATUS_OK;
@@ -657,6 +704,14 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
                                 urn, chunk_id);
         return res;
     }
+
+    // Empty the cache if it's full
+    if (chunk_cache.size() >= chunk_cache_size) {
+        chunk_cache.clear();
+    }
+
+    // Add the decompressed chunk to the cache
+    chunk_cache[chunk_id] = buffer;
 
     result += buffer;
     return STATUS_OK;

@@ -405,6 +405,8 @@ AFF4_IMAGE_COMPRESSION_ENUM CompressionMethodFromURN(URN method) {
         return AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
     } else if (method.value == AFF4_IMAGE_COMPRESSION_SNAPPY2) {
             return AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
+    } else if (method.value == AFF4_IMAGE_COMPRESSION_LZ4) {
+            return AFF4_IMAGE_COMPRESSION_ENUM_LZ4;
     } else if (method.value == AFF4_IMAGE_COMPRESSION_STORED) {
         return AFF4_IMAGE_COMPRESSION_ENUM_STORED;
     } else if (method.value == AFF4_LEGACY_IMAGE_COMPRESSION_STORED) {
@@ -421,6 +423,9 @@ URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method) {
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:
             return AFF4_IMAGE_COMPRESSION_SNAPPY;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_LZ4:
+            return AFF4_IMAGE_COMPRESSION_LZ4;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
             return AFF4_IMAGE_COMPRESSION_STORED;

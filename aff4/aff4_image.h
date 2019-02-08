@@ -19,6 +19,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4/config.h"
 #include "aff4/aff4_io.h"
 
+#include <unordered_map>
+
 namespace aff4 {
 
 
@@ -115,6 +117,9 @@ class AFF4Image: public AFF4Stream {
     // FALSE if stream is aff4:ImageStream, true if stream is aff4:stream.
     bool isAFF4Legacy = false;
 
+    // Simple cache of decompressed bevys
+    std::unordered_map<unsigned int, std::string> chunk_cache{};
+
   public:
     AFF4Image(DataStore* resolver, URN urn);
     explicit AFF4Image(DataStore* resolver);
@@ -123,6 +128,7 @@ class AFF4Image: public AFF4Stream {
                                          * chunk. */
     unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
                                            * Bevy. */
+    unsigned int chunk_cache_size = 1024; /**> The max number of cached chunks */
 
     // Which compression should we use.
     AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;

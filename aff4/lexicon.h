@@ -52,7 +52,7 @@ typedef enum AFF4_IMAGE_COMPRESSION_ENUM_t {
     AFF4_IMAGE_COMPRESSION_ENUM_ZLIB = 1,     // Uses zlib.compress()
     AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY = 2,   // snappy.compress()
     AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE = 8,   // zlib.deflate()
-    AFF4_IMAGE_COMPRESSION_ENUM_LZ4 = 16   // lz4 (coming soon).
+    AFF4_IMAGE_COMPRESSION_ENUM_LZ4 = 16   // lz4
 } AFF4_IMAGE_COMPRESSION_ENUM;
 
 AFF4_IMAGE_COMPRESSION_ENUM CompressionMethodFromURN(URN method);
