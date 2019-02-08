@@ -160,11 +160,9 @@ AFF4Status AFF4Stream::Write(const char* data, size_t length) {
 }
 
 int AFF4Stream::ReadIntoBuffer(void* buffer, size_t length) {
-    std::string result = Read(length);
-
-    memcpy(buffer, result.data(), result.size());
-
-    return result.size();
+    // FIXME: errors?
+    ReadBuffer(reinterpret_cast<char*>(buffer), &length);
+    return length;
 }
 
 off_t AFF4Stream::Tell() {
