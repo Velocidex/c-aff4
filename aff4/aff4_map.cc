@@ -120,6 +120,8 @@ AFF4Status AFF4Map::ReadBuffer(char* data, size_t* length) {
     size_t remaining = std::min((aff4_off_t)*length, Size() - readptr);
     *length = 0;
 
+    std::string tdata;
+
     while (remaining > 0) {
         auto map_it = map.upper_bound(readptr);
 
@@ -172,48 +174,49 @@ AFF4Status AFF4Map::ReadBuffer(char* data, size_t* length) {
 
         target_stream->Seek(offset_in_target, SEEK_SET);
 
-        {
-// TODO: can we switch this to a char* buffer?
-            std::string tdata = target_stream->Read(length_to_read_in_target);
-            if (tdata.size() < length_to_read_in_target) {
-                // Failed to read some portion of memory. On Windows platforms, this is usually
-                // due to Virtual Secure Mode (VSM) memory. Re-read memory in smaller units,
-                // while leaving the unreadable regions null-padded.
-                resolver->logger->info(
-                    "Map target {} cannot produced required {} bytes at offset 0x{:x}. Got {} bytes. Will re-read one page at a time.",
-                    target_stream->urn.SerializeToString(),
-                    length_to_read_in_target, offset_in_target, tdata.size());
+        tdata.resize(length_to_read_in_target);
+        size_t rlen = length_to_read_in_target;
+        target_stream->ReadBuffer(&tdata[0], &rlen);
+        tdata.resize(rlen);
 
-                // Reset target_strem back to original position, and then re-read one page at a time.
-                target_stream->Seek(offset_in_target, SEEK_SET);
+        if (tdata.size() < length_to_read_in_target) {
+            // Failed to read some portion of memory. On Windows platforms, this is usually
+            // due to Virtual Secure Mode (VSM) memory. Re-read memory in smaller units,
+            // while leaving the unreadable regions null-padded.
+            resolver->logger->info(
+                "Map target {} cannot produced required {} bytes at offset 0x{:x}. Got {} bytes. Will re-read one page at a time.",
+                target_stream->urn.SerializeToString(),
+                length_to_read_in_target, offset_in_target, tdata.size());
 
-                // Grow the data buffer to the expected size, filled to the end with null bytes.
-                tdata.resize(length_to_read_in_target, 0);
-                const char* buffer = tdata.data();
+            // Reset target_strem back to original position, and then re-read one page at a time.
+            target_stream->Seek(offset_in_target, SEEK_SET);
 
-                size_t reread_total = 0;
-                while (reread_total < length_to_read_in_target) {
-                    size_t reread_want = std::min((size_t)(length_to_read_in_target - reread_total), max_reread_size);
-                    int reread_actual = target_stream->ReadIntoBuffer((void *)buffer, reread_want);
-                    if (reread_actual < reread_want) {
-                        resolver->logger->info(
-                            "Map target {}: Read error starting at offset 0x{:x} of {} bytes. Expected {} bytes. Null padding.",
-                            target_stream->urn.SerializeToString(),
-                            offset_in_target+reread_total,
-                            reread_actual, reread_want);
-                    }
-                    reread_total += reread_want;
-                    // Advance the pointer in the buffer.
-                    buffer += reread_want;
+            // Grow the data buffer to the expected size, filled to the end with null bytes.
+            tdata.resize(length_to_read_in_target, 0);
+            const char* buffer = tdata.data();
 
-                    // ensure that we seek to the correct position in target_stream
-                    target_stream->Seek(offset_in_target+reread_total, SEEK_SET);
+            size_t reread_total = 0;
+            while (reread_total < length_to_read_in_target) {
+                size_t reread_want = std::min((size_t)(length_to_read_in_target - reread_total), max_reread_size);
+                int reread_actual = target_stream->ReadIntoBuffer((void *)buffer, reread_want);
+                if (reread_actual < reread_want) {
+                    resolver->logger->info(
+                        "Map target {}: Read error starting at offset 0x{:x} of {} bytes. Expected {} bytes. Null padding.",
+                        target_stream->urn.SerializeToString(),
+                        offset_in_target+reread_total,
+                        reread_actual, reread_want);
                 }
-            }
+                reread_total += reread_want;
+                // Advance the pointer in the buffer.
+                buffer += reread_want;
 
-            std::memcpy(data+*length, tdata.data(), tdata.size());
-            *length += tdata.size();
+                // ensure that we seek to the correct position in target_stream
+                target_stream->Seek(offset_in_target+reread_total, SEEK_SET);
+            }
         }
+
+        std::memcpy(data+*length, tdata.data(), tdata.size());
+        *length += tdata.size();
 
         readptr = std::min(Size(), (aff4_off_t)(readptr + length_to_read_in_target));
         remaining = std::max((size_t)0, remaining - length_to_read_in_target);
