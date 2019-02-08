@@ -618,6 +618,8 @@ AFF4Status BasicImager::handle_compression() {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
     } else if (compression_setting == "snappy") {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
+    } else if (compression_setting == "lz4") {
+        compression = AFF4_IMAGE_COMPRESSION_ENUM_LZ4;
 
     } else if (compression_setting == "none") {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
