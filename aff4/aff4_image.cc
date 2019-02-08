@@ -18,6 +18,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4/libaff4.h"
 #include <zlib.h>
 #include <snappy.h>
+#include <lz4.h>
 #include "aff4/aff4_utils.h"
 
 namespace aff4 {
@@ -64,6 +65,33 @@ AFF4Status DeCompressSnappy_(const std::string &input, std::string* output) {
     if (!snappy::Uncompress(input.data(), input.size(), output)) {
         return GENERIC_ERROR;
     }
+
+    return STATUS_OK;
+}
+
+AFF4Status CompressLZ4_(const std::string &input, std::string* output) {
+    output->resize(LZ4_compressBound(input.size()));
+
+    int size = LZ4_compress_default(input.data(), const_cast<char *>(output->data()),
+                                    input.size(), output->size());
+    if (size == 0) {
+        return GENERIC_ERROR;
+    }
+
+    output->resize(size);
+
+    return STATUS_OK;
+}
+
+
+AFF4Status DeCompressLZ4_(const std::string &input, std::string* output) {
+    int size = LZ4_decompress_safe(input.data(), const_cast<char *>(output->data()),
+                                   input.size(), output->size());
+    if (size == 0) {
+        return GENERIC_ERROR;
+    }
+
+    output->resize(size);
 
     return STATUS_OK;
 }
@@ -154,6 +182,11 @@ private:
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY: {
             RETURN_IF_ERROR(CompressSnappy_(data, &c_data));
+        }
+            break;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_LZ4: {
+            RETURN_IF_ERROR(CompressLZ4_(data, &c_data));
         }
             break;
 
@@ -647,6 +680,10 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:
             res = DeCompressSnappy_(cbuffer, &buffer);
+            break;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_LZ4:
+            res = DeCompressLZ4_(cbuffer, &buffer);
             break;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_STORED:
