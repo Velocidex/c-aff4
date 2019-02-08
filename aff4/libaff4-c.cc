@@ -70,12 +70,12 @@ class LogSink: public spdlog::sinks::sink {
 public:
     virtual ~LogSink() {}
 
-    virtual void log(const spdlog::details::log_msg& msg) override {
+    void log(const spdlog::details::log_msg& msg) override {
         // trampoline to our thread-local log handler
         get_log_handler().log(msg);
     }
 
-    virtual void flush() override {}
+    void flush() override {}
 };
 
 struct Holder {

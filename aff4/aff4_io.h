@@ -210,7 +210,7 @@ class StringIO: public AFF4Stream {
     AFF4Status Write(const char* data, size_t length) override;
 
     AFF4Status Truncate() override;
-    virtual aff4_off_t Size() const override;
+    aff4_off_t Size() const override;
     void reserve(size_t size) override;
 
     using AFF4Stream::Write;

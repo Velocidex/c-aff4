@@ -79,7 +79,7 @@ class AFF4ConstantStream: public AFF4Stream {
   public:
     explicit AFF4ConstantStream(DataStore* resolver): AFF4Stream(resolver) {}
 
-    virtual aff4_off_t Size() const override {
+    aff4_off_t Size() const override {
         return -1;
     }
 
