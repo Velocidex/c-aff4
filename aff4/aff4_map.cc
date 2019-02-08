@@ -111,32 +111,50 @@ AFF4Status AFF4Map::LoadFromURN() {
     return STATUS_OK;
 }
 
+// FIXME: move to base class
 std::string AFF4Map::Read(size_t length) {
-    if (length > AFF4_MAX_READ_LEN) {
+    if (length == 0) {
         return "";
     }
 
-    std::string result;
-    length = std::min((aff4_off_t)length, Size() - readptr);
+    std::string result(length, '\0');
+    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
+        return "";
+    }
 
-    while (length > 0) {
+    result.resize(length);
+    return result;
+}
+
+AFF4Status AFF4Map::ReadBuffer(char* data, size_t* length) {
+    if (*length > AFF4_MAX_READ_LEN) {
+        *length = 0;
+        return STATUS_OK; // FIXME?
+    }
+
+    size_t remaining = std::min((aff4_off_t)*length, Size() - readptr);
+    *length = 0;
+
+    while (remaining > 0) {
         auto map_it = map.upper_bound(readptr);
 
         // No range contains the current readptr - just pad it.
         if (map_it == map.end()) {
-            result.resize(length);
-            readptr += length;
-            return result;
+            *length = remaining;
+            readptr += remaining;
+            return STATUS_OK;
         }
 
         Range range = map_it->second;
         aff4_off_t length_to_start_of_range = std::min(
-            (aff4_off_t)length, (aff4_off_t)(range.map_offset - readptr));
+            (aff4_off_t)remaining, (aff4_off_t)(range.map_offset - readptr));
         if (length_to_start_of_range > 0) {
             // Null pad it.
-            result.resize(result.size() + length_to_start_of_range);
-            length = std::max((aff4_off_t)0,
-                              (aff4_off_t)length - length_to_start_of_range);
+            *length += length_to_start_of_range;
+            remaining = std::max(
+                (aff4_off_t)0,
+                (aff4_off_t)remaining - length_to_start_of_range
+            );
             readptr = std::min((aff4_off_t)Size(),
                                readptr + length_to_start_of_range);
             continue;
@@ -144,11 +162,11 @@ std::string AFF4Map::Read(size_t length) {
 
         // The readptr is inside a range.
         URN target = targets[range.target_id];
-        size_t length_to_read_in_target = length;
+        size_t length_to_read_in_target = remaining;
 
         if (range.map_end() - readptr <= SIZE_MAX)
             length_to_read_in_target = std::min(
-                length, (size_t)(range.map_end() - readptr));
+                remaining, (size_t)(range.map_end() - readptr));
 
         aff4_off_t offset_in_target = range.target_offset + (
                                           readptr - range.map_offset);
@@ -161,30 +179,32 @@ std::string AFF4Map::Read(size_t length) {
                                    " For map {}  (Offset {:x})",
                                    target.value, urn.value, readptr);
             // Null pad
-            result.resize(result.size() + length_to_read_in_target);
-            length = std::max((size_t)0, length - length_to_read_in_target);
+            *length += length_to_read_in_target;
+            remaining = std::max((size_t)0, remaining - length_to_read_in_target);
             readptr = std::min(Size(), (aff4_off_t)(readptr + length_to_read_in_target));
             continue;
         }
 
         target_stream->Seek(offset_in_target, SEEK_SET);
+
         {
-            std::string data = target_stream->Read(length_to_read_in_target);
-            if (data.size() < length_to_read_in_target) {
+// TODO: can we switch this to a char* buffer?
+            std::string tdata = target_stream->Read(length_to_read_in_target);
+            if (tdata.size() < length_to_read_in_target) {
                 // Failed to read some portion of memory. On Windows platforms, this is usually
                 // due to Virtual Secure Mode (VSM) memory. Re-read memory in smaller units,
                 // while leaving the unreadable regions null-padded.
                 resolver->logger->info(
                     "Map target {} cannot produced required {} bytes at offset 0x{:x}. Got {} bytes. Will re-read one page at a time.",
                     target_stream->urn.SerializeToString(),
-                    length_to_read_in_target, offset_in_target, data.size());
+                    length_to_read_in_target, offset_in_target, tdata.size());
 
                 // Reset target_strem back to original position, and then re-read one page at a time.
                 target_stream->Seek(offset_in_target, SEEK_SET);
 
                 // Grow the data buffer to the expected size, filled to the end with null bytes.
-                data.resize(length_to_read_in_target, 0);
-                const char* buffer = data.data();
+                tdata.resize(length_to_read_in_target, 0);
+                const char* buffer = tdata.data();
 
                 size_t reread_total = 0;
                 while (reread_total < length_to_read_in_target) {
@@ -204,14 +224,17 @@ std::string AFF4Map::Read(size_t length) {
                     // ensure that we seek to the correct position in target_stream
                     target_stream->Seek(offset_in_target+reread_total, SEEK_SET);
                 }
-            };
-            result += data;
+            }
+
+            std::memcpy(data+*length, tdata.data(), tdata.size());
+            *length += tdata.size();
         }
+
         readptr = std::min(Size(), (aff4_off_t)(readptr + length_to_read_in_target));
-        length = std::max((size_t)0, length - length_to_read_in_target);
+        remaining = std::max((size_t)0, remaining - length_to_read_in_target);
     }
 
-    return result;
+    return STATUS_OK;
 }
 
 aff4_off_t AFF4Map::Size() const {
