@@ -17,6 +17,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4/aff4_image.h"
 #include "aff4/libaff4.h"
 
+#include <memory>
+
 namespace aff4 {
 
 
@@ -79,13 +81,19 @@ AFF4Status AFF4Map::LoadFromURN() {
             // Clear the map so we start with a fresh map.
             Clear();
         } else {
-            // Note: The legacy AFF4 version, and AFF4 Standard use the same map format.
-            BinaryRange binary_range;
-            while (map_stream->ReadIntoBuffer(
-                        &binary_range, sizeof(binary_range)) == sizeof(binary_range)) {
-                Range range(binary_range);
+            // Calculate number of ranges
+            const auto n = map_stream->Size() / sizeof(BinaryRange);
+            auto buffer = new BinaryRange[n];
+
+            map_stream->ReadIntoBuffer(buffer, n * sizeof(BinaryRange));
+
+            for (size_t i = 0; i < n; i++) {
+                const auto & binary_range = buffer[i];
+                Range range{binary_range};
                 map[range.map_end()] = range;
             }
+
+            delete [] buffer;
         }
     }
 
