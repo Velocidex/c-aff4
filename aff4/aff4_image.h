@@ -206,6 +206,7 @@ class AFF4StdImage : public AFF4Stream {
 
     AFF4Status LoadFromURN() override;
 
+    AFF4Status ReadBuffer(char* data, size_t* length) override;
     std::string Read(size_t length) override;
 
  protected:

@@ -938,17 +938,32 @@ AFF4Status AFF4StdImage::LoadFromURN() {
     return STATUS_OK;
 }
 
-std::string AFF4StdImage::Read(size_t length) {
-    auto delegate_stream = resolver->AFF4FactoryOpen<AFF4Stream>(
-        delegate);
+AFF4Status AFF4StdImage::ReadBuffer(char* data, size_t* length) {
+    auto delegate_stream = resolver->AFF4FactoryOpen<AFF4Stream>(delegate);
     if (!delegate_stream) {
-        resolver->logger->error("Unable to open aff4:dataStream {} for Image {}",
-                                delegate, urn);
-        return "";
+        resolver->logger->error(
+            "Unable to open aff4:dataStream {} for Image {}", delegate, urn
+        );
+        *length = 0;
+        return STATUS_OK; // FIXME?
     }
 
     delegate_stream->Seek(readptr, SEEK_SET);
-    return delegate_stream->Read(length);
+    return delegate_stream->ReadBuffer(data, length);
+}
+
+std::string AFF4StdImage::Read(size_t length) {
+    if (length == 0) {
+        return "";
+    }
+
+    std::string result(length, '\0');
+    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
+        return "";
+    }
+
+    result.resize(length);
+    return result;
 }
 
 // AFF4 Standard
