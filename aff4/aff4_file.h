@@ -90,11 +90,11 @@ class AFF4ConstantStream: public AFF4Stream {
         return STATUS_OK;
     }
 
-    virtual std::string Read(size_t length) override {
+    std::string Read(size_t length) override {
         return std::string(length, constant);
     }
 
-    virtual AFF4Status ReadBuffer(char* data, size_t* length) override {
+    AFF4Status ReadBuffer(char* data, size_t* length) override {
         std::memset(data, constant, *length);
         return STATUS_OK;
     }

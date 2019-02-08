@@ -942,7 +942,8 @@ AFF4Status AFF4StdImage::ReadBuffer(char* data, size_t* length) {
     auto delegate_stream = resolver->AFF4FactoryOpen<AFF4Stream>(delegate);
     if (!delegate_stream) {
         resolver->logger->error(
-            "Unable to open aff4:dataStream {} for Image {}", delegate, urn
+            "Unable to open aff4:dataStream {} for Image {}",
+            delegate, urn
         );
         *length = 0;
         return STATUS_OK; // FIXME?
