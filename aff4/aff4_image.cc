@@ -820,21 +820,6 @@ AFF4Status AFF4Image::ReadBuffer(char* data, size_t* length) {
     return STATUS_OK;
 }
 
-// FIXME: move to base class
-std::string AFF4Image::Read(size_t length) {
-    if (length == 0) {
-        return "";
-    }
-
-    std::string result(length, '\0');
-    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
-        return "";
-    }
-
-    result.resize(length);
-    return result;
-}
-
 AFF4Status AFF4Image::_write_metadata() {
     resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
                   /* replace = */ false);
@@ -951,20 +936,6 @@ AFF4Status AFF4StdImage::ReadBuffer(char* data, size_t* length) {
 
     delegate_stream->Seek(readptr, SEEK_SET);
     return delegate_stream->ReadBuffer(data, length);
-}
-
-std::string AFF4StdImage::Read(size_t length) {
-    if (length == 0) {
-        return "";
-    }
-
-    std::string result(length, '\0');
-    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
-        return "";
-    }
-
-    result.resize(length);
-    return result;
 }
 
 // AFF4 Standard

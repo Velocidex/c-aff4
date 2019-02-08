@@ -89,19 +89,6 @@ AFF4Status _CreateIntermediateDirectories(DataStore *resolver, std::string dir_n
     return _CreateIntermediateDirectories(resolver, split(dir_name, PATH_SEP));
 }
 
-std::string FileBackedObject::Read(size_t length) {
-    if (length == 0) {
-        return "";
-    }
-
-    std::string result(length, '\0');
-    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
-        return "";
-    }
-    result.resize(length);
-    return result;
-}
-
 // Windows files are read through the CreateFile() API so that devices can be
 // read.
 #if defined(_WIN32)

@@ -111,21 +111,6 @@ AFF4Status AFF4Map::LoadFromURN() {
     return STATUS_OK;
 }
 
-// FIXME: move to base class
-std::string AFF4Map::Read(size_t length) {
-    if (length == 0) {
-        return "";
-    }
-
-    std::string result(length, '\0');
-    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
-        return "";
-    }
-
-    result.resize(length);
-    return result;
-}
-
 AFF4Status AFF4Map::ReadBuffer(char* data, size_t* length) {
     if (*length > AFF4_MAX_READ_LEN) {
         *length = 0;

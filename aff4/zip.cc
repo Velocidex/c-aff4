@@ -675,19 +675,9 @@ AFF4Status ZipFileSegment::LoadFromZipFile(
     return STATUS_OK;
 }
 
-// FIXME: move to base class
 std::string ZipFileSegment::Read(size_t length) {
-    if (length == 0) {
-        return "";
-    }
-
-    std::string result(length, '\0');
-    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
-        return "";
-    }
-
-    result.resize(length);
-    return result;
+    // We want the default implementation, no the one from StringIO::Read
+    return AFF4Stream::Read(length);
 }
 
 AFF4Status ZipFileSegment::ReadBuffer(char* data, size_t* length) {

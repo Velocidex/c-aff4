@@ -24,7 +24,6 @@ class AFF4SymbolicStream: public AFF4Stream {
 
     virtual ~AFF4SymbolicStream();
 
-    std::string Read(size_t length) override;
     AFF4Status ReadBuffer(char* data, size_t* length) override;
 
     // Override AFF4Object::Return();

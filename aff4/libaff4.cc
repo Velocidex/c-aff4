@@ -127,17 +127,21 @@ AFF4Status AFF4Stream::Seek(off_t offset, int whence) {
 }
 
 std::string AFF4Stream::Read(size_t length) {
-    UNUSED(length);
-    return "";
+    if (length == 0) {
+        return "";
+    }
+
+    std::string result(length, '\0');
+    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
+        return "";
+    }
+    result.resize(length);
+    return result;
 }
 
 AFF4Status AFF4Stream::ReadBuffer(char* data, size_t *length) {
-    auto result = Read(*length);
-
-    *length = result.size();
-
-    memcpy(data, result.c_str(), *length);
-
+    UNUSED(data);
+    *length = 0;
     return STATUS_OK;
 }
 
