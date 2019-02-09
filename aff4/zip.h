@@ -181,7 +181,7 @@ class ZipFileSegment: public StringIO {
     std::string Read(size_t length) override;
     AFF4Status Write(const char* data, size_t length) override;
 
-    aff4_off_t Size() override;
+    aff4_off_t Size() const override;
 
     AFF4Status WriteStream(
         AFF4Stream* source, ProgressContext* progress = nullptr) override;

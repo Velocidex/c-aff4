@@ -41,7 +41,7 @@ namespace aff4 {
         } else {
             // fill with pattern
             const size_t pSz = pattern.size();
-            char* data = const_cast<char*>(result.data());
+            char* data = &result[0];
             size_t toRead = length;
             while (toRead > 0) {
                 int pOffset = readptr % pSz;

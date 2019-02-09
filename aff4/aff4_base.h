@@ -155,7 +155,7 @@ class AFF4Object {
      *
      * @return true if the object is dirty.
      */
-    virtual bool IsDirty() {
+    virtual bool IsDirty() const {
         return _dirty;
     }
 

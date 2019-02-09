@@ -101,11 +101,11 @@ class BasicImager {
     // The list of input streams we copy (from the --inputs flag).
     std::vector<std::string> inputs;
 
-    virtual std::string GetName() {
+    virtual std::string GetName() const {
         return "AFF4 Imager";
     }
 
-    virtual std::string GetVersion() {
+    virtual std::string GetVersion() const {
         return AFF4_VERSION;
     }
 

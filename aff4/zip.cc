@@ -696,7 +696,7 @@ std::string ZipFileSegment::Read(size_t length) {
     return result;
 }
 
-aff4_off_t ZipFileSegment::Size() {
+aff4_off_t ZipFileSegment::Size() const {
     if (_backing_store_start_offset < 0) {
         return StringIO::Size();
     }
@@ -846,7 +846,7 @@ AFF4Status ZipFileSegment::Flush() {
 
         zip_info->crc32_cs = crc32(
             zip_info->crc32_cs,
-            reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
+            reinterpret_cast<const Bytef*>(buffer.data()),
             buffer.size());
 
         if (compression_method == AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE) {
@@ -1064,7 +1064,7 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
             int output_bytes = AFF4_BUFF_SIZE - strm.avail_out;
             zip_info->crc32_cs = crc32(
                 zip_info->crc32_cs,
-                reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
+                reinterpret_cast<const Bytef*>(buffer.data()),
                 buffer.size() - strm.avail_in);
 
             if (backing_store->Write(c_buffer.get(), output_bytes) < 0) {
@@ -1119,7 +1119,7 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
             zip_info->file_size += buffer.size();
             zip_info->crc32_cs = crc32(
                 zip_info->crc32_cs,
-                reinterpret_cast<Bytef*>(const_cast<char*>(buffer.data())),
+                reinterpret_cast<const Bytef*>(buffer.data()),
                 buffer.size());
 
             RETURN_IF_ERROR(backing_store->Write(buffer.data(), buffer.size()));

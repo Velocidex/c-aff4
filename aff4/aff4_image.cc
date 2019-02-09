@@ -28,7 +28,7 @@ AFF4Status CompressZlib_(const std::string &input, std::string* output) {
     uLongf c_length = compressBound(input.size()) + 1;
     output->resize(c_length);
 
-    if (compress2(reinterpret_cast<Bytef*>(const_cast<char*>(output->data())),
+    if (compress2(reinterpret_cast<Bytef*>(&(*output)[0]),
                   &c_length,
                   reinterpret_cast<Bytef*>(const_cast<char*>(input.data())),
                   input.size(), 1) != Z_OK) {
@@ -43,7 +43,7 @@ AFF4Status CompressZlib_(const std::string &input, std::string* output) {
 AFF4Status DeCompressZlib_(const std::string &input, std::string* output) {
     uLongf buffer_size = output->size();
 
-    if (uncompress(reinterpret_cast<Bytef*>(const_cast<char*>(output->data())),
+    if (uncompress(reinterpret_cast<Bytef*>(&(*output)[0]),
                    &buffer_size,
                    (const Bytef*)input.data(), input.size()) == Z_OK) {
         output->resize(buffer_size);
@@ -72,7 +72,7 @@ AFF4Status DeCompressSnappy_(const std::string &input, std::string* output) {
 AFF4Status CompressLZ4_(const std::string &input, std::string* output) {
     output->resize(LZ4_compressBound(input.size()));
 
-    int size = LZ4_compress_default(input.data(), const_cast<char *>(output->data()),
+    int size = LZ4_compress_default(input.data(), &(*output)[0],
                                     input.size(), output->size());
     if (size == 0) {
         return GENERIC_ERROR;
@@ -85,7 +85,7 @@ AFF4Status CompressLZ4_(const std::string &input, std::string* output) {
 
 
 AFF4Status DeCompressLZ4_(const std::string &input, std::string* output) {
-    int size = LZ4_decompress_safe(input.data(), const_cast<char *>(output->data()),
+    int size = LZ4_decompress_safe(input.data(), &(*output)[0],
                                    input.size(), output->size());
     if (size == 0) {
         return GENERIC_ERROR;
@@ -753,7 +753,7 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
         }
 
         BevyIndex* bevy_index_array = reinterpret_cast<BevyIndex*>(
-            const_cast<char*>(bevy_index_data.data()));
+            &bevy_index_data[0]);
 
         while (chunks_to_read > 0) {
             // Read a full chunk from the bevy.
@@ -856,9 +856,9 @@ static AFF4Registrar<AFF4Image> r2(AFF4_LEGACY_IMAGESTREAM_TYPE);
 void aff4_image_init() {}
 
 std::string AFF4Image::_FixupBevyData(std::string* data){
-    uint32_t index_size = data->length() / sizeof(uint32_t);
-    BevyIndex* bevy_index_array = new BevyIndex[index_size];
-    uint32_t* bevy_index_data = reinterpret_cast<uint32_t*>(const_cast<char*>(data->data()));
+    const uint32_t index_size = data->length() / sizeof(uint32_t);
+    std::unique_ptr<BevyIndex[]> bevy_index_array(new BevyIndex[index_size]);
+    uint32_t* bevy_index_data = reinterpret_cast<uint32_t*>(&(*data)[0]);
 
     uint64_t cOffset = 0;
     uint32_t cLength = 0;
@@ -870,11 +870,10 @@ std::string AFF4Image::_FixupBevyData(std::string* data){
         cOffset += bevy_index_array[offset].length;
     }
 
-    std::string result = std::string(
-        reinterpret_cast<char*>(bevy_index_array),
-        index_size * sizeof(BevyIndex));
-    delete[] bevy_index_array;
-    return result;
+    return std::string(
+        reinterpret_cast<char*>(bevy_index_array.get()),
+        index_size * sizeof(BevyIndex)
+    );
 }
 
 

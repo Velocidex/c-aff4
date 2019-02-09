@@ -41,11 +41,11 @@ class Range: public BinaryRange {
     explicit Range(BinaryRange range): BinaryRange(range) {}
     Range(): BinaryRange() {}
 
-    uint64_t map_end() {
+    uint64_t map_end() const {
         return map_offset + length;
     }
 
-    uint64_t target_end() {
+    uint64_t target_end() const {
         return target_offset + length;
     }
 
@@ -95,14 +95,14 @@ class AFF4Map: public AFF4Stream {
 
     void Dump();
 
-    std::vector<Range> GetRanges();
+    std::vector<Range> GetRanges() const;
 
     // Creates or retrieves the underlying map data stream.
     AFF4Status GetBackingStream(URN& target);
 
     void Clear();
 
-    aff4_off_t Size() override;
+    aff4_off_t Size() const override;
     void SetSize(aff4_off_t size);
 
     using AFF4Stream::Write;

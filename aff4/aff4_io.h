@@ -164,7 +164,7 @@ class AFF4Stream: public AFF4Object {
 
     virtual AFF4Status Write(const char* data, size_t length);
     virtual aff4_off_t Tell();
-    virtual aff4_off_t Size();
+    virtual aff4_off_t Size() const;
 
     // Callers may reserve space in the stream for efficiency. This
     // gives the implementation a hint as to how large this stream is
@@ -203,16 +203,14 @@ class StringIO: public AFF4Stream {
 
     // Convenience constructors.
     static std::unique_ptr<StringIO> NewStringIO() {
-        std::unique_ptr<StringIO> result(new StringIO());
-
-        return result;
+        return std::unique_ptr<StringIO>(new StringIO());
     }
 
     std::string Read(size_t length) override;
     AFF4Status Write(const char* data, size_t length) override;
 
     AFF4Status Truncate() override;
-    aff4_off_t Size() override;
+    aff4_off_t Size() const override;
     void reserve(size_t size) override;
 
     using AFF4Stream::Write;

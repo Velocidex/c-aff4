@@ -214,7 +214,7 @@ std::string AFF4Map::Read(size_t length) {
     return result;
 }
 
-aff4_off_t AFF4Map::Size() {
+aff4_off_t AFF4Map::Size() const {
     return size;
 }
 
@@ -606,7 +606,7 @@ void AFF4Map::Dump() {
 }
 
 
-std::vector<Range> AFF4Map::GetRanges() {
+std::vector<Range> AFF4Map::GetRanges() const {
     std::vector<Range> result;
     for (auto it : map) {
         result.push_back(it.second);
