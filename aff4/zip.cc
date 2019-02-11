@@ -676,7 +676,7 @@ AFF4Status ZipFileSegment::LoadFromZipFile(
 }
 
 std::string ZipFileSegment::Read(size_t length) {
-    // We want the default implementation, no the one from StringIO::Read
+    // We want the default implementation, not the one from StringIO::Read
     return AFF4Stream::Read(length);
 }
 
