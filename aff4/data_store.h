@@ -558,9 +558,9 @@ class DataStore {
         // Cache the object for next time.
         T* result = dynamic_cast<T*>(obj.get());
 
-        if(result == nullptr){
-                // bad type cast.
-                return AFF4ScopedPtr<T>();
+        if (result == nullptr){
+            // bad type cast.
+            return AFF4ScopedPtr<T>();
         }
 
         // Store the object in the cache but place it immediate in the in_use list.

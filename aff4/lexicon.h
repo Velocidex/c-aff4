@@ -110,6 +110,7 @@ class Schema {
     Schema() {}
 
     Schema(std::string object_type): object_type(object_type) {}
+
     void AddAttribute(std::string alias, Attribute attribute) {
         attributes[alias] = attribute;
     }

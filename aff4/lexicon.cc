@@ -33,7 +33,7 @@ std::unordered_map<std::string, Schema> Schema::cache;
 
 Schema Schema::GetSchema(std::string object_type) {
     // If we did not add any schema yet, do so now.
-    if(cache.size() == 0) {
+    if (cache.size() == 0) {
         // Define all the Schema and attributes.
         Schema AFF4_OBJECT_SCHEMA("object");
         AFF4_OBJECT_SCHEMA.AddAttribute(
