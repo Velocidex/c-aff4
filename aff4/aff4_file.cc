@@ -440,11 +440,10 @@ class AFF4FileRegistrer {
         });
     }
 
-    AFF4Object* GetObject(DataStore* resolver, const URN* urn) {
+    AFF4Object* GetObject(DataStore* resolver, const URN* urn) const {
         if (AFF4Directory::IsDirectory(*urn)) {
             return new AFF4Directory(resolver, *urn);
         }
-        XSDString mode;
 
         return new FileBackedObject(resolver);
     }

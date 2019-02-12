@@ -22,9 +22,6 @@ class URN;
 template<class T>
 class ClassFactory {
   public:
-    std::unordered_map<
-    std::string, std::function<T* (DataStore*, const URN*)> > factoryFunctionRegistry;
-
     std::unique_ptr<T> CreateInstance(const char* name, DataStore* resolver,
                                       const URN* urn = nullptr) const {
         return CreateInstance(std::string(name), resolver, urn);
@@ -35,7 +32,7 @@ class ClassFactory {
         T* instance = nullptr;
 
         // find name in the registry and call factory method.
-        auto it = factoryFunctionRegistry.find(name);
+        const auto it = factoryFunctionRegistry.find(name);
         if (it != factoryFunctionRegistry.end()) {
             instance = it->second(data, urn);
         }
@@ -45,10 +42,17 @@ class ClassFactory {
 
     void RegisterFactoryFunction(
         std::string name, std::function<
-        T*(DataStore*, const URN*)> classFactoryFunction) {
+        T*(DataStore*, const URN*)> classFactoryFunction)
+    {
         // register the class factory function
         factoryFunctionRegistry[name] = classFactoryFunction;
     }
+
+  private:
+    std::unordered_map<
+      std::string,
+      std::function<T* (DataStore*, const URN*)>
+    > factoryFunctionRegistry;
 };
 
 #endif  // SRC_AFF4_REGISTRY_H_

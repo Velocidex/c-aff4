@@ -76,6 +76,8 @@ AFF4Object::AFF4Object(DataStore* resolver): resolver(resolver) {
     UuidToString(&newId, &buffer);
 
     urn.Set(AFF4_PREFIX + std::string(reinterpret_cast<char*>(buffer)));
+
+    RpcStringFree(&buffer);
 }
 
 #endif

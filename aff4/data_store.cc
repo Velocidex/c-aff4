@@ -403,9 +403,8 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream& output_stream, URN base, bo
             }
 
             // Load all attributes.
-            const std::vector<std::shared_ptr<RDFValue>> attr = attr_it.second;
-            for (auto at_it = attr.begin(); at_it != attr.end(); at_it++) {
-                const RDFValue* value = (*at_it).get();
+            for (const auto& a: attr_it.second) {
+                const RDFValue* value = a.get();
 
                 // Skip this URN if it is in the suppressed_rdftypes set.
                 if (ShouldSuppress(
@@ -836,7 +835,7 @@ AFF4Object* AFF4ObjectCache::Get(const URN urn) {
 }
 
 void AFF4ObjectCache::Return(AFF4Object* object) {
-    std::string key = object->urn.SerializeToString();
+    const std::string key = object->urn.SerializeToString();
     auto it = in_use.find(key);
 
     // This should never happen - Only objects obtained from Get() should be
@@ -869,7 +868,7 @@ void AFF4ObjectCache::Return(AFF4Object* object) {
 }
 
 AFF4Status AFF4ObjectCache::Remove(AFF4Object* object) {
-    std::string key = object->urn.SerializeToString();
+    const std::string key = object->urn.SerializeToString();
     AFF4Status res;
 
     auto it = lru_map.find(key);

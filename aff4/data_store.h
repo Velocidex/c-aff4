@@ -558,9 +558,9 @@ class DataStore {
         // Cache the object for next time.
         T* result = dynamic_cast<T*>(obj.get());
 
-        if(result == nullptr){
-                // bad type cast.
-                return AFF4ScopedPtr<T>();
+        if (result == nullptr){
+            // bad type cast.
+            return AFF4ScopedPtr<T>();
         }
 
         // Store the object in the cache but place it immediate in the in_use list.
@@ -591,7 +591,7 @@ class DataStore {
      * @param object
      */
     void Return(AFF4Object* object) {
-        std::string urn = object->urn.SerializeToString();
+        const std::string urn = object->urn.SerializeToString();
         // Don't return symbolics.
         auto it = SymbolicStreams.find(urn);
         if (it != SymbolicStreams.end()) {
