@@ -591,7 +591,7 @@ class DataStore {
      * @param object
      */
     void Return(AFF4Object* object) {
-        std::string urn = object->urn.SerializeToString();
+        const std::string urn = object->urn.SerializeToString();
         // Don't return symbolics.
         auto it = SymbolicStreams.find(urn);
         if (it != SymbolicStreams.end()) {
