@@ -23,6 +23,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4/aff4_utils.h"
 #include "aff4/rdf.h"
 
+#include <cstring>
+
 namespace aff4 {
 
 /*
@@ -47,7 +49,6 @@ class FileBackedObject: public AFF4Stream {
     explicit FileBackedObject(DataStore* resolver): AFF4Stream(resolver), fd(0){}
     virtual ~FileBackedObject();
 
-    std::string Read(size_t length) override;
     AFF4Status ReadBuffer(char* data, size_t *length) override;
     AFF4Status Write(const char* data, size_t length) override;
 
@@ -72,7 +73,7 @@ class FileBackedObject: public AFF4Stream {
 
 
 /*
-  A stream which just returns the same char over.
+  A stream which just returns the same char over and over.
  */
 class AFF4ConstantStream: public AFF4Stream {
     char constant = 0;
@@ -91,12 +92,16 @@ class AFF4ConstantStream: public AFF4Stream {
     std::string Read(size_t length) override {
         return std::string(length, constant);
     }
+
+    AFF4Status ReadBuffer(char* data, size_t* length) override {
+        std::memset(data, constant, *length);
+        return STATUS_OK;
+    }
 };
 
 class AFF4BuiltInStreams : public AFF4Stream {
  public:
     explicit AFF4BuiltInStreams(DataStore *resolver): AFF4Stream(resolver) {}
-    std::string Read(size_t length) override;
     AFF4Status Write(const char* data, size_t length) override;
     AFF4Status Seek(aff4_off_t offset, int whence) override;
     AFF4Status LoadFromURN() override;

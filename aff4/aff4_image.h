@@ -168,14 +168,7 @@ class AFF4Image: public AFF4Stream {
 
     AFF4Status Write(const char* data, size_t length) override;
 
-    /**
-     * Read data from the current read pointer.
-     *
-     * @param length: How much data to read.
-     *
-     * @return A string containing the data to read.
-     */
-    std::string Read(size_t length) override;
+    AFF4Status ReadBuffer(char* data, size_t* length) override;
 
     AFF4Status Flush() override;
 
@@ -204,7 +197,7 @@ class AFF4StdImage : public AFF4Stream {
 
     AFF4Status LoadFromURN() override;
 
-    std::string Read(size_t length) override;
+    AFF4Status ReadBuffer(char* data, size_t* length) override;
 
  protected:
     URN delegate;

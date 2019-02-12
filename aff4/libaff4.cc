@@ -129,17 +129,21 @@ AFF4Status AFF4Stream::Seek(off_t offset, int whence) {
 }
 
 std::string AFF4Stream::Read(size_t length) {
-    UNUSED(length);
-    return "";
+    if (length == 0) {
+        return "";
+    }
+
+    std::string result(length, '\0');
+    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
+        return "";
+    }
+    result.resize(length);
+    return result;
 }
 
 AFF4Status AFF4Stream::ReadBuffer(char* data, size_t *length) {
-    auto result = Read(*length);
-
-    *length = result.size();
-
-    memcpy(data, result.c_str(), *length);
-
+    UNUSED(data);
+    *length = 0;
     return STATUS_OK;
 }
 
@@ -158,11 +162,9 @@ AFF4Status AFF4Stream::Write(const char* data, size_t length) {
 }
 
 int AFF4Stream::ReadIntoBuffer(void* buffer, size_t length) {
-    std::string result = Read(length);
-
-    memcpy(buffer, result.data(), result.size());
-
-    return result.size();
+    // FIXME: errors?
+    ReadBuffer(reinterpret_cast<char*>(buffer), &length);
+    return length;
 }
 
 off_t AFF4Stream::Tell() {
@@ -339,8 +341,14 @@ AFF4Status StringIO::Write(const char* data, size_t length) {
 std::string StringIO::Read(size_t length) {
     std::string result = buffer.substr(readptr, length);
     readptr += result.size();
-
     return result;
+}
+
+AFF4Status StringIO::ReadBuffer(char* data, size_t* length) {
+    *length = std::min(*length, buffer.size() - readptr);
+    std::memcpy(data, buffer.data() + readptr, *length);
+    readptr += *length;
+    return STATUS_OK;
 }
 
 off_t StringIO::Size() const {

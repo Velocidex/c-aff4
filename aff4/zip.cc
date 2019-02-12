@@ -676,22 +676,29 @@ AFF4Status ZipFileSegment::LoadFromZipFile(
 }
 
 std::string ZipFileSegment::Read(size_t length) {
+    // We want the default implementation, not the one from StringIO::Read
+    return AFF4Stream::Read(length);
+}
+
+AFF4Status ZipFileSegment::ReadBuffer(char* data, size_t* length) {
     if (_backing_store_start_offset < 0) {
-        return StringIO::Read(length);
+        return StringIO::ReadBuffer(data, length);
     }
 
     AFF4ScopedPtr<AFF4Stream> backing_store = resolver->AFF4FactoryOpen<AFF4Stream>(_backing_store_urn);
     if (!backing_store || (size_t)readptr > _backing_store_length) {
-        return "";
+        *length = 0;
+        return STATUS_OK; // FIXME??
     }
 
     aff4_off_t offset = _backing_store_start_offset + readptr;
-    size_t to_read = std::min((aff4_off_t) length, (aff4_off_t) _backing_store_length - readptr);
+    *length = std::min((aff4_off_t) *length, (aff4_off_t) _backing_store_length
+ - readptr);
 
     backing_store->Seek(offset, SEEK_SET);
 
-    std::string result = backing_store->Read(to_read);
-    readptr += result.size();
+    const AFF4Status result = backing_store->ReadBuffer(data, length);
+    readptr += *length;
 
     return result;
 }

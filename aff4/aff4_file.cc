@@ -89,7 +89,6 @@ AFF4Status _CreateIntermediateDirectories(DataStore *resolver, std::string dir_n
     return _CreateIntermediateDirectories(resolver, split(dir_name, PATH_SEP));
 }
 
-
 // Windows files are read through the CreateFile() API so that devices can be
 // read.
 #if defined(_WIN32)
@@ -187,30 +186,6 @@ AFF4Status FileBackedObject::LoadFromURN() {
     return STATUS_OK;
 }
 
-std::string FileBackedObject::Read(size_t length) {
-    DWORD buffer_size = length;
-    std::unique_ptr<char[]> result(new char[length]);
-
-    if (properties.seekable) {
-        LARGE_INTEGER tmp;
-        tmp.QuadPart = readptr;
-        if (!SetFilePointerEx(fd, tmp, &tmp, FILE_BEGIN)) {
-            resolver->logger->info("Failed to seek: {}", GetLastErrorMessage());
-        }
-    }
-
-    if (!ReadFile(fd, result.get(), buffer_size, &buffer_size, nullptr)) {
-        resolver->logger->warn("Reading failed at {:x}: {}", readptr,
-                                GetLastErrorMessage());
-
-        return "";
-    }
-
-    readptr += buffer_size;
-
-    return std::string(result.get(), buffer_size);
-}
-
 AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
     DWORD buf_length = (DWORD)*length;
 
@@ -224,6 +199,9 @@ AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
     }
 
     if (!ReadFile(fd, data, buf_length, &buf_length, nullptr)) {
+        resolver->logger->warn("Reading failed at {:x}: {}", readptr,
+                                GetLastErrorMessage());
+
         return IO_ERROR;
     }
 
@@ -232,8 +210,6 @@ AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
 
     return STATUS_OK;
 }
-
-
 
 AFF4Status FileBackedObject::Write(const char* data, size_t length) {
     // Dont even try to write on files we are not allowed to write on.
@@ -352,35 +328,16 @@ AFF4Status FileBackedObject::LoadFromURN() {
     return STATUS_OK;
 }
 
-std::string FileBackedObject::Read(size_t length) {
-    std::unique_ptr<char[]> result(new char[length]);
-    int res;
-
+AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
     lseek(fd, readptr, SEEK_SET);
-    res = read(fd, result.get(), length);
+    const int res = read(fd, data, *length);
     if (res < 0) {
-        return "";
+        *length = 0;
+        return IO_ERROR;
     }
 
     readptr += res;
-
-    return std::string(result.get(), res);
-}
-
-AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
-    if (!properties.writable) {
-        return IO_ERROR;
-    }
-
-    lseek(fd, readptr, SEEK_SET);
-    int res = read(fd, data, *length);
-    if (res >= 0) {
-        readptr += res;
-        *length = res;
-    } else {
-        return IO_ERROR;
-    }
-
+    *length = res;
     return STATUS_OK;
 }
 
@@ -478,11 +435,6 @@ AFF4Status AFF4BuiltInStreams::LoadFromURN() {
 
     resolver->logger->error("Unsupported builtin stream {}", urn);
     return IO_ERROR;
-}
-
-std::string AFF4BuiltInStreams::Read(size_t length) {
-    UNUSED(length);
-    return "";
 }
 
 AFF4Status AFF4BuiltInStreams::Write(const char* data, size_t length) {

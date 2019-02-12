@@ -243,16 +243,13 @@ class _PipedReaderStream: public AFF4Stream {
       stdout_rd(stdout_rd)
   {}
 
-  std::string Read(size_t length) {
-      std::string buffer(length, 0);
-      DWORD bytes_read = buffer.size();
-
-      if (!ReadFile(stdout_rd, &buffer[0], bytes_read, &bytes_read, NULL)) {
-          return "";
+  AFF4Status ReadBuffer(char* data, size_t* length) override {
+      if (!ReadFile(stdout_rd, data, *length, length, NULL)) {
+          return STATUS_OK; // FIXME?
       }
 
-      readptr += bytes_read;
-      return buffer;
+      readptr += *length;
+      return STATUS_OK;
   }
 
   virtual ~_PipedReaderStream() {

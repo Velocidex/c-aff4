@@ -160,7 +160,7 @@ class AFF4Stream: public AFF4Object {
     virtual AFF4Status Seek(aff4_off_t offset, int whence);
     virtual std::string Read(size_t length);
 
-    virtual AFF4Status ReadBuffer(char *data, size_t *length);
+    virtual AFF4Status ReadBuffer(char* data, size_t* length);
 
     virtual AFF4Status Write(const char* data, size_t length);
     virtual aff4_off_t Tell();
@@ -207,6 +207,7 @@ class StringIO: public AFF4Stream {
     }
 
     std::string Read(size_t length) override;
+    AFF4Status ReadBuffer(char* data, size_t* length) override;
     AFF4Status Write(const char* data, size_t length) override;
 
     AFF4Status Truncate() override;

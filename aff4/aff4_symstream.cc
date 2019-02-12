@@ -26,14 +26,12 @@ namespace aff4 {
         // NOP
     }
 
-    std::string AFF4SymbolicStream::Read(size_t length) {
-        std::string result;
-        result.resize(length);
+    AFF4Status AFF4SymbolicStream::ReadBuffer(char* data, size_t* length) {
         if (pattern.empty()) {
             // fill with symbol
-            std::memset((void*) result.data(), symbol, length);
-            readptr += length;
-            // cycle around to zero if we go passed the logical end of
+            std::memset(data, symbol, *length);
+            readptr += *length;
+            // cycle around to zero if we go past the logical end of
             // the stream.
             if (readptr < 0) {
                 readptr = 0;
@@ -41,23 +39,22 @@ namespace aff4 {
         } else {
             // fill with pattern
             const size_t pSz = pattern.size();
-            char* data = &result[0];
-            size_t toRead = length;
+            size_t toRead = *length;
             while (toRead > 0) {
                 int pOffset = readptr % pSz;
                 *data = pattern[pOffset];
-                data++;
-                toRead--;
+                ++data;
+                --toRead;
 
-                readptr++;
-                // cycle around to zero if we go passed the logical
+                ++readptr;
+                // cycle around to zero if we go past the logical
                 // end of the stream.
                 if (readptr < 0) {
                     readptr = 0;
                 }
             }
         }
-        return result;
+        return STATUS_OK;
     }
 
     void AFF4SymbolicStream::Return() {
