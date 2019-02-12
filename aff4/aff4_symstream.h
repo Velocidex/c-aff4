@@ -26,8 +26,7 @@ class AFF4SymbolicStream: public AFF4Stream {
 
     std::string Read(size_t length);
 
-    // Override AFF4Object::Return();
-    void Return();
+    void Return() override;
 
  protected:
     uint8_t symbol;

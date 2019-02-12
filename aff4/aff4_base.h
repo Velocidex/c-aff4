@@ -111,7 +111,7 @@ class AFF4Object {
     }
 
     // Return this object to the resolver.
-    void Return();
+    virtual void Return();
 
     // By defining a virtual destructor this allows the destructor of derived
     // objects to be called when deleting a pointer to a base object.
