@@ -70,7 +70,7 @@ void AFF4_free_messages(AFF4_Message* msg);
  */
 void AFF4_set_verbosity(unsigned int level);
 
-struct AFF4_Handle;
+typedef struct AFF4_Handle AFF4_Handle;
 
 /**
  * Open the given filename, and access the first aff4:Image in the container.
