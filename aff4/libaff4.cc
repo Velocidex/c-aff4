@@ -557,10 +557,10 @@ void aff4_init() {
 
 
 std::shared_ptr<spdlog::logger> get_logger() {
-    auto logger = spdlog::get("aff4");
+    auto logger = spdlog::get(aff4::LOGGER);
 
     if (!logger) {
-        return spdlog::stderr_color_mt("aff4");
+        return spdlog::stderr_color_mt(aff4::LOGGER);
     }
 
     return logger;

@@ -42,8 +42,8 @@ TEST_F(AFF4CAPI, Sample1URN) {
 
     AFF4_init();
 
-    int handle = AFF4_open(filename.c_str(), nullptr);
-    ASSERT_NE(-1, handle);
+    AFF4_Handle* handle = AFF4_open(filename.c_str(), nullptr);
+    ASSERT_TRUE(handle);
 
     uint64_t size = AFF4_object_size(handle, nullptr);
     ASSERT_EQ(268435456, size);
@@ -61,8 +61,8 @@ TEST_F(AFF4CAPI, Sample2URN) {
     std::string filename = reference_images + "AFF4Std/Base-Allocated.aff4";
     AFF4_init();
 
-    int handle = AFF4_open(filename.c_str(), nullptr);
-    ASSERT_NE(-1, handle);
+    AFF4_Handle* handle = AFF4_open(filename.c_str(), nullptr);
+    ASSERT_TRUE(handle);
 
     uint64_t size = AFF4_object_size(handle, nullptr);
     ASSERT_EQ(268435456, size);
@@ -88,8 +88,8 @@ TEST_F(AFF4CAPI, Sample3URN) {
     std::string filename = reference_images + "AFF4Std/Base-Linear-ReadError.aff4";
     AFF4_init();
 
-    int handle = AFF4_open(filename.c_str(), nullptr);
-    ASSERT_NE(-1, handle);
+    AFF4_Handle* handle = AFF4_open(filename.c_str(), nullptr);
+    ASSERT_TRUE(handle);
 
     uint64_t size = AFF4_object_size(handle, nullptr);
     ASSERT_EQ(268435456, size);

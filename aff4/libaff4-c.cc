@@ -15,7 +15,6 @@
 
 #include <cstring>
 #include <memory>
-#include <unordered_map>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/sink.h>
@@ -79,40 +78,27 @@ public:
     void flush() override {}
 };
 
-struct Holder {
-    Holder():
-        resolver(Holder::make_resolver())
-    {
-        resolver.logger->set_level(spdlog::level::err);
-    }
 
-    bool getURN(int handle, aff4::URN& urn) {
-        const auto& it = handles.find(handle);
-        if (it == handles.end()) {
-            return false;
-        }
-        urn = it->second;
-        return true;
-    }
-
-    static aff4::MemoryDataStore make_resolver() {
-        spdlog::drop("aff4");
-        return aff4::MemoryDataStore(
-            aff4::DataStoreOptions{
-                spdlog::create("aff4", std::make_shared<LogSink>()), 1
-            }
-        );
-    }
-
-    aff4::MemoryDataStore resolver;
-    std::unordered_map<int, aff4::URN> handles;
-    int nextHandle = 0;
-};
-
-Holder& get_holder() {
-    static Holder the_holder;
-    return the_holder;
+std::shared_ptr<spdlog::logger> setup_c_api_logger() {
+    spdlog::drop(aff4::LOGGER);
+    auto logger = spdlog::create(aff4::LOGGER, std::make_shared<LogSink>());
+    logger->set_level(spdlog::level::err);
+    return logger;
 }
+
+std::shared_ptr<spdlog::logger> get_c_api_logger() {
+    static std::shared_ptr<spdlog::logger> the_logger = setup_c_api_logger();
+    return the_logger;
+}
+
+struct AFF4_Handle {
+    aff4::MemoryDataStore resolver;
+    aff4::URN urn;
+
+    AFF4_Handle():
+        resolver(aff4::DataStoreOptions{get_c_api_logger(), 1})
+    {}
+};
 
 spdlog::level::level_enum enum_for_level(unsigned int level) {
     switch (level) {
@@ -134,7 +120,7 @@ extern "C" {
 void AFF4_init() {}
 
 void AFF4_set_verbosity(unsigned int level) {
-    get_holder().resolver.logger->set_level(enum_for_level(level));
+    spdlog::get(aff4::LOGGER)->set_level(enum_for_level(level));
 }
 
 void AFF4_free_messages(AFF4_Message* msg) {
@@ -146,29 +132,29 @@ void AFF4_free_messages(AFF4_Message* msg) {
     }
 }
 
-int AFF4_open(const char* filename, AFF4_Message** msg) {
-    Holder& h = get_holder();
+AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
+    std::unique_ptr<AFF4_Handle> h(new AFF4_Handle());
     get_log_handler().use(msg);
 
     aff4::URN urn = aff4::URN::NewURNFromFilename(filename);
     aff4::AFF4ScopedPtr<aff4::ZipFile> zip = aff4::ZipFile::NewZipFile(
-        &h.resolver, urn);
+        &h->resolver, urn);
     if (!zip) {
         errno = ENOENT;
-        return -1;
+        return nullptr;
     }
 
     // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
     const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
-    std::unordered_set<aff4::URN> images = h.resolver.Query(aff4::AFF4_TYPE, &type);
+    std::unordered_set<aff4::URN> images = h->resolver.Query(aff4::AFF4_TYPE, &type);
 
     if (images.empty()) {
         const aff4::URN legacy_type(aff4::AFF4_LEGACY_IMAGE_TYPE);
-        images = h.resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
+        images = h->resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
         if (images.empty()) {
-            h.resolver.Close(zip);
+            h->resolver.Close(zip);
             errno = ENOENT;
-            return -1;
+            return nullptr;
         }
     }
 
@@ -177,32 +163,29 @@ int AFF4_open(const char* filename, AFF4_Message** msg) {
     std::sort(sorted_images.begin(), sorted_images.end());
 
     // Make sure we only load an image that is stored in the filename provided
-    for (const auto & image : sorted_images) {
-        if (!h.resolver.HasURNWithAttributeAndValue(image, aff4::AFF4_STORED, zip->urn)) {
+    for (const auto& img_urn: sorted_images) {
+        if (!h->resolver.HasURNWithAttributeAndValue(img_urn, aff4::AFF4_STORED, zip->urn)) {
             continue;
         }
 
-        if (!h.resolver.AFF4FactoryOpen<aff4::AFF4StdImage>(image)) {
+        if (!h->resolver.AFF4FactoryOpen<aff4::AFF4StdImage>(img_urn)) {
             continue;
         }
 
-        const int handle = h.nextHandle++;
-        h.handles[handle] = image;
-        return handle;
+        h->urn = img_urn;
+        return h.release();
     }
 
-    h.resolver.Close(zip);
+    h->resolver.Close(zip);
     errno = ENOENT;
-    return -1;
+    return nullptr;
 }
 
-uint64_t AFF4_object_size(int handle, AFF4_Message** msg) {
-    Holder& h = get_holder();
+uint64_t AFF4_object_size(AFF4_Handle* handle, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
-    aff4::URN urn;
-    if (h.getURN(handle, urn)) {
-        auto stream = h.resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
+    if (handle) {
+        auto stream = handle->resolver.AFF4FactoryOpen<aff4::AFF4Stream>(handle->urn);
         if (stream.get()) {
             return stream->Size();
         }
@@ -210,14 +193,14 @@ uint64_t AFF4_object_size(int handle, AFF4_Message** msg) {
     return 0;
 }
 
-ssize_t AFF4_read(int handle, uint64_t offset, void* buffer, size_t length, AFF4_Message** msg) {
-    Holder& h = get_holder();
+ssize_t AFF4_read(AFF4_Handle* handle, uint64_t offset, void* buffer, size_t length, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
-    aff4::URN urn;
-    if (!h.getURN(handle, urn)) return -1;
+    if (!handle) {
+        return -1;
+    }
 
-    auto stream = h.resolver.AFF4FactoryOpen<aff4::AFF4Stream>(urn);
+    auto stream = handle->resolver.AFF4FactoryOpen<aff4::AFF4Stream>(handle->urn);
     if (stream.get()) {
         if (stream->Seek(offset, SEEK_SET) != aff4::STATUS_OK ||
             stream->ReadBuffer(static_cast<char*>(buffer), &length) != aff4::STATUS_OK)
@@ -233,17 +216,16 @@ ssize_t AFF4_read(int handle, uint64_t offset, void* buffer, size_t length, AFF4
     return length;
 }
 
-int AFF4_close(int handle, AFF4_Message** msg) {
-    Holder& h = get_holder();
+int AFF4_close(AFF4_Handle* handle, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
-    aff4::URN urn;
-    if (h.getURN(handle, urn)) {
-        auto obj = h.resolver.AFF4FactoryOpen<aff4::AFF4Object>(urn);
+    if (handle) {
+        auto obj = handle->resolver.AFF4FactoryOpen<aff4::AFF4Object>(handle->urn);
         if (obj.get()) {
-            h.resolver.Close(obj);
-            h.handles.erase(handle);
+            handle->resolver.Close(obj);
         }
+
+        delete handle;
     }
     return 0;
 }
