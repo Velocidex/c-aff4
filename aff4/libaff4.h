@@ -68,6 +68,8 @@ extern "C" {
 
 std::string aff4_sprintf(std::string fmt, ...);
 
+const char LOGGER[] = "aff4";
+
 } // namespace aff4
 
 

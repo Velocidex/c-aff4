@@ -21,7 +21,7 @@
 /*
  * This is the C interface into libaff4.
  *
- * Note: This API is NOT MT-SAFE.
+ * Note: Individual handles are NOT MT-SAFE.
  */
 
 #ifdef __cplusplus
@@ -70,18 +70,20 @@ void AFF4_free_messages(AFF4_Message* msg);
  */
 void AFF4_set_verbosity(unsigned int level);
 
+typedef struct AFF4_Handle AFF4_Handle;
+
 /**
  * Open the given filename, and access the first aff4:Image in the container.
  * @param filename The filename to open.
  * @param msg A pointer to log messages.
- * @return Object handle, or -1 on error. See errno
+ * @return Object handle, or NULL on error. See errno
  */
-int AFF4_open(const char* filename, AFF4_Message** msg);
+AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg);
 
 /**
  * Get the size of the AFF4 Object that was opened.
  */
-uint64_t AFF4_object_size(int handle, AFF4_Message** msg);
+uint64_t AFF4_object_size(AFF4_Handle* handle, AFF4_Message** msg);
 
 /**
  * Read a block from the given handle.
@@ -92,7 +94,7 @@ uint64_t AFF4_object_size(int handle, AFF4_Message** msg);
  * @param msg A pointer to log messages.
  * @return The number of bytes placed into the buffer.
  */
-ssize_t AFF4_read(int handle, uint64_t offset, void* buffer, size_t length, AFF4_Message** msg);
+ssize_t AFF4_read(AFF4_Handle* handle, uint64_t offset, void* buffer, size_t length, AFF4_Message** msg);
 
 /**
  * Close the given handle.
@@ -100,7 +102,7 @@ ssize_t AFF4_read(int handle, uint64_t offset, void* buffer, size_t length, AFF4
  * @param msg A pointer to log messages.
  * @return 0, or -1 on error.
  */
-int AFF4_close(int handle, AFF4_Message** msg);
+int AFF4_close(AFF4_Handle* handle, AFF4_Message** msg);
 
 #ifdef __cplusplus
 }
