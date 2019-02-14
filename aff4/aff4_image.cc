@@ -935,7 +935,12 @@ AFF4Status AFF4StdImage::ReadBuffer(char* data, size_t* length) {
     }
 
     delegate_stream->Seek(readptr, SEEK_SET);
-    return delegate_stream->ReadBuffer(data, length);
+
+    auto data = delegate_stream->Read(length);
+
+    Seek(data.size(), SEEK_CUR);
+
+    return data;
 }
 
 // AFF4 Standard
