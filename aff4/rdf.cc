@@ -141,7 +141,13 @@ std::string URN::Path() const {
     }
 
     if (Scheme() == "aff4") {
-        return value.substr(strlen(AFF4_PREFIX) + Domain().size() + 1);
+        // Calculate offset of any trailing path
+        const auto offset = strlen(AFF4_PREFIX) + Domain().size() + 1;
+
+        // Some valid URNs don't have paths
+        if (value.size() > offset) {
+            return value.substr(offset);
+        }
     }
 
     return "";
