@@ -21,6 +21,7 @@
 #include <raptor2/raptor2.h>
 #include <spdlog/spdlog.h>
 #include <iostream>
+#include <mutex>
 #include "aff4/aff4_symstream.h"
 
 namespace aff4 {
@@ -182,6 +183,35 @@ DataStore::DataStore(DataStoreOptions options)
     }
 }
 
+class RaptorWorldPool {
+    std::vector<raptor_world*> pool{};
+    std::mutex pool_mutex{};
+
+public:
+    raptor_world * get() {
+        std::lock_guard<std::mutex> lock(pool_mutex);
+
+        raptor_world * world;
+
+        if (pool.empty()) {
+            world = raptor_new_world();
+            raptor_world_open(world);
+        } else {
+            world = pool.back();
+            pool.pop_back();
+        }
+
+        return world;
+    }
+
+    void put(raptor_world * world) {
+        std::lock_guard<std::mutex> lock(pool_mutex);
+
+        pool.push_back(world);
+    }
+};
+
+static RaptorWorldPool raptor_world_pool{};
 
 class RaptorSerializer {
 protected:
@@ -201,7 +231,7 @@ public:
         std::unique_ptr<RaptorSerializer> result(new RaptorSerializer());
         raptor_uri* uri;
 
-        result->world = raptor_new_world();
+        result->world = raptor_world_pool.get();
 
         result->serializer = raptor_new_serializer(result->world, "turtle");
 
@@ -247,8 +277,13 @@ public:
     }
 
     ~RaptorSerializer() {
-        raptor_free_serializer(serializer);
-        raptor_free_world(world);
+        if (serializer != nullptr) {
+            raptor_free_serializer(serializer);
+        }
+
+        if (world != nullptr) {
+            raptor_world_pool.put(world);
+        }
     }
 };
 
@@ -335,7 +370,7 @@ public:
     static std::unique_ptr<RaptorParser> NewRaptorParser(DataStore* resolver) {
         std::unique_ptr<RaptorParser> result(new RaptorParser(resolver));
 
-        result->world = raptor_new_world();
+        result->world = raptor_world_pool.get();
 
         result->parser = raptor_new_parser(result->world, "turtle");
 
@@ -374,8 +409,13 @@ public:
         // Flush the parser.
         raptor_parser_parse_chunk(parser, nullptr, 0, 1);
 
-        raptor_free_parser(parser);
-        raptor_free_world(world);
+        if (parser != nullptr) {
+            raptor_free_parser(parser);
+        }
+
+        if (world != nullptr) {
+            raptor_world_pool.put(world);
+        }
     }
 };
 
