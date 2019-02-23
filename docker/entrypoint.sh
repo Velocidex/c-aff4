@@ -15,7 +15,12 @@ function do_configure() {
 }
 
 function do_build() {
-    make -j4 install
+    make -j14 install
+}
+
+
+function do_clean() {
+    make -j4 clean
 }
 
 function do_help() {
@@ -50,6 +55,9 @@ elif [ "$#" -eq 1 ]; then
         exit 0
     elif [ "$1" == "build" ]; then
         do_build
+        exit 0
+    elif [ "$1" == "clean" ]; then
+        do_clean
         exit 0
     elif [ "$1" == "help" ]; then
         do_help

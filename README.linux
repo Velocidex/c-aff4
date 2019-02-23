@@ -86,7 +86,14 @@ cd spdlog-0.11.0/
 cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX . && make all install
 cd ..
 
-git clone https://github.com/google/aff4.git
+export LZ4_VERSION=1.8.3
+curl -L https://github.com/lz4/lz4/archive/v${LZ4_VERSION}.tar.gz -o lz4-${LZ4_VERSION}.tar.gz
+tar xvzf lz4-${LZ4_VERSION}.tar.gz
+cd lz4-${LZ4_VERSION}/lib
+make -j4 install
+cd ..
+
+git clone https://github.com/Velocidex/aff4.git
 cd aff4
 ./autogen.sh
 ./configure --prefix=$PREFIX  --enable-static LDFLAGS="-L$PREFIX/lib -L$PREFIX/libexec" --enable-static-binaries

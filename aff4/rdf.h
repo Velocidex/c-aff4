@@ -21,7 +21,7 @@ specific language governing permissions and limitations under the License.
 #include <string>
 #include <string>
 
-#include "aff4/config.h"
+// #include "aff4/config.h"
 #include "aff4/aff4_errors.h"
 #include "aff4/aff4_registry.h"
 #include "aff4/aff4_utils.h"

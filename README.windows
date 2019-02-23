@@ -112,6 +112,13 @@ cd spdlog-0.17.0/
 cmake -DCMAKE_INSTALL_PREFIX:PATH=$PREFIX . && make install -j4
 cd ..
 
+export LZ4_VERSION=1.8.3
+curl -L https://github.com/lz4/lz4/archive/v${LZ4_VERSION}.tar.gz -o lz4-${LZ4_VERSION}.tar.gz
+tar xvzf lz4-${LZ4_VERSION}.tar.gz
+cd lz4-${LZ4_VERSION}/lib
+CC=i686-w64-mingw32-gcc make -j4 install
+cd ..
+
 cd aff4
 ./configure --prefix=$PREFIX --disable-shared --enable-static LDFLAGS="-L$PREFIX/lib -static -static-libstdc++" --host=i686-w64-mingw32 \
             CXXFLAGS="-static -mnop-fun-dllimport -I$PREFIX/include/ -DRAPTOR_STATIC" --enable-static-binaries

@@ -70,6 +70,8 @@ class PmemImager: public BasicImager {
     virtual AFF4ScopedPtr<AFF4Stream> GetWritableStream_(
         const URN &output_urn, const URN &volume_urn);
 
+    virtual AFF4Status WriteRawVolume_();
+
  public:
     PmemImager(): BasicImager() {}
     virtual ~PmemImager();

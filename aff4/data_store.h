@@ -310,6 +310,11 @@ class AFF4ScopedPtr {
 struct DataStoreOptions {
     std::shared_ptr<spdlog::logger> logger = aff4::get_logger();
     int threadpool_size = 1;
+
+    DataStoreOptions(std::shared_ptr<spdlog::logger> logger,  int threadpool_size):
+        logger(logger), threadpool_size(threadpool_size){};
+
+    DataStoreOptions() : logger(aff4::get_logger()){};
 };
 
 
@@ -509,7 +514,7 @@ class DataStore {
         if (cached_obj) {
             logger->debug("AFF4FactoryOpen (cached): {}", cached_obj->urn);
 
-            cached_obj->Prepare();
+            // cached_obj->Prepare();
             return AFF4ScopedPtr<T>(dynamic_cast<T*>(cached_obj), this);
         }
 

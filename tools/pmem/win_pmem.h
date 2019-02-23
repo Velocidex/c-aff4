@@ -92,9 +92,9 @@ class WinPmemImager: public PmemImager {
    */
   MemoryDataStore private_resolver;
 
-  virtual AFF4Status CreateMap_(AFF4Map *map, aff4_off_t *length);
+  AFF4Status CreateMap_(AFF4Map *map, aff4_off_t *length) override;
 
-  virtual std::string GetName() {
+  std::string GetName() const override {
     return "The WinPmem memory imager.";
   }
 
@@ -104,7 +104,7 @@ class WinPmemImager: public PmemImager {
    *
    * @return STATUS_OK if successful.
    */
-  virtual AFF4Status ImagePageFile();
+  AFF4Status ImagePageFile();
 
   /**
    * Actually create the image of physical memory.
@@ -146,7 +146,7 @@ class WinPmemImager: public PmemImager {
    */
   AFF4Status UninstallDriver();
 
-  virtual AFF4Status RegisterArgs() {
+  AFF4Status RegisterArgs() override {
     AddArg(new TCLAP::SwitchArg(
         "L", "load-driver", "Load the driver and exit", false));
 

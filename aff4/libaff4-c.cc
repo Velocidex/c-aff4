@@ -96,7 +96,7 @@ struct AFF4_Handle {
     aff4::URN urn;
 
     AFF4_Handle():
-        resolver(aff4::DataStoreOptions{get_c_api_logger(), 1})
+        resolver(aff4::DataStoreOptions(get_c_api_logger(), 1))
     {}
 };
 

@@ -119,12 +119,36 @@ std::string OSXPmemImager::DumpMemoryInfoToYaml() {
 
 AFF4Status OSXPmemImager::ImagePhysicalMemory() {
   resolver.logger->info("Imaging memory");
+  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
 
   AFF4Status res;
 
   res = InstallDriver();
   if (res != STATUS_OK)
     return res;
+
+  // When the output volume is raw - we image in raw or elf format.
+  if (volume_type == "raw") {
+      return WriteRawVolume_();
+  }
+
+  std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
+
+  // When the output volume is raw - we image in raw or elf format.
+  if (volume_type == "raw") {
+      output_volume_backing_urn = URN::NewURNFromFilename(output_path);
+      if (output_path == "-") {
+          output_volume_backing_urn = URN("builtin://stdout");
+      }
+
+      resolver.Set(output_volume_backing_urn, AFF4_STREAM_WRITE_MODE,
+                   new XSDString("truncate"));
+
+      if (format == "elf") {
+          return WriteElfFormat_(output_volume_backing_urn, output_volume_backing_urn);
+      }
+      return WriteRawFormat_(output_volume_backing_urn, output_volume_backing_urn);
+  }
 
   URN output_urn;
   res = GetOutputVolumeURN(&output_volume_urn);
@@ -139,8 +163,6 @@ AFF4Status OSXPmemImager::ImagePhysicalMemory() {
 
   // This is a physical memory image.
   resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
-
-  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
 
   if (format == "map") {
     res = WriteMapObject_(map_urn, output_volume_urn);

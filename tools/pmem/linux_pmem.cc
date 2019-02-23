@@ -186,6 +186,13 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
 
 AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
   resolver.logger->info("Imaging memory");
+  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
+  std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
+
+  // When the output volume is raw - we image in raw or elf format.
+  if (volume_type == "raw") {
+      return WriteRawVolume_();
+  }
 
   URN output_urn;
   AFF4Status res = GetOutputVolumeURN(&output_volume_urn);
@@ -200,8 +207,6 @@ AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
 
   // This is a physical memory image.
   resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
-
-  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
 
   if (format == "map") {
     res = WriteMapObject_(map_urn, output_volume_urn);

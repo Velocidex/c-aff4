@@ -452,6 +452,7 @@ AFF4Status ZipFile::write_zip64_CD(AFF4Stream& backing_store) {
     // Append a new central directory to the end of the zip file.
     if (backing_store.properties.seekable) {
         RETURN_IF_ERROR(backing_store.Seek(0, SEEK_END));
+        resolver->logger->debug("Seeking to {}", backing_store.Tell());
     }
 
     // The real start of the ECD.
@@ -841,6 +842,7 @@ AFF4Status ZipFileSegment::Flush() {
 
         // Append member at the end of the file.
         if (backing_store->properties.seekable) {
+            resolver->logger->debug("Seeking to end");
             RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
         }
 
@@ -1017,6 +1019,7 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
 
     // Append member at the end of the file.
     if (is_backing_store_seekable) {
+        resolver->logger->debug("Seeking to end");
         RETURN_IF_ERROR(backing_store->Seek(0, SEEK_END));
     }
 
