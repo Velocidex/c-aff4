@@ -642,6 +642,7 @@ void BasicImager::MaybeSwapOutputVolume(const URN& image_stream) {
         if (output_stream.get()) {
             backing_file_size = output_stream->Size();
         }
+        resolver.logger->debug("Output volume at {}", backing_file_size);
     }
     // We need to split the volume into another file.
     if (max_output_volume_file_size > 0 &&

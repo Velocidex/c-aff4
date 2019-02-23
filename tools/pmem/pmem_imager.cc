@@ -332,6 +332,24 @@ AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
   return AFF4ScopedPtr<AFF4Stream>();
 }
 
+AFF4Status PmemImager::WriteRawVolume_() {
+  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
+  std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
+
+  output_volume_backing_urn = URN::NewURNFromFilename(output_path);
+  if (output_path == "-") {
+      output_volume_backing_urn = URN("builtin://stdout");
+  }
+
+  resolver.Set(output_volume_backing_urn, AFF4_STREAM_WRITE_MODE,
+               new XSDString("truncate"));
+
+  if (format == "elf") {
+      return WriteElfFormat_(output_volume_backing_urn, output_volume_backing_urn);
+  }
+  return WriteRawFormat_(output_volume_backing_urn, output_volume_backing_urn);
+}
+
 
 AFF4Status PmemImager::process_input() {
     if (volume_type != "aff4") {

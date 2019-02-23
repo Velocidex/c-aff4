@@ -4,20 +4,20 @@ FROM ubuntu:18.04 as aff4-builder-base
 RUN sed -i '/^#\sdeb-src /s/^# *//' "/etc/apt/sources.list"
 
 RUN apt-get update && \
-	apt-get install -y --no-install-recommends \
-		build-essential \
-		libtool-bin \
-		dpkg-dev \
-		pkgconf \
-		curl \
-		autoconf \
-		automake \
-		cmake \
-		ccache \
-		vim \
-		less \
-		ca-certificates
-	
+        apt-get install -y --no-install-recommends \
+                build-essential \
+                libtool-bin \
+                dpkg-dev \
+                pkgconf \
+                curl \
+                autoconf \
+                automake \
+                cmake \
+                ccache \
+                vim \
+                less \
+                ca-certificates
+
 
 ENV AFF4_DEPS_PATH /aff4-deps
 ENV AFF4_DEPS_SRC_PATH /aff4-deps-src
@@ -30,18 +30,14 @@ ADD Makefile-deps Makefile
 # Fetch all dependencies.
 RUN make fetch-deps
 
-ADD entrypoint.sh /entrypoint.sh
-RUN chmod 755 /entrypoint.sh
-ENTRYPOINT [ "/entrypoint.sh" ]
-
 # WIN32 BUILDER
 FROM aff4-builder-base as aff4-builder-win32
 ENV AFF4_BUILD_OUTPUT_PATH=/src/build/win32
 # Install the mingw toolchain
 RUN apt-get update && \
-	apt-get install -y --no-install-recommends \
-		g++-mingw-w64-i686
-		
+        apt-get install -y --no-install-recommends \
+                g++-mingw-w64-i686
+
 # Explicitly set the gcc/g++ compilers to the posix version
 RUN update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
 RUN update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
@@ -62,7 +58,11 @@ ENV AFF4_CMAKE_TOOLCHAIN_FLAGS "-DCMAKE_TOOLCHAIN_FILE:PATH=${CMAKE_TOOLCHAIN_FI
 
 # Now actually build and install the dependencies.
 RUN make install-deps
-	
+
+ADD entrypoint.sh /entrypoint.sh
+RUN chmod 755 /entrypoint.sh
+ENTRYPOINT [ "/entrypoint.sh" ]
+
 RUN mkdir /src
 WORKDIR /src
 

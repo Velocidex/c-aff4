@@ -244,11 +244,15 @@ class _PipedReaderStream: public AFF4Stream {
   {}
 
   AFF4Status ReadBuffer(char* data, size_t* length) override {
-      if (!ReadFile(stdout_rd, data, *length, length, NULL)) {
+      DWORD bytes_read = 0;
+
+      if (!ReadFile(stdout_rd, data, *length, &bytes_read, NULL)) {
           return STATUS_OK; // FIXME?
       }
 
-      readptr += *length;
+      readptr += bytes_read;
+      *length = bytes_read;
+
       return STATUS_OK;
   }
 
@@ -523,23 +527,12 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
   if (res != CONTINUE)
     return res;
 
-  std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
-
   // When the output volume is raw - we image in raw or elf format.
   if (volume_type == "raw") {
-      output_volume_backing_urn = URN::NewURNFromFilename(output_path);
-      if (output_path == "-") {
-          output_volume_backing_urn = URN("builtin://stdout");
-      }
-
-      resolver.Set(output_volume_backing_urn, AFF4_STREAM_WRITE_MODE,
-                   new XSDString("truncate"));
-
-      if (format == "elf") {
-          return WriteElfFormat_(output_volume_backing_urn, output_volume_backing_urn);
-      }
-      return WriteRawFormat_(output_volume_backing_urn, output_volume_backing_urn);
+      return WriteRawVolume_();
   }
+
+  std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
 
   URN output_urn;
   res = GetOutputVolumeURN(&output_volume_urn);

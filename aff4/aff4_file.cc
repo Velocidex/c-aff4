@@ -212,7 +212,7 @@ AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
 }
 
 AFF4Status FileBackedObject::Write(const char* data, size_t length) {
-    // Dont even try to write on files we are not allowed to write on.
+    // Dont ever try to write on files we are not allowed to write on.
     if (!properties.writable) {
         return IO_ERROR;
     }
@@ -361,7 +361,7 @@ AFF4Status FileBackedObject::Write(const char* data, size_t length) {
     if (readptr > size) {
         size = readptr;
     }
-
+    resolver->logger->debug("Writing {} on {}/{}\n", length, readptr, size);
     return STATUS_OK;
 }
 

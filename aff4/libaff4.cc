@@ -345,7 +345,7 @@ std::string StringIO::Read(size_t length) {
 }
 
 AFF4Status StringIO::ReadBuffer(char* data, size_t* length) {
-    *length = std::min(*length, buffer.size() - readptr);
+    *length = std::min((aff4_off_t)*length, (aff4_off_t)(buffer.size() - readptr));
     std::memcpy(data, buffer.data() + readptr, *length);
     readptr += *length;
     return STATUS_OK;
