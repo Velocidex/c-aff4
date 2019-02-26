@@ -123,7 +123,7 @@ extern "C" {
 void AFF4_init() {}
 
 void AFF4_set_verbosity(unsigned int level) {
-    spdlog::get(aff4::LOGGER)->set_level(enum_for_level(level));
+    get_c_api_logger()->set_level(enum_for_level(level));
 }
 
 void AFF4_free_messages(AFF4_Message* msg) {
@@ -139,7 +139,7 @@ AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
     std::unique_ptr<AFF4_Handle> h(new AFF4_Handle());
     std::unordered_set<aff4::URN> images;
     const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
-    aff4::AFF4Flusher<aff4::ZipFile> zip;
+    aff4::AFF4Flusher<aff4::AFF4Volume> zip;
 
     get_log_handler().use(msg);
 
@@ -153,6 +153,8 @@ AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
             &h->resolver, aff4::AFF4Flusher<aff4::AFF4Stream>(file.release()), zip)) {
         goto fail;
     };
+
+    h->volumes.AddVolume(std::move(zip));
 
     // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
     images = h->resolver.Query(aff4::AFF4_TYPE, &type);
@@ -170,22 +172,16 @@ AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
         std::vector<aff4::URN> sorted_images{images.begin(), images.end()};
         std::sort(sorted_images.begin(), sorted_images.end());
 
-    // Make sure we only load an image that is stored in the filename provided
-    for (const auto& img_urn: sorted_images) {
-        if (!h->resolver.HasURNWithAttributeAndValue(img_urn, aff4::AFF4_STORED, zip->urn)) {
-            continue;
+        for (const auto& img_urn: sorted_images) {
+            aff4::AFF4Flusher<aff4::AFF4Stream> image;
+            if (aff4::STATUS_OK != h->volumes.GetStream(img_urn, image)) {
+                goto fail;
+            }
+
+            h->stream.reset(image.release());
+
+            return h.release();
         }
-
-        aff4::AFF4Flusher<aff4::AFF4Image> image;
-        if (aff4::STATUS_OK != aff4::AFF4Image::OpenAFF4Image(
-                &h->resolver, img_urn, &h->volumes, image)) {
-            goto fail;
-        }
-
-        h->stream.reset(image.release());
-
-        return h.release();
-    }
     }
 
  fail:

@@ -48,7 +48,7 @@ hashes.
 ## Copyright
 
 Copyright 2015-2017 Google Inc.
-Copyright 2018 Rekall Innovations (Michael Cohen).
+Copyright 2018-present Velocidex Innovations.
 
 ## References
 
