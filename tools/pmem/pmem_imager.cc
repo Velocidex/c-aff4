@@ -124,212 +124,202 @@ AFF4Status PmemImager::handle_compression() {
 
 
 // Write an ELF stream.
-AFF4Status PmemImager::WriteElfFormat_(
-    const URN &target_urn, const URN &output_volume_urn) {
+AFF4Status PmemImager::WriteElfFormat_(const URN &output_urn) {
     resolver.logger->info("Will write in ELF format.");
 
-  AFF4ScopedPtr<AFF4Stream> header = resolver.CachePut<AFF4Stream>(
-      new StringIO(&resolver));
+    AFF4Flusher<AFF4Stream> header(new StringIO(&resolver));
 
-  // Create a temporary map for WriteStream() API.
-  AFF4Map memory_layout(&resolver);
-  aff4_off_t total_length = 0;
+    // Create a temporary map for WriteStream() API.
+    AFF4Map memory_layout(&resolver);
+    aff4_off_t total_length = 0;
 
-  AFF4Status res = CreateMap_(&memory_layout, &total_length);
-  if (res != STATUS_OK)
-    return res;
+    RETURN_IF_ERROR(CreateMap_(&memory_layout, &total_length));
 
-  std::vector<Range> ranges = memory_layout.GetRanges();
+    std::vector<Range> ranges = memory_layout.GetRanges();
 
-  resolver.logger->info("There are {} ranges", ranges.size());
+    resolver.logger->info("There are {} ranges", ranges.size());
 
-  // Now create a transformed map based on the ranges calculated.
-  AFF4Map temp_map(&resolver);
+    // Now create a transformed map based on the ranges calculated.
+    AFF4Map temp_map(&resolver);
 
-  // Write the ELF header.
-  Elf64_Ehdr elf_header;
-  elf_header.ident[0] = ELFMAG0;
-  elf_header.ident[1] = ELFMAG1;
-  elf_header.ident[2] = ELFMAG2;
-  elf_header.ident[3] = ELFMAG3;
-  elf_header.ident[4] = ELFCLASS64;
-  elf_header.ident[5] = ELFDATA2LSB;
-  elf_header.ident[6] = EV_CURRENT;
+    // Write the ELF header.
+    Elf64_Ehdr elf_header;
+    elf_header.ident[0] = ELFMAG0;
+    elf_header.ident[1] = ELFMAG1;
+    elf_header.ident[2] = ELFMAG2;
+    elf_header.ident[3] = ELFMAG3;
+    elf_header.ident[4] = ELFCLASS64;
+    elf_header.ident[5] = ELFDATA2LSB;
+    elf_header.ident[6] = EV_CURRENT;
 
-  elf_header.type = ET_CORE;
-  elf_header.machine = EM_X86_64;
-  elf_header.version = EV_CURRENT;
+    elf_header.type = ET_CORE;
+    elf_header.machine = EM_X86_64;
+    elf_header.version = EV_CURRENT;
 
-  elf_header.phoff    = sizeof(Elf64_Ehdr);
-  elf_header.phentsize = sizeof(Elf64_Phdr);
-  elf_header.ehsize = sizeof(Elf64_Ehdr);
-  elf_header.phentsize = sizeof(Elf64_Phdr);
+    elf_header.phoff    = sizeof(Elf64_Ehdr);
+    elf_header.phentsize = sizeof(Elf64_Phdr);
+    elf_header.ehsize = sizeof(Elf64_Ehdr);
+    elf_header.phentsize = sizeof(Elf64_Phdr);
 
-  elf_header.phnum = ranges.size();
-  elf_header.shentsize = sizeof(Elf64_Shdr);
-  elf_header.shnum = 0;
+    elf_header.phnum = ranges.size();
+    elf_header.shentsize = sizeof(Elf64_Shdr);
+    elf_header.shnum = 0;
 
-  header->Write(reinterpret_cast<char *>(&elf_header), sizeof(elf_header));
+    header->Write(reinterpret_cast<char *>(&elf_header), sizeof(elf_header));
 
-  // Where we start writing data: End of ELF header plus one physical header per
-  // range.
-  uint64 file_offset = (sizeof(Elf64_Ehdr) +
-                        ranges.size() * sizeof(Elf64_Phdr));
+    // Where we start writing data: End of ELF header plus one physical header per
+    // range.
+    uint64 file_offset = (sizeof(Elf64_Ehdr) +
+                          ranges.size() * sizeof(Elf64_Phdr));
 
-  // Map the header into the output stream.
-  temp_map.AddRange(0, 0, file_offset, header->urn);
+    // Map the header into the output stream.
+    temp_map.AddRange(0, 0, file_offset, header.get());
 
-  for (auto range : ranges) {
-    Elf64_Phdr pheader = {};
+    for (auto range : ranges) {
+        Elf64_Phdr pheader = {};
 
-    pheader.type = PT_LOAD;
-    pheader.paddr = range.map_offset;
-    pheader.memsz = range.length;
-    pheader.align = 1;
-    pheader.flags = PF_R;
-    pheader.off = file_offset;
-    pheader.filesz = range.length;
+        pheader.type = PT_LOAD;
+        pheader.paddr = range.map_offset;
+        pheader.memsz = range.length;
+        pheader.align = 1;
+        pheader.flags = PF_R;
+        pheader.off = file_offset;
+        pheader.filesz = range.length;
 
-    // Write the program header into the ELF header stream.
-    if (header->Write(reinterpret_cast<char *>(&pheader),
-                      sizeof(pheader)) < 0) {
-      return IO_ERROR;
+        // Write the program header into the ELF header stream.
+        if (header->Write(reinterpret_cast<char *>(&pheader),
+                          sizeof(pheader)) < 0) {
+            return IO_ERROR;
+        }
+
+        // Map this range.
+        temp_map.AddRange(file_offset, range.map_offset, range.length,
+                          memory_layout.targets[range.target_id]);
+
+        // Move the file offset by the size of this run.
+        file_offset += range.length;
     }
 
-    // Map this range.
-    temp_map.AddRange(file_offset, range.map_offset, range.length,
-                      memory_layout.targets[range.target_id]);
+    // Create the output object.
+    AFF4Flusher<AFF4Volume> volume;
+    AFF4Flusher<AFF4Stream> target_stream;
+    RETURN_IF_ERROR(GetWritableStream_(
+                        output_urn, target_stream, volume));
 
-    // Move the file offset by the size of this run.
-    file_offset += range.length;
-  }
+    DefaultProgress progress(&resolver);
+    progress.length = file_offset;
 
-  // Create the output object.
-  AFF4ScopedPtr<AFF4Stream> target_stream = GetWritableStream_(
-      target_urn, output_volume_urn);
-
-  if (!target_stream)
-    return IO_ERROR;
-
-  DefaultProgress progress(&resolver);
-  progress.length = file_offset;
-
-  // Now write the map into the image.
-  res = target_stream->WriteStream(&temp_map, &progress);
-  if (res != STATUS_OK)
-    return res;
-
-  return STATUS_OK;
+    // Now write the map into the image.
+    return target_stream->WriteStream(&temp_map, &progress);
 }
 
 
-AFF4Status PmemImager::WriteRawFormat_(
-    const URN &target_urn, const URN &output_volume_urn) {
+AFF4Status PmemImager::WriteRawFormat_(const URN &target_urn) {
     resolver.logger->info("Will write in raw format.");
 
-  // Create a temporary map for WriteStream() API.
-  AFF4Map temp_stream(&resolver);
-  aff4_off_t total_length = 0;
+    // Create a temporary map for WriteStream() API.
+    AFF4Map temp_stream(&resolver);
+    aff4_off_t total_length = 0;
 
-  AFF4Status res = CreateMap_(&temp_stream, &total_length);
-  if (res != STATUS_OK)
-    return res;
+    RETURN_IF_ERROR(CreateMap_(&temp_stream, &total_length));
 
-  // Create the map object.
-  AFF4ScopedPtr<AFF4Stream> target_stream = GetWritableStream_(
-      target_urn, output_volume_urn);
+    // Create the map object.
+    AFF4Flusher<AFF4Volume> volume;
+    AFF4Flusher<AFF4Stream> target_stream;
+    RETURN_IF_ERROR(GetWritableStream_(
+                        target_urn, target_stream, volume));
 
-  if (!target_stream) {
-    return IO_ERROR;
-  }
+    DefaultProgress progress(&resolver);
+    progress.length = total_length;
 
-  DefaultProgress progress(&resolver);
-  progress.length = total_length;
-
-  // Now write the map into the image.
-  res = target_stream->WriteStream(&temp_stream, &progress);
-  if (res != STATUS_OK)
-    return res;
-
-  return STATUS_OK;
+    // Now write the map into the image.
+    return target_stream->WriteStream(&temp_stream, &progress);
 }
 
-AFF4Status PmemImager::WriteMapObject_(
-    const URN &map_urn, const URN &output_urn) {
+AFF4Status PmemImager::WriteMapObject_(const URN &map_urn) {
     resolver.logger->info("Will write in AFF4 map format.");
 
-  // Create a temporary map for WriteStream() API.
-  AFF4Map temp_stream(&resolver);
-  aff4_off_t total_length = 0;
+    // Create a temporary map for WriteStream() API.
+    AFF4Map temp_stream(&resolver);
+    aff4_off_t total_length = 0;
 
-  AFF4Status res = CreateMap_(&temp_stream, &total_length);
-  if (res != STATUS_OK)
-    return res;
+    RETURN_IF_ERROR(CreateMap_(&temp_stream, &total_length));
 
-  // Set the user's preferred compression method.
-  resolver.Set(map_urn.Append("data"), AFF4_IMAGE_COMPRESSION, new URN(
-      CompressionMethodToURN(compression)));
+    // Set the user's preferred compression method.
+    resolver.Set(map_urn.Append("data"), AFF4_IMAGE_COMPRESSION, new URN(
+                     CompressionMethodToURN(compression)));
 
-  // Create the map object.
-  AFF4ScopedPtr<AFF4Map> map_stream = AFF4Map::NewAFF4Map(
-      &resolver, map_urn, output_urn);
+    // Create the map object.
+    AFF4Flusher<AFF4Volume> volume;
+    RETURN_IF_ERROR(GetCurrentVolume(volume));
 
-  if (!map_stream)
-    return IO_ERROR;
+    AFF4Flusher<AFF4Image> data_stream;
+    RETURN_IF_ERROR(AFF4Image::NewAFF4Image(
+                        &resolver, map_urn.Append("data"),
+                        volume.get(), data_stream));
 
-  DefaultProgress progress(&resolver);
-  progress.length = total_length;
+    AFF4Flusher<AFF4Map> map_stream;
+    RETURN_IF_ERROR(
+        AFF4Map::NewAFF4Map(
+            &resolver, map_urn, volume.get(), data_stream.get(),
+            map_stream));
 
-  // Now write the map into the image.
-  res = map_stream->WriteStream(&temp_stream, &progress);
-  if (res != STATUS_OK)
-    return res;
+    DefaultProgress progress(&resolver);
+    progress.length = total_length;
 
-  return STATUS_OK;
+    // Now write the map into the image.
+    return map_stream->WriteStream(&temp_stream, &progress);
 }
 
-AFF4ScopedPtr<AFF4Stream> PmemImager::GetWritableStream_(
-    const URN &output_urn, const URN &volume_urn) {
-
+AFF4Status PmemImager::GetWritableStream_(
+    const URN &output_urn,
+    AFF4Flusher<AFF4Stream> &result,
+    AFF4Flusher<AFF4Volume> &volume) {
     // Raw containers should just be flat files.
     if (volume_type == "raw") {
-
         std::string output_path = GetArg<TCLAP::ValueArg<std::string>>(
             "output")->getValue();
 
-        if (output_path == "-") {
-            output_volume_backing_urn = URN("builtin://stdout");
-        }
 
-        // Flat files cannot store more than one stream so we must
-        // truncate them.
-        resolver.Set(output_volume_backing_urn,
-                     AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+        if (output_path == "-") {
+            RETURN_IF_ERROR(AFF4Stdout::NewAFF4Stdout(
+                                &resolver, result));
+
+        } else {
+            AFF4Flusher<FileBackedObject> output_stream;
+            RETURN_IF_ERROR(NewFileBackedObject(
+                                &resolver, output_path, "truncate",
+                                output_stream));
+
+            result.reset(output_stream.release());
+        }
 
         resolver.logger->info(
             "Destination volume will be a flat file {}.",
-            output_volume_backing_urn);
+            result->urn);
 
-        return resolver.AFF4FactoryOpen<AFF4Stream>(output_volume_backing_urn);
+        return STATUS_OK;
     }
 
-  AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
-      volume_urn);
+    RETURN_IF_ERROR(GetCurrentVolume(volume));
 
-  if (!volume)
-    return AFF4ScopedPtr<AFF4Stream>();
+    // If the user asked for raw or no compression just write a normal stream.
+    std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
+    if (format == "raw" || format == "elf") {
+        // These formats are not compressed.
+        return volume->CreateMemberStream(output_urn, result);
+    } else {
+        AFF4Flusher<AFF4Image> image_stream;
 
-  // If the user asked for raw or no compression just write a normal stream.
-  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
-  if (format == "raw" || format == "elf") {
-      // These formats are not compressed.
-      return volume->CreateMember(output_urn);
-  } else {
-      return AFF4Image::NewAFF4Image(
-          &resolver, output_urn, volume_urn).cast<AFF4Stream>();
-  }
+        RETURN_IF_ERROR(AFF4Image::NewAFF4Image(
+                            &resolver, output_urn,
+                            volume.get(),
+                            image_stream));
 
-  return AFF4ScopedPtr<AFF4Stream>();
+        result.reset(image_stream.release());
+    }
+
+    return STATUS_OK;
 }
 
 AFF4Status PmemImager::WriteRawVolume_() {
@@ -345,9 +335,9 @@ AFF4Status PmemImager::WriteRawVolume_() {
                new XSDString("truncate"));
 
   if (format == "elf") {
-      return WriteElfFormat_(output_volume_backing_urn, output_volume_backing_urn);
+      return WriteElfFormat_(output_volume_backing_urn);
   }
-  return WriteRawFormat_(output_volume_backing_urn, output_volume_backing_urn);
+  return WriteRawFormat_(output_volume_backing_urn);
 }
 
 

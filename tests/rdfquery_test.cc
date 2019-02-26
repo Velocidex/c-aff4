@@ -17,6 +17,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4/libaff4.h"
 #include <unistd.h>
 #include <glog/logging.h>
+#include "utils.h"
+
 
 namespace aff4 {
 
@@ -32,10 +34,12 @@ TEST_F(AFF4ImageRDFQuery, Sample1URN) {
 
     MemoryDataStore resolver;
 
-    // This will open the container.
-    URN urn = URN::NewURNFromFilename(filename);
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
+    AFF4Flusher<AFF4Stream> file;
+    AFF4Flusher<AFF4Volume> zip;
+    EXPECT_OK(NewFileBackedObject(&resolver, filename, "read", file));
+    EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
+    // Query the resolver.
     const URN type(AFF4_IMAGE_TYPE);
     std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);
 
@@ -51,9 +55,11 @@ TEST_F(AFF4ImageRDFQuery, Sample2URN) {
     std::string filename = reference_images + "AFF4Std/Base-Allocated.aff4";
 
     MemoryDataStore resolver;
-    // This will open the container.
-    URN urn = URN::NewURNFromFilename(filename);
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
+
+    AFF4Flusher<AFF4Stream> file;
+    AFF4Flusher<AFF4Volume> zip;
+    EXPECT_OK(NewFileBackedObject(&resolver, filename, "read", file));
+    EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
     const URN type(AFF4_IMAGE_TYPE);
     std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);
@@ -68,9 +74,11 @@ TEST_F(AFF4ImageRDFQuery, Sample3URN) {
     std::string filename = reference_images + "AFF4Std/Base-Linear-ReadError.aff4";
 
     MemoryDataStore resolver;
-    // This will open the container.
-    URN urn = URN::NewURNFromFilename(filename);
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, urn);
+
+    AFF4Flusher<AFF4Stream> file;
+    AFF4Flusher<AFF4Volume> zip;
+    EXPECT_OK(NewFileBackedObject(&resolver, filename, "read", file));
+    EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
     const URN type(AFF4_IMAGE_TYPE);
     std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);

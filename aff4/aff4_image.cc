@@ -20,6 +20,7 @@ specific language governing permissions and limitations under the License.
 #include <snappy.h>
 #include <lz4.h>
 #include "aff4/aff4_utils.h"
+#include "aff4/volume_group.h"
 
 namespace aff4 {
 
@@ -247,6 +248,8 @@ private:
 };
 
 
+void _BevyWriterDeleter::operator()(_BevyWriter *p) { delete p; }
+
 
 // A private class which manages image stream.
 class _CompressorStream: public AFF4Stream {
@@ -309,105 +312,77 @@ class _CompressorStream: public AFF4Stream {
 };
 
 
+AFF4Status AFF4Image::OpenAFF4Image(
+    DataStore* resolver,
+    URN image_urn,
+    VolumeGroup *volumes,
+    AFF4Flusher<AFF4Image> &result) {
 
-AFF4ScopedPtr<AFF4Image> AFF4Image::NewAFF4Image(
-    DataStore* resolver, const URN& image_urn, const URN& volume_urn) {
-    AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
-        volume_urn);
-
-    if (!volume) {
-        return AFF4ScopedPtr<AFF4Image>();    /** Volume not known? */
-    }
-
-    // Inform the volume that we have a new image stream contained within it.
-    volume->children.insert(image_urn.SerializeToString());
-
-    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
-                  /* replace = */ false);
-    resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
-    if(!resolver->HasURNWithAttribute(image_urn, AFF4_STREAM_SIZE)) {
-        resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
-    }
-
-    // We need to use the resolver here instead of just making a new object, in
-    // case the object already exists. If it is already known we will get the
-    // existing object from the cache through the factory. If the object does not
-    // already exist, then the factory will make a new one.
-    return resolver->AFF4FactoryOpen<AFF4Image>(image_urn);
-}
-
-
-/**
- * Initializes this AFF4 object from the information stored in the resolver.
- *
- *
- * @return STATUS_OK if the object was successfully initialized.
- */
-AFF4Status AFF4Image::LoadFromURN() {
-    URN volume_urn;
-
-    if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-        RETURN_IF_ERROR(resolver->Get(urn, AFF4_LEGACY_STORED, volume_urn));
-    }
+    auto new_obj = AFF4Flusher<AFF4Image>(new AFF4Image(resolver));
+    new_obj->urn.Set(image_urn);
+    new_obj->volumes = volumes;
 
     // Determine if this is an AFF4:ImageStream (AFF4 Standard) or
     // a aff4:stream (AFF4 Legacy)
-    URN rdfType (AFF4_LEGACY_IMAGESTREAM_TYPE);
-    isAFF4Legacy = resolver->HasURNWithAttributeAndValue(
-        urn, AFF4_TYPE, rdfType);
+    new_obj->isAFF4Legacy = resolver->HasURNWithAttributeAndValue(
+        new_obj->urn, AFF4_TYPE, URN(AFF4_LEGACY_IMAGESTREAM_TYPE));
 
     // Configure the stream parameters.
     XSDInteger value;
 
-    if(!isAFF4Legacy){
+    if(!new_obj->isAFF4Legacy){
         // AFF4 Standard
-        if (resolver->Get(urn, AFF4_STREAM_CHUNK_SIZE, value) == STATUS_OK) {
-            chunk_size = value.value;
+        if (resolver->Get(new_obj->urn, AFF4_STREAM_CHUNK_SIZE, value) == STATUS_OK) {
+            new_obj->chunk_size = value.value;
         }
 
-        if (resolver->Get(urn, AFF4_STREAM_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
-            chunks_per_segment = value.value;
+        if (resolver->Get(new_obj->urn, AFF4_STREAM_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
+            new_obj->chunks_per_segment = value.value;
         }
 
-        if (resolver->Get(urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
-            size = value.value;
+        if (resolver->Get(new_obj->urn, AFF4_STREAM_SIZE, value) == STATUS_OK) {
+            new_obj->size = value.value;
 
         } else {
             resolver->logger->error(
                 "ImageStream {} does not specify a size. "
-                "Is this part of a split image set?", urn);
+                "Is this part of a split image set?", new_obj->urn);
         }
+
     } else {
         // AFF4 Legacy
-        if (resolver->Get(urn, AFF4_LEGACY_STREAM_CHUNK_SIZE, value) == STATUS_OK) {
-            chunk_size = value.value;
+        if (resolver->Get(new_obj->urn, AFF4_LEGACY_STREAM_CHUNK_SIZE, value) == STATUS_OK) {
+            new_obj->chunk_size = value.value;
         }
 
-        if (resolver->Get(urn, AFF4_LEGACY_STREAM_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
-            chunks_per_segment = value.value;
+        if (resolver->Get(new_obj->urn, AFF4_LEGACY_STREAM_CHUNKS_PER_SEGMENT, value) == STATUS_OK) {
+            new_obj->chunks_per_segment = value.value;
         }
 
-        if (resolver->Get(urn, AFF4_LEGACY_STREAM_SIZE, value) == STATUS_OK) {
-            size = value.value;
+        if (resolver->Get(new_obj->urn, AFF4_LEGACY_STREAM_SIZE, value) == STATUS_OK) {
+            new_obj->size = value.value;
         }
     }
 
     // By default we cache 32 MiB of bevys
-    chunk_cache_size = (32 * 1024 * 1024) / chunk_size;
+    new_obj->chunk_cache_size = (32 * 1024 * 1024) / new_obj->chunk_size;
 
     // Load the compression scheme. If it is not set we just default to ZLIB.
     URN compression_urn;
-    if (STATUS_OK == resolver->Get(urn, AFF4_IMAGE_COMPRESSION, compression_urn)) {
-        compression = CompressionMethodFromURN(compression_urn);
-        if (compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
+    if (STATUS_OK == resolver->Get(
+            new_obj->urn, AFF4_IMAGE_COMPRESSION, compression_urn)) {
+        new_obj->compression = CompressionMethodFromURN(compression_urn);
+        if (new_obj->compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
             resolver->logger->error(
                 "Compression method {} is not supported by this implementation.",
                 compression_urn);
             return NOT_IMPLEMENTED;
         }
-    } else if (STATUS_OK == resolver->Get(urn, AFF4_LEGACY_IMAGE_COMPRESSION, compression_urn)) {
-        compression = CompressionMethodFromURN(compression_urn);
-        if (compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
+
+    } else if (STATUS_OK == resolver->Get(
+                   new_obj->urn, AFF4_LEGACY_IMAGE_COMPRESSION, compression_urn)) {
+        new_obj->compression = CompressionMethodFromURN(compression_urn);
+        if (new_obj->compression == AFF4_IMAGE_COMPRESSION_ENUM_UNKNOWN) {
             resolver->logger->error(
                 "Compression method {} is not supported by this implementation.",
                 compression_urn);
@@ -415,9 +390,49 @@ AFF4Status AFF4Image::LoadFromURN() {
         }
     }
 
+    result.swap(new_obj);
+
     return STATUS_OK;
 }
 
+AFF4Status AFF4Image::NewAFF4Image(
+    DataStore* resolver,
+    URN image_urn,
+    AFF4Volume *volume,
+    AFF4Flusher<AFF4Stream> &result) {
+
+    AFF4Flusher<AFF4Image> image;
+    RETURN_IF_ERROR(
+        AFF4Image::NewAFF4Image(
+            resolver, image_urn, volume, image));
+
+    result.reset(image.release());
+
+    return STATUS_OK;
+}
+
+
+AFF4Status AFF4Image::NewAFF4Image(
+    DataStore* resolver,
+    URN image_urn,
+    AFF4Volume *volume,
+    AFF4Flusher<AFF4Image> &result) {
+
+    auto new_obj = AFF4Flusher<AFF4Image>(new AFF4Image(resolver));
+    new_obj->urn = image_urn;
+    new_obj->current_volume = volume;
+
+    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
+                  /* replace = */ false);
+    resolver->Set(image_urn, AFF4_STORED, new URN(volume->urn));
+    if(!resolver->HasURNWithAttribute(image_urn, AFF4_STREAM_SIZE)) {
+        resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
+    }
+
+    new_obj.swap(result);
+
+    return STATUS_OK;
+}
 
 // Bevy is full - flush it to the image and start the next one. Takes
 // and disposes of the bevy_writer. Next Write() will make a new
@@ -436,27 +451,13 @@ AFF4Status AFF4Image::FlushBevy() {
     URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number)));
     URN bevy_index_urn(bevy_urn.value +(".index"));
 
-    // Open the volume.
-    URN volume_urn;
-    RETURN_IF_ERROR(resolver->Get(urn, AFF4_STORED, volume_urn));
-
-    AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
-        volume_urn);
-
-    if (!volume) {
-        return NOT_FOUND;
-    }
-
     // Create the new segments in this zip file.
-    AFF4ScopedPtr<AFF4Stream> bevy_index_member = volume->CreateMember(
-                bevy_index_urn);
+    AFF4Flusher<AFF4Stream> bevy_index_member;
+    RETURN_IF_ERROR(current_volume->CreateMemberStream(
+                        bevy_index_urn, bevy_index_member));
 
-    AFF4ScopedPtr<AFF4Stream> bevy_member = volume->CreateMember(bevy_urn);
-
-    if (!bevy_index_member || !bevy_member) {
-        resolver->logger->error("Unable to create bevy URN {}", bevy_urn);
-        return IO_ERROR;
-    }
+    AFF4Flusher<AFF4Stream> bevy_member;
+    RETURN_IF_ERROR(current_volume->CreateMemberStream(bevy_urn, bevy_member));
 
     std::string index_stream;
     bevy_index_member->reserve(chunks_per_segment * sizeof(BevyIndex));
@@ -466,10 +467,6 @@ AFF4Status AFF4Image::FlushBevy() {
     ProgressContext empty_progress(resolver);
     bevy_index_member->reserve(chunks_per_segment * chunk_size);
     RETURN_IF_ERROR(bevy_member->WriteStream(&bevy_stream, &empty_progress));
-
-    // These calls flush the bevies and removes them from the resolver cache.
-    RETURN_IF_ERROR(resolver->Close(bevy_index_member));
-    RETURN_IF_ERROR(resolver->Close(bevy_member));
 
     // Done with this bevy - make a new writer.
     bevy_writer.reset(new _BevyWriter(
@@ -549,51 +546,32 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
         // Read and compress the bevy into memory.
         RETURN_IF_ERROR(stream.PrepareBevy());
 
-        URN volume_urn;
-
-        if (resolver->Get(urn, AFF4_STORED, volume_urn) != STATUS_OK) {
-            resolver->logger->error("Unable to find storage for urn {}", urn);
-            return NOT_FOUND;
-        }
-
-        // Open the volume.
-        AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
-            volume_urn);
-
-        if (!volume) {
-            return NOT_FOUND;
-        }
-
         URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number)));
         URN bevy_index_urn(bevy_urn.value + (".index"));
 
         // First write the bevy.
         {
-            AFF4ScopedPtr<AFF4Stream> bevy = volume->CreateMember(bevy_urn);
-            if (!bevy) {
-                resolver->logger->error("Unable to create bevy {}", bevy_urn);
-                return IO_ERROR;
-            }
+            AFF4Flusher<AFF4Stream> bevy;
+
+            RETURN_IF_ERROR(
+                current_volume->CreateMemberStream(bevy_urn, bevy));
 
             bevy->reserve(chunks_per_segment * chunk_size);
+
             RETURN_IF_ERROR(bevy->WriteStream(&stream, progress));
-            resolver->Close(bevy);
+            bevy->Flush();
         }
 
         // Now write the index.
         {
-            AFF4ScopedPtr<AFF4Stream> bevy_index = volume->CreateMember(
-                    bevy_index_urn);
-
-            if (!bevy_index) {
-                resolver->logger->error("Unable to create bevy_index {}",
-                                       bevy_index_urn);
-                return IO_ERROR;
-            }
+            AFF4Flusher<AFF4Stream> bevy_index;
+            RETURN_IF_ERROR(
+                current_volume->CreateMemberStream(
+                    bevy_index_urn, bevy_index));
 
             RETURN_IF_ERROR(bevy_index->Write(
                                 stream.bevy_writer.index_stream()));
-            resolver->Close(bevy_index);
+
         }
 
         // Report the data read from the source.
@@ -629,7 +607,7 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
  * @return number of bytes read, or AFF4Status for error.
  */
 AFF4Status AFF4Image::ReadChunkFromBevy(
-    std::string& result, unsigned int chunk_id, AFF4ScopedPtr<AFF4Stream>& bevy,
+    std::string& result, unsigned int chunk_id, AFF4Flusher<AFF4Stream>& bevy,
     BevyIndex bevy_index[], uint32_t index_size) {
     unsigned int chunk_id_in_bevy = chunk_id % chunks_per_segment;
     BevyIndex entry;
@@ -732,14 +710,14 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
             bevy_index_urn = bevy_urn.value + (".index");
         }
 
-        AFF4ScopedPtr<AFF4Stream> bevy_index = resolver->AFF4FactoryOpen
-            <AFF4Stream>(bevy_index_urn);
+        AFF4Flusher<AFF4Stream> bevy_index;
+        AFF4Flusher<AFF4Stream> bevy;
 
-        AFF4ScopedPtr<AFF4Stream> bevy = resolver->AFF4FactoryOpen<AFF4Stream>(
-            bevy_urn);
+        if (volumes->GetStream(bevy_index_urn, bevy_index) != STATUS_OK) {
+            return -1;
+        }
 
-        if (!bevy_index || !bevy) {
-            resolver->logger->error("Unable to open bevy {}", bevy_urn);
+        if (volumes->GetStream(bevy_urn, bevy) != STATUS_OK) {
             return -1;
         }
 
@@ -758,7 +736,8 @@ int AFF4Image::_ReadPartial(unsigned int chunk_id, int chunks_to_read,
         while (chunks_to_read > 0) {
             // Read a full chunk from the bevy.
             if (ReadChunkFromBevy(
-                    result, chunk_id, bevy, bevy_index_array, index_size) < 0) {
+                    result, chunk_id, bevy,
+                    bevy_index_array, index_size) < 0) {
                 return IO_ERROR;
             }
 
@@ -791,7 +770,8 @@ AFF4Status AFF4Image::ReadBuffer(char* data, size_t* length) {
 
     // We read this many full chunks at once.
     int chunks_to_read = final_chunk_id - initial_chunk_id + 1;
-// TODO: write to the buffer, not a std::string
+
+    // TODO: write to the buffer, not a std::string
     unsigned int chunk_id = initial_chunk_id;
     std::string result;
 
@@ -852,8 +832,12 @@ AFF4Status AFF4Image::Flush() {
     return AFF4Stream::Flush();
 }
 
+/*
+
 static AFF4Registrar<AFF4Image> r1(AFF4_IMAGESTREAM_TYPE);
 static AFF4Registrar<AFF4Image> r2(AFF4_LEGACY_IMAGESTREAM_TYPE);
+
+*/
 
 void aff4_image_init() {}
 
@@ -878,73 +862,7 @@ std::string AFF4Image::_FixupBevyData(std::string* data){
     );
 }
 
-
-
-AFF4ScopedPtr<AFF4StdImage> AFF4StdImage::NewAFF4StdImage(
-    DataStore* resolver, const URN& image_urn, const URN& volume_urn) {
-    AFF4ScopedPtr<AFF4Volume> volume = resolver->AFF4FactoryOpen<AFF4Volume>(
-        volume_urn);
-
-    if (!volume) {
-        return AFF4ScopedPtr<AFF4StdImage>();    /** Volume not known? */
-    }
-
-    // Inform the volume that we have a new image stream contained within it.
-    volume->children.insert(image_urn.SerializeToString());
-
-    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
-                  /* replace = */ false);
-    resolver->Set(image_urn, AFF4_STORED, new URN(volume_urn));
-    if(!resolver->HasURNWithAttribute(image_urn, AFF4_STREAM_SIZE)) {
-        resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
-    }
-
-    return resolver->AFF4FactoryOpen<AFF4StdImage>(image_urn);
-}
-
-AFF4Status AFF4StdImage::LoadFromURN() {
-    // Find the delegate.
-    if (resolver->Get(urn, AFF4_DATASTREAM, delegate) != STATUS_OK) {
-        RETURN_IF_ERROR(resolver->Get(urn, AFF4_LEGACY_DATASTREAM, delegate));
-    }
-
-    // Try to open the delegate.
-    auto delegate_stream = resolver->AFF4FactoryOpen<AFF4Stream>(
-        delegate);
-    if (!delegate_stream) {
-        resolver->logger->error("Unable to open aff4:dataStream {} for Image {}",
-                                delegate, urn);
-        return NOT_FOUND;
-    }
-
-    // Get the delegate's size.
-    size = delegate_stream->Size();
-
-    return STATUS_OK;
-}
-
-AFF4Status AFF4StdImage::ReadBuffer(char* data, size_t* length) {
-    auto delegate_stream = resolver->AFF4FactoryOpen<AFF4Stream>(delegate);
-    if (!delegate_stream) {
-        resolver->logger->error(
-            "Unable to open aff4:dataStream {} for Image {}",
-            delegate, urn
-        );
-        *length = 0;
-        return STATUS_OK; // FIXME?
-    }
-
-    delegate_stream->Seek(readptr, SEEK_SET);
-
-    AFF4Status res = delegate_stream->ReadBuffer(data, length);
-
-    Seek(*length, SEEK_CUR);
-
-    return res;
-}
-
-// AFF4 Standard
-
+/*
 // In the AFF4 Standard, AFF4_IMAGE_TYPE is an abstract concept which
 // delegates the data stream implementation to some other AFF4 stream
 // (image or map) via the DataStore attribute.
@@ -961,5 +879,6 @@ static AFF4Registrar<AFF4StdImage> image8(AFF4_LEGACY_DISK_IMAGE_TYPE);
 static AFF4Registrar<AFF4StdImage> image9(AFF4_LEGACY_VOLUME_IMAGE_TYPE);
 static AFF4Registrar<AFF4StdImage> image10(AFF4_LEGACY_CONTIGUOUS_IMAGE_TYPE);
 
+*/
 
 } // namespace aff4

@@ -58,17 +58,16 @@ class PmemImager: public BasicImager {
     // Override this to produce a suitable map object for imaging.
     virtual AFF4Status CreateMap_(AFF4Map *map, aff4_off_t *length) = 0;
 
-    virtual AFF4Status WriteMapObject_(
-        const URN &map_urn, const URN &output_urn);
+    virtual AFF4Status WriteMapObject_(const URN &map_urn);
 
-    virtual AFF4Status WriteRawFormat_(
-        const URN &stream_urn, const URN &output_urn);
+    virtual AFF4Status WriteRawFormat_(const URN &stream_urn);
 
-    virtual AFF4Status WriteElfFormat_(
-        const URN &stream_urn, const URN &output_urn);
+    virtual AFF4Status WriteElfFormat_(const URN &stream_urn);
 
-    virtual AFF4ScopedPtr<AFF4Stream> GetWritableStream_(
-        const URN &output_urn, const URN &volume_urn);
+    virtual AFF4Status GetWritableStream_(
+        const URN &output_urn,
+        AFF4Flusher<AFF4Stream> &result,
+        AFF4Flusher<AFF4Volume> &volume);
 
     virtual AFF4Status WriteRawVolume_();
 

@@ -51,7 +51,7 @@ namespace aff4 {
  *
  * @return STATUS_OK if images were added successfully.
  */
-AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
+AFF4Status XXXImageStream(DataStore& resolver, std::vector<URN>& input_urns,
                        URN output_urn,
                        bool truncate = true);
 
@@ -64,13 +64,20 @@ AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
  *
  * @return
  */
-AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
+AFF4Status XXXExtractStream(DataStore& resolver, URN input_urn,
                          URN output_urn,
                          bool truncate = true);
 
 class BasicImager {
-  protected:
+ public:
+    // Must be at the top to make sure it is destroyed last.
+    MemoryDataStore resolver;
+
+ protected:
+    // deprecated
     std::vector<URN> volume_URNs;
+
+    VolumeGroup volume_objs;
 
     // The current URN of the volume we write to.
     URN output_volume_urn;
@@ -110,7 +117,7 @@ class BasicImager {
         return AFF4_VERSION;
     }
 
-    AFF4Status GetOutputVolumeURN(URN* volume_urn);
+    AFF4Status GetCurrentVolume(AFF4Flusher<AFF4Volume> &volume);
 
     std::unique_ptr<TCLAP::CmdLine> cmd;
 
@@ -184,8 +191,6 @@ class BasicImager {
     std::vector<std::string> GlobFilename(std::string glob) const;
 
   public:
-    MemoryDataStore resolver;
-
     /**
      * This should be overloaded for imagers that need to do something before they
      * start. The method is called during the imager's initialization routine.
@@ -279,11 +284,9 @@ class BasicImager {
     virtual AFF4Status Run(int argc, char** argv);
 
     virtual void Abort();
-    virtual ~BasicImager() {}
 
-    // Should be called periodically to give the imager a chance to
-    // swap output volume if the output needs to be split.
-    void MaybeSwapOutputVolume(const URN &image_stream);
+    BasicImager() : volume_objs(&resolver) {}
+    virtual ~BasicImager() {}
 
  private:
     AFF4Status GetNextPart();

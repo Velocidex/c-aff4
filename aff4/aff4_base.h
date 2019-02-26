@@ -110,43 +110,10 @@ class AFF4Object {
         urn = new_urn;
     }
 
-    // Return this object to the resolver.
-    virtual void Return();
-
     // By defining a virtual destructor this allows the destructor of derived
     // objects to be called when deleting a pointer to a base object.
     virtual ~AFF4Object() {}
 
-    /**
-     * Load this AFF4 object from the URN provided.
-     *
-     *
-     * @return STATUS_OK if the object was properly loaded.
-     */
-    virtual AFF4Status LoadFromURN() {
-        return NOT_IMPLEMENTED;
-    }
-
-    /**
-     * Prepares an object for re-use. Since AFF4Objects can be cached, we need a
-     * way to reset the object to a consistent state when returning it from the
-     * cache. The AFF4FactoryOpen() function will call this method before
-     * returning it to the caller in order to reset the object into a consistent
-     * state.
-     *
-     *
-     * @return STATUS_OK
-     */
-    virtual AFF4Status Prepare() {
-        return STATUS_OK;
-    }
-
-    /**
-     * Flush the object state to the resolver data store.
-     * This is the reverse of LoadFromURN().
-     *
-     * @return
-     */
     virtual AFF4Status Flush();
 
     /**
@@ -171,45 +138,6 @@ class AFF4Object {
     // AFF4Objects are not trivially copyable.
     AFF4Object(const AFF4Object&) = delete;
     AFF4Object& operator=(const AFF4Object&) = delete;
-};
-
-
-/**
- * A registry for AFF4 objects. This is used to instantiate the correct
- * AFF4Object at a specific URN.
- *
- */
-ClassFactory<AFF4Object>* GetAFF4ClassFactory();
-
-
-/**
- * A registration class for new AFF4 objects.
- *
- * Registration occurs through static instances of the AFF4Registrar class. For
- * example the following registers the ZipFile class to handle the AFF4_ZIP_TYPE
- * type:
-
-~~~~~~~~~~~{.c}
-static AFF4Registrar<ZipFile> r1(AFF4_ZIP_TYPE);
-~~~~~~~~~~~
-
- *
- * @param name
- */
-template<class T>
-class AFF4Registrar {
-  public:
-    std::string name;
-    explicit AFF4Registrar(std::string name) {
-        this->name = name;
-
-        GetAFF4ClassFactory()->RegisterFactoryFunction(
-            name,
-        [](DataStore *resolver, const URN *urn) -> T * {
-            UNUSED(urn);
-            return new T(resolver);
-        });
-    }
 };
 
 // In the AFF4 library all offsets are 64 bits - even on windows!

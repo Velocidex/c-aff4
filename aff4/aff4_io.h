@@ -112,11 +112,10 @@ class DefaultProgress: public ProgressContext {
 };
 
 class AFF4Stream: public AFF4Object {
-  protected:
+  public:
     aff4_off_t readptr;
     aff4_off_t size;             // How many bytes are used in the stream?
 
-  public:
     AFF4StreamProperties properties;
 
     // Compression method supported by this stream. Note that not all compression
@@ -245,10 +244,13 @@ class AFF4Volume: public AFF4Object {
     AFF4Volume(DataStore* resolver, URN urn): AFF4Object(resolver, urn) {}
     explicit AFF4Volume(DataStore* resolver): AFF4Object(resolver) {}
 
-    // Create a new contained member. Note that if the member already exists you
-    // should be able to just open it with the factory - so this is only for
-    // creating new members.
-    virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
+    virtual AFF4Status CreateMemberStream(
+        URN segment_urn,
+        AFF4Flusher<AFF4Stream> &result) = 0;
+
+    virtual AFF4Status OpenMemberStream(
+        URN segment_urn,
+        AFF4Flusher<AFF4Stream> &result) = 0;
 
     // This is used to notify the volume of a stream which is
     // contained within it. The container will ensure the dependent

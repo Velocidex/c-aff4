@@ -60,6 +60,7 @@ libaff4_include_HEADERS = \
 	aff4_file.h \
 	aff4_symstream.h \
 	libaff4-c.h \
+	volume_group.h \
 	threadpool.h
 
 libaff4_la_SOURCES = \
@@ -76,6 +77,7 @@ libaff4_la_SOURCES = \
 	aff4_file.cc \
 	aff4_symstream.cc \
 	libaff4-c.cc \
+	volume_group.cc \
 	tclap_parsers.cc
 
 libaff4_la_LDFLAGS = $(STATIC_LIBLDFLAGS)

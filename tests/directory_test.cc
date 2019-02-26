@@ -16,6 +16,7 @@ specific language governing permissions and limitations under the License.
 #include <gtest/gtest.h>
 #include "aff4/libaff4.h"
 #include <unistd.h>
+#include "utils.h"
 
 namespace aff4 {
 
@@ -23,7 +24,9 @@ namespace aff4 {
 class AFF4DirectoryTest: public ::testing::Test {
  protected:
     std::string root_path = "/tmp/aff4_directory/";
-    std::string segment_name = "Foobar.txt";
+    std::string member_name = "Foobar.txt";
+
+    URN member_urn;
 
   // Remove the file on teardown.
   virtual void TearDown() {
@@ -34,59 +37,39 @@ class AFF4DirectoryTest: public ::testing::Test {
   // Create an initial container for each test.
   virtual void SetUp() {
       MemoryDataStore resolver;
-      URN root_urn = URN::NewURNFromFilename(root_path);
 
-    // We are allowed to write on the output filename.
-    resolver.Set(root_urn, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+      AFF4Flusher<AFF4Directory> volume;
+      EXPECT_OK(AFF4Directory::NewAFF4Directory(
+                    &resolver, root_path, true /* truncate */, volume));
 
-    // Create a new directory.
-    AFF4ScopedPtr<AFF4Directory> volume = AFF4Directory::NewAFF4Directory(
-        &resolver, root_urn);
+      member_urn = volume->urn.Append(member_name);
 
-    ASSERT_TRUE(volume.get()) << "Unable to create AFF4Directory " <<
-        root_urn.SerializeToString();
+      AFF4Flusher<AFF4Stream> member;
+      EXPECT_OK(volume->CreateMemberStream(member_urn, member));
 
-    URN segment_urn = volume->urn.Append(segment_name);
-
-    AFF4ScopedPtr<AFF4Stream> member = volume->CreateMember(segment_urn);
-
-    ASSERT_TRUE(member.get()) << "Unable to create member " <<
-        segment_urn.SerializeToString();
-
-    member->Write("Hello world");
-    resolver.Set(member->urn, AFF4_STREAM_ORIGINAL_FILENAME,
-                 new XSDString(root_path + segment_name));
-
-    // Flush the volume to make sure it can be opened again.
-    volume->Flush();
+      member->Write("Hello world");
   }
 };
 
-TEST_F(AFF4DirectoryTest, CreateMember) {
+TEST_F(AFF4DirectoryTest, CreateMemberStream) {
   MemoryDataStore resolver;
-  URN root_urn = URN::NewURNFromFilename(root_path);
 
-  // Open the Directory volume:
-  AFF4ScopedPtr<AFF4Directory> directory = AFF4Directory::NewAFF4Directory(
-      &resolver, root_urn);
-
-  ASSERT_TRUE(directory.get()) << "Unable to open AFF4Directory: " <<
-      root_urn.SerializeToString();
+  AFF4Flusher<AFF4Directory> volume;
+  EXPECT_OK(AFF4Directory::OpenAFF4Directory(
+                &resolver, root_path, volume));
 
   // Check for member.
-  URN child_urn = directory->urn.Append(segment_name);
-  AFF4ScopedPtr<AFF4Stream> child = resolver.AFF4FactoryOpen<AFF4Stream>(
-      child_urn);
-
-  ASSERT_TRUE(child.get()) << "Unable to open member.";
+  AFF4Flusher<AFF4Stream> child;
+  EXPECT_OK(volume->OpenMemberStream(member_urn, child));
 
   ASSERT_EQ(child->Read(10000), "Hello world");
 
   // Check that the metadata is carried over.
   XSDString filename;
-  ASSERT_EQ(STATUS_OK,
-            resolver.Get(child_urn, AFF4_STREAM_ORIGINAL_FILENAME, filename));
+  EXPECT_OK(resolver.Get(child->urn, AFF4_STREAM_ORIGINAL_FILENAME, filename));
 
-  ASSERT_EQ(filename.SerializeToString(), root_path + segment_name);
+  ASSERT_EQ(filename.SerializeToString(), root_path + PATH_SEP_STR + member_name);
 }
+
+
 } // namespace aff4

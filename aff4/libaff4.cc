@@ -90,10 +90,6 @@ AFF4Status AFF4Object::Flush() {
 }
 
 
-void AFF4Object::Return() {
-    resolver->Return(this);
-}
-
 AFF4Status AFF4Stream::Seek(off_t offset, int whence) {
     if (!properties.seekable)
         return IO_ERROR;
@@ -545,7 +541,6 @@ public:
     _InitHelper() {
         aff4_lexicon_init();
         aff4_file_init();
-        aff4_directory_init();
         aff4_image_init();
         aff4_map_init();
     }

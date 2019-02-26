@@ -18,6 +18,7 @@ specific language governing permissions and limitations under the License.
 
 #include "aff4/config.h"
 #include "aff4/aff4_io.h"
+#include "aff4/volume_group.h"
 
 #include <unordered_map>
 
@@ -77,6 +78,9 @@ struct BevyIndex {
 
 class _BevyWriter;
 
+struct _BevyWriterDeleter {
+    void operator()(_BevyWriter *p);
+};
 
 class AFF4Image: public AFF4Stream {
   protected:
@@ -90,7 +94,7 @@ class AFF4Image: public AFF4Stream {
 
     AFF4Status ReadChunkFromBevy(
         std::string& result, unsigned int chunk_id,
-        AFF4ScopedPtr<AFF4Stream>& bevy, BevyIndex bevy_index[],
+        AFF4Flusher<AFF4Stream>& bevy, BevyIndex bevy_index[],
         uint32_t index_size);
 
     // The below are used to implement variable sized write support
@@ -103,7 +107,7 @@ class AFF4Image: public AFF4Stream {
     std::string buffer;
 
     // Collect chunks here for the current bevy.
-    std::unique_ptr<_BevyWriter> bevy_writer;
+    std::unique_ptr<_BevyWriter, _BevyWriterDeleter> bevy_writer;
 
     // The current bevy we write into.
     unsigned int bevy_number = 0;
@@ -122,42 +126,47 @@ class AFF4Image: public AFF4Stream {
 
   public:
     AFF4Image(DataStore* resolver, URN urn);
+
     explicit AFF4Image(DataStore* resolver);
 
-    unsigned int chunk_size = 32*1024;    /**< The number of bytes in each
-                                         * chunk. */
-    unsigned int chunks_per_segment = 1024; /**< Maximum number of chunks in each
-                                           * Bevy. */
-    unsigned int chunk_cache_size = 1024; /**> The max number of cached chunks */
+    unsigned int chunk_size = 32*1024;    /** The number of bytes in each
+                                           * chunk. */
+    unsigned int chunks_per_segment = 1024; /** Maximum number of chunks in each
+                                             * Bevy. */
+    unsigned int chunk_cache_size = 1024; /** The max number of cached chunks */
 
     // Which compression should we use.
     AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
 
-    /**
-     * Create a new AFF4Image instance.
-     *
-     * After callers receive a new AFF4Image object they may modify the parameters
-     * before calling Write().
-     *
-     * @param image_urn: The URN of the stream which will be created in the
-     *                   volume.
-     *
-     * @param volume: An AFF4Volume instance. We take a shared reference to the
-     *                volume object and write segments into it as required.
-     *
-     * @return A unique reference to a new AFF4Image object.
-     */
-    static AFF4ScopedPtr<AFF4Image> NewAFF4Image(
-        DataStore* resolver, const URN& image_urn, const URN& volume_urn);
+    static AFF4Status NewAFF4Image(
+        DataStore* resolver,
+        URN image_urn,
+        // An initial reference to the current volume.
+        AFF4Volume *volume,
+        AFF4Flusher<AFF4Image> &result);
 
-    /**
-     * Load the file from an AFF4 URN.
-     *
-     *
-     * @return
-     */
-    AFF4Status LoadFromURN() override;
+    static AFF4Status NewAFF4Image(
+        DataStore* resolver,
+        URN image_urn,
+        // An initial reference to the current volume.
+        AFF4Volume *volume,
+        AFF4Flusher<AFF4Stream> &result);
 
+    // Open an existing AFF4 Image stream.
+    static AFF4Status OpenAFF4Image(
+        DataStore *resolver,
+        URN image_urn,
+        VolumeGroup *volumes,
+        AFF4Flusher<AFF4Image> &result);
+
+    // Borrowed reference to the current volume. We need to access the
+    // volume when writing so it should be valid when a write is
+    // issued (unused for reading).
+    AFF4Volume *current_volume;
+
+    // A borrowed reference to the volume group. We read bevies from
+    // one of these volumes (unused for writing).
+    VolumeGroup *volumes;
 
     /**
      * An optimized WriteStream() API.
@@ -187,15 +196,10 @@ class AFF4Image: public AFF4Stream {
 
 // Note that to create such a stream, you can simply set the
 // aff4:dataStream to a concerete Map or ImageStream.
-class AFF4StdImage : public AFF4Stream {
+ class AFF4StdImage : public AFF4Stream {
  public:
-   AFF4StdImage(DataStore* resolver, URN urn): AFF4Stream(resolver, urn) {}
-   explicit AFF4StdImage(DataStore* resolver): AFF4Stream(resolver) {}
-
-    static AFF4ScopedPtr<AFF4StdImage> NewAFF4StdImage(
-        DataStore* resolver, const URN& image_urn, const URN& volume_urn);
-
-    AFF4Status LoadFromURN() override;
+     AFF4StdImage(DataStore* resolver, URN urn): AFF4Stream(resolver, urn) {}
+     explicit AFF4StdImage(DataStore* resolver): AFF4Stream(resolver) {}
 
     AFF4Status ReadBuffer(char* data, size_t* length) override;
 

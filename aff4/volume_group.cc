@@ -1,0 +1,114 @@
+#include "aff4/volume_group.h"
+#include "aff4/aff4_image.h"
+#include "aff4/aff4_map.h"
+#include "aff4/zip.h"
+#include "aff4/aff4_symstream.h"
+
+namespace aff4 {
+
+
+
+
+void VolumeGroup::AddVolume(AFF4Flusher<AFF4Volume> &&volume) {
+    volume_objs.insert(std::make_pair(volume->urn, std::move(volume)));
+}
+
+// Construct the appropriate stream and return it.
+AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &result) {
+
+    // Get all the type attrbutes of the URN.
+    std::vector<std::shared_ptr<RDFValue>> types;
+    if (STATUS_OK == resolver->Get(stream_urn, AFF4_TYPE, types)) {
+        for (auto &type : types) {
+            std::string type_str(type->SerializeToString());
+
+            if (type_str == AFF4_IMAGESTREAM_TYPE ||
+                type_str == AFF4_LEGACY_IMAGESTREAM_TYPE) {
+                AFF4Flusher<AFF4Image> image_stream;
+                RETURN_IF_ERROR(
+                    AFF4Image::OpenAFF4Image(
+                        resolver, stream_urn, this, image_stream));
+
+                result.reset(image_stream.release());
+
+                resolver->logger->debug("Openning {} as type {}",
+                                        stream_urn, type_str);
+                return STATUS_OK;
+            }
+
+            // The AFF4 Standard specifies an "AFF4 Image" as an abstract
+            // container for image related properties. It is not actually a
+            // concrete stream but it refers to a storage stream using its
+            // aff4:dataStream property.
+
+            // Note that to create such a stream, you can simply create a
+            // regular stream with NewAFF4Image or NewAFF4Map and then set
+            // the aff4:dataStream of a new object to a concerete Map or
+            // ImageStream.
+            if (type_str == AFF4_IMAGE_TYPE) {
+                URN delegate;
+
+                RETURN_IF_ERROR(
+                    resolver->Get(stream_urn, AFF4_DATASTREAM, delegate));
+
+                // TODO: This can get recursive. Protect against abuse.
+                return GetStream(delegate, result);
+            }
+
+            if (type_str == AFF4_MAP_TYPE) {
+                AFF4Flusher<AFF4Map> map_stream;
+                RETURN_IF_ERROR(
+                    AFF4Map::OpenAFF4Map(
+                        resolver, stream_urn, this, map_stream));
+
+                result.reset(map_stream.release());
+                resolver->logger->debug("Openning {} as type {}",
+                                        stream_urn, type_str);
+
+                return STATUS_OK;
+            }
+        }
+    }
+
+    // Handle symbolic streams now.
+    if (stream_urn == AFF4_IMAGESTREAM_ZERO) {
+        result.reset(new AFF4SymbolicStream(resolver, stream_urn, 0));
+        return STATUS_OK;
+    }
+    if (stream_urn == AFF4_IMAGESTREAM_FF) {
+        result.reset(new AFF4SymbolicStream(resolver, stream_urn, 0xff));
+        return STATUS_OK;
+    }
+    if (stream_urn == AFF4_IMAGESTREAM_UNKNOWN) {
+        result.reset(new AFF4SymbolicStream(resolver, stream_urn, "UNKNOWN"));
+        return STATUS_OK;
+    }
+    if (stream_urn == AFF4_IMAGESTREAM_UNREADABLE) {
+        result.reset(new AFF4SymbolicStream(resolver, stream_urn, "UNREADABLEDATA"));
+        return STATUS_OK;
+    }
+
+    for (int i = 0; i < 256; i++) {
+        std::string urn = aff4_sprintf(
+            "%s%02X", AFF4_IMAGESTREAM_SYMBOLIC_PREFIX, i);
+
+        if (stream_urn == urn) {
+            result.reset(new AFF4SymbolicStream(resolver, stream_urn, i));
+            return STATUS_OK;
+        }
+    }
+
+    for (auto &i: volume_objs) {
+        AFF4Flusher<AFF4Stream> stream;
+        AFF4Status res = i.second->OpenMemberStream(stream_urn, stream);
+        if (res == STATUS_OK) {
+            result.swap(stream);
+            return  STATUS_OK;
+        }
+    }
+
+    return NOT_FOUND;
+}
+
+
+} // namespace aff4
