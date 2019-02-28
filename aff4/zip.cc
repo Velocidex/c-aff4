@@ -41,6 +41,20 @@ ZipFile::ZipFile(DataStore* resolver) :
 AFF4Status ZipFile::NewZipFile(
         DataStore* resolver,
         AFF4Flusher<AFF4Stream> &&backing_stream,
+        AFF4Flusher<AFF4Volume> &result) {
+
+    AFF4Flusher<ZipFile> new_obj;
+    RETURN_IF_ERROR(ZipFile::NewZipFile(
+                        resolver, std::move(backing_stream), new_obj));
+
+    result.reset(new_obj.release());
+
+    return STATUS_OK;
+}
+
+AFF4Status ZipFile::NewZipFile(
+        DataStore* resolver,
+        AFF4Flusher<AFF4Stream> &&backing_stream,
         AFF4Flusher<ZipFile> &result) {
 
     // We need to create an empty temporary object to get a new URN.
@@ -477,6 +491,11 @@ AFF4Status ZipFile::CreateMemberStream(
 
     return STATUS_OK;
 }
+
+aff4_off_t ZipFile::Size() const {
+    return backing_stream->Size();
+}
+
 
 ZipFileSegment::ZipFileSegment(DataStore* resolver) :
     StringIO(resolver) {

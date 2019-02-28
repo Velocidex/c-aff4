@@ -80,6 +80,9 @@ class AFF4Flusher {
     }
 
     void reset(AFF4ObjectType* p) {
+        if (ptr) {
+            ptr->Flush();
+        }
         ptr.reset(p);
     }
 

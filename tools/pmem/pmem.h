@@ -26,8 +26,8 @@ namespace aff4 {
 
 class PmemImager: public BasicImager {
  protected:
-  // A list of files to be removed when we exit.
-    std::vector<URN> to_be_removed;
+    // A list of files to be removed when we exit.
+    std::vector<std::string> to_be_removed;
     std::vector<std::string> pagefiles;
     std::string volume_type;
 
@@ -66,10 +66,7 @@ class PmemImager: public BasicImager {
 
     virtual AFF4Status GetWritableStream_(
         const URN &output_urn,
-        AFF4Flusher<AFF4Stream> &result,
-        AFF4Flusher<AFF4Volume> &volume);
-
-    virtual AFF4Status WriteRawVolume_();
+        AFF4Flusher<AFF4Stream> &result);
 
  public:
     PmemImager(): BasicImager() {}

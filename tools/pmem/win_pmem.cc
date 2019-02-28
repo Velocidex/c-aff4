@@ -22,6 +22,7 @@ specific language governing permissions and limitations under the License.
 #include <string>
 
 #include "aff4/aff4_io.h"
+#include "aff4/aff4_symstream.h"
 
 #include <yaml-cpp/yaml.h>
 
@@ -149,12 +150,16 @@ AFF4Status WinPmemImager::GetMemoryInfo(PmemMemoryInfo *info) {
 
   memset(info, 0, sizeof(*info));
 
-  AFF4ScopedPtr<FileBackedObject> device_stream = resolver.AFF4FactoryOpen
-      <FileBackedObject>(device_urn);
+  if (!device) {
+      auto device_path = "\\\\.\\" + device_name;
 
-  if (!device_stream) {
-      resolver.logger->error("Cannot open device {}", device_urn);
-      return IO_ERROR;
+      // We need write mode for issuing IO controls. Note the driver will refuse
+      // write unless it is also switched to write mode.
+      if (NewFileBackedObject(&resolver, device_path,
+                              "append", device) != STATUS_OK) {
+          resolver.logger->error("Cannot open device {}", device_path);
+          return IO_ERROR;
+      }
   }
 
   // Set the acquisition mode.
@@ -168,7 +173,7 @@ AFF4Status WinPmemImager::GetMemoryInfo(PmemMemoryInfo *info) {
   }
 
   // Set the acquisition mode.
-  if (!DeviceIoControl(device_stream->fd, PMEM_CTRL_IOCTRL, &acquisition_mode,
+  if (!DeviceIoControl(device->fd, PMEM_CTRL_IOCTRL, &acquisition_mode,
                        sizeof(acquisition_mode), NULL, 0, &size, NULL)) {
       resolver.logger->error(
           "Failed to set acquisition mode: {}", GetLastErrorMessage());
@@ -178,7 +183,7 @@ AFF4Status WinPmemImager::GetMemoryInfo(PmemMemoryInfo *info) {
   }
 
   // Get the memory ranges.
-  if (!DeviceIoControl(device_stream->fd, PMEM_INFO_IOCTRL, NULL, 0,
+  if (!DeviceIoControl(device->fd, PMEM_INFO_IOCTRL, NULL, 0,
                        reinterpret_cast<char *>(info),
                        sizeof(*info), &size, NULL)) {
       resolver.logger->error("Failed to get memory geometry: {}",
@@ -273,15 +278,11 @@ AFF4Status WinPmemImager::ImagePageFile() {
   if (fcat_path.size() == 0)
     return IO_ERROR;
 
-  URN fcat_urn = URN::NewURNFromFilename(fcat_path);
-  resolver.logger->info("fcat_urn {}", fcat_urn);
-  AFF4Status res = ExtractFile_(fcat, sizeof(fcat), fcat_urn);
-
-  if (res != STATUS_OK)
-    return res;
+  resolver.logger->info("fcat_urn {}", fcat_path);
+  RETURN_IF_ERROR(ExtractFile_(fcat, sizeof(fcat), fcat_path));
 
   // Remember to clean up when done.
-  to_be_removed.push_back(fcat_urn);
+  to_be_removed.push_back(fcat_path);
 
   for (const std::string& pagefile_path : pagefiles) {
     // Now shell out to fcat and copy to the output.
@@ -308,53 +309,42 @@ AFF4Status WinPmemImager::ImagePageFile() {
         // Drive letter.
         pagefile_path.substr(0, 2).c_str());
 
-    res = CreateChildProcess(resolver, command_line, stdout_wr);
-    if (res != STATUS_OK) {
-      to_be_removed.clear();
-
-      return res;
-    }
+    RETURN_IF_ERROR(
+        CreateChildProcess(resolver, command_line, stdout_wr));
 
     resolver.logger->info("Preparing to run {}", command_line.c_str());
     std::string buffer(BUFF_SIZE, 0);
-    URN volume_urn;
-    AFF4Status res = GetOutputVolumeURN(&volume_urn);
-    if (res != STATUS_OK)
-      return res;
 
-    URN pagefile_urn = volume_urn.Append(
+    AFF4Volume* volume;
+    RETURN_IF_ERROR(GetCurrentVolume(&volume))
+
+    URN pagefile_urn = volume->urn.Append(
         URN::NewURNFromFilename(pagefile_path).Path());
 
     resolver.logger->info("Output will go to {}",
                           pagefile_urn.SerializeToString());
 
-    AFF4ScopedPtr<AFF4Stream> output_stream = GetWritableStream_(
-        pagefile_urn, volume_urn);
+    AFF4Flusher<AFF4Stream> pagefile;
+    RETURN_IF_ERROR(GetWritableStream_(pagefile_urn, pagefile));
 
-    if (!output_stream)
-      return IO_ERROR;
-
-    resolver.Set(pagefile_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PAGEFILE));
-    resolver.Set(pagefile_urn, AFF4_MEMORY_PAGEFILE_NUM,
+    resolver.Set(pagefile->urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PAGEFILE));
+    resolver.Set(pagefile->urn, AFF4_MEMORY_PAGEFILE_NUM,
                  new XSDInteger(pagefile_number));
 
 
     DefaultProgress progress(&resolver);
     _PipedReaderStream reader_stream(&resolver, stdout_rd);
-    res = output_stream->WriteStream(&reader_stream, &progress);
-    if (res != STATUS_OK)
-      return res;
+    RETURN_IF_ERROR(pagefile->WriteStream(&reader_stream, &progress));
   }
 
   actions_run.insert("pagefile");
+
   return CONTINUE;
 }
 
 AFF4Status WinPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
   PmemMemoryInfo info;
-  AFF4Status res = GetMemoryInfo(&info);
-  if (res != STATUS_OK)
-    return res;
+  RETURN_IF_ERROR(GetMemoryInfo(&info));
 
   // Copy the memory to the output.
   for (unsigned int i = 0; i < info.NumberOfRuns; i++) {
@@ -362,7 +352,7 @@ AFF4Status WinPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
 
     resolver.logger->info("Dumping Range {} (Starts at {:#08x}, length {:#08x}",
                           i, range.start, range.length);
-    map->AddRange(range.start, range.start, range.length, device_urn);
+    map->AddRange(range.start, range.start, range.length, device.get());
     *length += range.length;
   }
 
@@ -370,47 +360,31 @@ AFF4Status WinPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
 }
 
 
-AFF4Status WinPmemImager::WriteMapObject_(
-    const URN &map_urn, const URN &output_urn) {
-
+AFF4Status WinPmemImager::WriteMapObject_(const URN &map_urn) {
   std::vector<std::string> unreadable_pages;
 
-  // Get the device object
-  AFF4ScopedPtr<AFF4Stream> device_stream = resolver.AFF4FactoryOpen<
-      AFF4Stream>(device_urn);
+  AFF4Volume *volume;
+  RETURN_IF_ERROR(GetCurrentVolume(&volume));
 
-  if (!device_stream)
-    return IO_ERROR;
+  // Create the backing stream;
+  AFF4Flusher<AFF4Stream> data_stream;
+  RETURN_IF_ERROR(AFF4Image::NewAFF4Image(
+                      &resolver, map_urn.Append("data"),
+                      volume, data_stream));
 
   // Create the map object.
-  AFF4ScopedPtr<AFF4Map> map_stream = AFF4Map::NewAFF4Map(
-      &resolver, map_urn, output_urn);
-
-  if (!map_stream)
-    return IO_ERROR;
-
-  // Read data from the memory device and write it directly to the
-  // map's backing urn.
-  URN data_stream_urn;
-  RETURN_IF_ERROR(map_stream->GetBackingStream(data_stream_urn));
-
-  AFF4ScopedPtr<AFF4Stream> data_stream = resolver.AFF4FactoryOpen<
-      AFF4Stream>(data_stream_urn);
-
-  if (!data_stream) {
-      return IO_ERROR;
-  }
+  AFF4Flusher<AFF4Map> map_stream;
+  RETURN_IF_ERROR(
+      AFF4Map::NewAFF4Map(&resolver, map_urn, volume,
+                          data_stream.get(), map_stream));
 
   // Set the user's preferred compression method on the data stream.
-  resolver.Set(data_stream_urn, AFF4_IMAGE_COMPRESSION, new URN(
-      CompressionMethodToURN(compression)));
-
+  resolver.Set(data_stream->urn, AFF4_IMAGE_COMPRESSION, new URN(
+                   CompressionMethodToURN(compression)));
 
   // Get the ranges from the memory device.
   PmemMemoryInfo info;
-  AFF4Status res = GetMemoryInfo(&info);
-  if (res != STATUS_OK)
-    return res;
+  RETURN_IF_ERROR(GetMemoryInfo(&info));
 
   aff4_off_t total_length = 0;
 
@@ -439,37 +413,41 @@ AFF4Status WinPmemImager::WriteMapObject_(
         size_t to_read = std::min((aff4_off_t)(BUFF_SIZE),
                                   (aff4_off_t)(range.start + range.length - j));
         size_t buffer_len = to_read;
-        device_stream->Seek(j, SEEK_SET);
+        device->Seek(j, SEEK_SET);
 
         // Report the data read from the source.
         if (!progress.Report(j)) {
                 return ABORTED;
         }
 
-        AFF4Status res = device_stream->ReadBuffer(buf, &buffer_len);
+        AFF4Status res = device->ReadBuffer(buf, &buffer_len);
         if (res == STATUS_OK) {
             auto data_stream_offset = data_stream->Tell();
 
             // Append the data to the end of the data stream.
             data_stream->Write(buf, buffer_len);
-            map_stream->AddRange(j, data_stream_offset, buffer_len, data_stream_urn);
+            map_stream->AddRange(j, data_stream_offset, buffer_len, data_stream.get());
         } else {
             // This will happen when windows is running in VSM mode -
             // some of the physical pages are not actually accessible.
+
+            AFF4Flusher<AFF4Stream> unreadable(
+                new AFF4SymbolicStream(&resolver, AFF4_IMAGESTREAM_UNREADABLE,
+                                       "UNREADABLEDATA"));
 
             // One of the pages in the range is unreadable - repeat
             // the read for each page.
             for (aff4_off_t k = j; k < j + to_read; k += PAGE_SIZE) {
                 buffer_len = PAGE_SIZE;
 
-                device_stream->Seek(k, SEEK_SET);
-                AFF4Status res = device_stream->ReadBuffer(buf, &buffer_len);
+                device->Seek(k, SEEK_SET);
+                AFF4Status res = device->ReadBuffer(buf, &buffer_len);
                 if (res == STATUS_OK) {
                     auto data_stream_offset = data_stream->Tell();
 
                     // Append the data to the end of the data stream.
                     data_stream->Write(buf, buffer_len);
-                    map_stream->AddRange(k, data_stream_offset, buffer_len, data_stream_urn);
+                    map_stream->AddRange(k, data_stream_offset, buffer_len, data_stream.get());
                 } else {
                     resolver.logger->debug("Reading failed at offset {:x}: {}",
                                            k, GetLastErrorMessage());
@@ -479,7 +457,7 @@ AFF4Status WinPmemImager::WriteMapObject_(
                         k,
                         unreadable_offset,
                         PAGE_SIZE,
-                        AFF4_IMAGESTREAM_UNREADABLE);
+                        unreadable.get());
 
                     // We need to map consecutive blocks in the
                     // unreadable stream to allow the map to merge
@@ -497,9 +475,6 @@ AFF4Status WinPmemImager::WriteMapObject_(
   }
 
   // Free some memory ASAP.
-  resolver.Close(data_stream);
-  resolver.Close(map_stream);
-
   if (unreadable_pages.size() > 0) {
       resolver.logger->error(
           "There were {} page read errors in total.", unreadable_pages.size());
@@ -527,47 +502,34 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
   if (res != CONTINUE)
     return res;
 
-  // When the output volume is raw - we image in raw or elf format.
-  if (volume_type == "raw") {
-      return WriteRawVolume_();
-  }
-
   std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
 
-  URN output_urn;
-  res = GetOutputVolumeURN(&output_volume_urn);
-  if (res != STATUS_OK)
-    return res;
-
   // We image memory into this map stream.
-  URN map_urn = output_volume_urn.Append("PhysicalMemory");
+  AFF4Volume *volume;
+  RETURN_IF_ERROR(GetCurrentVolume(&volume));
 
-  AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
-      output_volume_urn);
+  URN map_urn = volume->urn.Append("PhysicalMemory");
 
   // Write the information into the image.
-  AFF4ScopedPtr<AFF4Stream> information_stream = volume->CreateMember(
-      map_urn.Append("information.yaml"));
+  {
+      AFF4Flusher<AFF4Stream> information_stream;
+      RETURN_IF_ERROR(volume->CreateMemberStream(
+                          map_urn.Append("information.yaml"),
+                          information_stream));
 
-  if (!information_stream) {
-      resolver.logger->error("Unable to create memory information yaml.");
-      return IO_ERROR;
+      PmemMemoryInfo info;
+      RETURN_IF_ERROR(GetMemoryInfo(&info));
+
+      if (information_stream->Write(DumpMemoryInfoToYaml(info)) < 0)
+          return IO_ERROR;
   }
 
-  PmemMemoryInfo info;
-  res = GetMemoryInfo(&info);
-  if (res != STATUS_OK)
-    return res;
-
-  if (information_stream->Write(DumpMemoryInfoToYaml(info)) < 0)
-    return IO_ERROR;
-
   if (format == "map") {
-    res = WriteMapObject_(map_urn, output_volume_urn);
+    res = WriteMapObject_(map_urn);
   } else if (format == "raw") {
-    res = WriteRawFormat_(map_urn, output_volume_urn);
+    res = WriteRawFormat_(map_urn);
   } else if (format == "elf") {
-    res = WriteElfFormat_(map_urn, output_volume_urn);
+    res = WriteElfFormat_(map_urn);
   }
 
   if (res != STATUS_OK) {
@@ -601,28 +563,19 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
 AFF4Status WinPmemImager::ExtractFile_(
     const unsigned char input_file[],
     size_t input_file_length,
-    URN output_file) {
+    std::string output_file) {
 
     private_resolver.Set(output_file, AFF4_STREAM_WRITE_MODE,
                          new XSDString("truncate"));
 
-    AFF4ScopedPtr<AFF4Stream> outfile = private_resolver.AFF4FactoryOpen
-      <AFF4Stream>(output_file);
-
-    if (!outfile) {
-        resolver.logger->critical("Unable to create driver file.");
-        abort();
-    }
+    AFF4Flusher<FileBackedObject> output;
+    RETURN_IF_ERROR(NewFileBackedObject(
+                        &resolver, output_file, "truncate", output));
 
     resolver.logger->info("Extracted {} bytes into {}", input_file_length, output_file);
-    // These files should be small so dont worry about progress.
-    AFF4Status res = outfile->Write((const char *)input_file, input_file_length);
-    if (res == STATUS_OK) {
-        // We must make sure to close the file or we will not be able to load it
-        // while we hold a handle to it.
-        res = private_resolver.Close<AFF4Stream>(outfile);
-    }
 
+    // These files should be small so dont worry about progress.
+    AFF4Status res = output->Write((const char *)input_file, input_file_length);
     if (res != STATUS_OK) {
         resolver.logger->error("Unable to extract {}: {}", output_file, res);
     }
@@ -701,34 +654,32 @@ AFF4Status WinPmemImager::InstallDriver() {
     // first, and if that fails we try the other ones. On modern win10
     // systems the attestation signed drivers are required, while on
     // windows 7 they cannot be loaded.
-    URN filename_urn = URN::NewURNFromFilename(driver_path);
     size_t file_size;
     const unsigned char* file_contents = GetDriverAtt(resolver, &file_size);
     RETURN_IF_ERROR(ExtractFile_(
                         file_contents,
                         file_size,
-                        filename_urn));   // Where to store the driver.
+                        driver_path));   // Where to store the driver.
 
     // Remove this file when we are done.
-    to_be_removed.push_back(filename_urn);
+    to_be_removed.push_back(driver_path);
 
-    res = _InstallDriver(filename_urn.ToFilename());
+    res = _InstallDriver(driver_path);
     if (res != STATUS_OK) {
         resolver.logger->info("Trying to load non-attestation signed driver.");
         driver_path = _GetTempPath(resolver);
         if (driver_path.size() == 0)
             return IO_ERROR;
 
-        URN filename_urn = URN::NewURNFromFilename(driver_path);
         size_t file_size;
         const unsigned char* file_contents = GetDriverNonAtt(resolver, &file_size);
         RETURN_IF_ERROR(ExtractFile_(
                             file_contents,
                             file_size,
-                            filename_urn));   // Where to store the driver.
+                            driver_path));   // Where to store the driver.
 
-        to_be_removed.push_back(filename_urn);
-        RETURN_IF_ERROR(_InstallDriver(filename_urn.ToFilename()));
+        to_be_removed.push_back(driver_path);
+        RETURN_IF_ERROR(_InstallDriver(driver_path));
     }
   } else {
       // Use the driver the user told us to.
@@ -740,25 +691,10 @@ AFF4Status WinPmemImager::InstallDriver() {
   driver_installed_ = true;
 
   resolver.logger->info("Loaded Driver {}", driver_path);
-  device_urn = URN::NewURNFromFilename("\\\\.\\" + device_name);
-
-  // We need write mode for issuing IO controls. Note the driver will refuse
-  // write unless it is also switched to write mode.
-  resolver.Set(device_urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
-
-  AFF4ScopedPtr<FileBackedObject> device_stream = resolver.AFF4FactoryOpen
-      <FileBackedObject>(device_urn);
-
-  if (!device_stream) {
-      resolver.logger->error("Unable to open device: {}", GetLastErrorMessage());
-    return IO_ERROR;
-  }
 
   // Now print some info about the driver.
   PmemMemoryInfo info;
-  res = GetMemoryInfo(&info);
-  if (res != STATUS_OK)
-    return res;
+  RETURN_IF_ERROR(GetMemoryInfo(&info));
 
   print_memory_info_(&resolver, info);
 
@@ -788,11 +724,7 @@ AFF4Status WinPmemImager::UninstallDriver() {
   resolver.logger->info("Driver Unloaded.");
 
   // Close the handle to the device so we can remove it.
-  AFF4ScopedPtr<AFF4Stream> device = resolver.AFF4FactoryOpen<AFF4Stream>(
-      device_urn);
-  if (device.get()) {
-      resolver.Close(device);
-  }
+  device.release();
 
   actions_run.insert("unload-driver");
   return CONTINUE;

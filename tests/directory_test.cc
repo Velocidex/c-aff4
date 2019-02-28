@@ -71,5 +71,4 @@ TEST_F(AFF4DirectoryTest, CreateMemberStream) {
   ASSERT_EQ(filename.SerializeToString(), root_path + PATH_SEP_STR + member_name);
 }
 
-
 } // namespace aff4

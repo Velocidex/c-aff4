@@ -77,12 +77,11 @@ class WinPmemImager: public PmemImager {
 
  protected:
   /// The URN of the AFF4 volume stored in the imager itself.
-  URN imager_urn;
-  URN device_urn;                       /**< The URN of the pmem device. */
-
   std::string service_name = PMEM_SERVICE_NAME;
   std::string device_name = PMEM_DEVICE_NAME;
   uint32_t acquisition_mode = PMEM_MODE_AUTO;
+
+  AFF4Flusher<FileBackedObject> device;
 
   /**
    * This resolver is used to parse the AFF4 volume we bring with us. Our
@@ -114,8 +113,7 @@ class WinPmemImager: public PmemImager {
    */
   AFF4Status ImagePhysicalMemory() override;
 
-  AFF4Status WriteMapObject_(
-      const URN &map_urn, const URN &output_urn) override;
+  AFF4Status WriteMapObject_(const URN &map_urn) override;
 
   /**
    * Attemptes to unpack and install the driver.
@@ -136,7 +134,7 @@ class WinPmemImager: public PmemImager {
    */
   AFF4Status ExtractFile_(const unsigned char* input_file,
                           size_t input_file_length,
-                          URN output);
+                          std::string output);
 
   /**
    * Unloads the driver.

@@ -48,11 +48,10 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
             if (type_str == AFF4_IMAGE_TYPE) {
                 URN delegate;
 
-                RETURN_IF_ERROR(
-                    resolver->Get(stream_urn, AFF4_DATASTREAM, delegate));
-
-                // TODO: This can get recursive. Protect against abuse.
-                return GetStream(delegate, result);
+                if (STATUS_OK == resolver->Get(stream_urn, AFF4_DATASTREAM, delegate)) {
+                    // TODO: This can get recursive. Protect against abuse.
+                    return GetStream(delegate, result);
+                }
             }
 
             if (type_str == AFF4_MAP_TYPE) {
@@ -66,6 +65,19 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
                                         stream_urn, type_str);
 
                 return STATUS_OK;
+            }
+
+            // Zip segments are stored directly in each volume. We use
+            // the resolver to figure out which volume has each
+            // segment.
+            if (type_str == AFF4_ZIP_SEGMENT_TYPE) {
+                URN owner;
+                RETURN_IF_ERROR(resolver->Get(stream_urn, AFF4_STORED, owner));
+
+                auto it = volume_objs.find(owner);
+                if (it != volume_objs.end()) {
+                    return (it->second->OpenMemberStream(stream_urn, result));
+                }
             }
         }
     }
@@ -95,15 +107,6 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
         if (stream_urn == urn) {
             result.reset(new AFF4SymbolicStream(resolver, stream_urn, i));
             return STATUS_OK;
-        }
-    }
-
-    for (auto &i: volume_objs) {
-        AFF4Flusher<AFF4Stream> stream;
-        AFF4Status res = i.second->OpenMemberStream(stream_urn, stream);
-        if (res == STATUS_OK) {
-            result.swap(stream);
-            return  STATUS_OK;
         }
     }
 

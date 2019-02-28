@@ -263,9 +263,6 @@ class ZipFile: public AFF4Volume {
   protected:
     int directory_number_of_entries = -1;
 
-    // Deprecate
-    URN backing_store_urn;
-
     /// The global offset of all zip file references from the real file
     /// references. This might be non-zero if the zip file was appended to another
     /// file.
@@ -298,6 +295,11 @@ class ZipFile: public AFF4Volume {
         DataStore* resolver,
         AFF4Flusher<AFF4Stream> &&backing_stream,
         AFF4Flusher<ZipFile> &result);
+
+    static AFF4Status NewZipFile(
+        DataStore* resolver,
+        AFF4Flusher<AFF4Stream> &&backing_stream,
+        AFF4Flusher<AFF4Volume> &result);
 
     // Open an existing zip file.
     static AFF4Status OpenZipFile(
@@ -332,6 +334,8 @@ class ZipFile: public AFF4Volume {
                                        ProgressContext* progress = nullptr);
 
     AFF4Status Flush() override;
+
+    aff4_off_t Size() const override;
 
     // All the members of the zip file. Used to reconstruct the central
     // directory. Note these store the members as the ZipFile sees them. The

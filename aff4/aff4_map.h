@@ -83,6 +83,9 @@ class AFF4Map: public AFF4Stream {
     // an unreadable region.
     size_t max_reread_size = 4096;
 
+    bool CanSwitchVolume() override;
+    AFF4Status SwitchVolume(AFF4Volume *volume) override;
+
     explicit AFF4Map(DataStore* resolver): AFF4Stream(resolver) {}
 
     // When creating a new map we must give the map the first data

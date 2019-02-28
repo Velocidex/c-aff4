@@ -116,6 +116,7 @@ public:
 
     // Generate the index stream.
     std::string index_stream() {
+        std::unique_lock<std::mutex> lock(mutex);
         std::string result;
         result.reserve(chunks_per_segment * sizeof(BevyIndex));
 
@@ -138,11 +139,13 @@ public:
     // contiguously. Instead, the index is sorted by chunk id and
     // refer to chunks in the bevy in any order.
     void EnqueueCompressChunk(int chunk_id, const std::string& data) {
-        results.push_back(
-            resolver->pool->enqueue(
-                [this, chunk_id, data]() {
-                    return _CompressChunk(chunk_id, data);
-                }));
+        std::future<AFF4Status> new_task = resolver->pool->enqueue(
+            [this, chunk_id, data]() {
+                return _CompressChunk(chunk_id, data);
+            });
+
+        std::unique_lock<std::mutex> lock(mutex);
+        results.push_back(std::move(new_task));
     }
 
     int chunks_written() {
@@ -151,6 +154,8 @@ public:
     }
 
     AFF4Status Finalize() {
+        std::unique_lock<std::mutex> lock(mutex);
+
         for (auto& result: results) {
             RETURN_IF_ERROR(result.get());
         }
@@ -159,7 +164,8 @@ public:
     }
 
 private:
-    std::mutex mutex;
+    std::mutex mutex;        // Protects the result vector.
+    std::mutex bevy_mutex;   // Protects writing on the bevy.
     StringIO bevy;
     DataStore *resolver;
     AFF4_IMAGE_COMPRESSION_ENUM compression;
@@ -216,7 +222,7 @@ private:
             return IO_ERROR;
         }
 
-        std::unique_lock<std::mutex> lock(mutex);
+        std::unique_lock<std::mutex> lock(bevy_mutex);
 
         BevyIndex &index = bevy_index_data[chunk_id];
         index.offset = bevy.Tell();
@@ -549,6 +555,10 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
         URN bevy_urn(urn.Append(aff4_sprintf("%08d", bevy_number)));
         URN bevy_index_urn(bevy_urn.value + (".index"));
 
+        // Between here and below, we can not switch the volume since
+        // bevies are inconsistent.
+        checkpointed = false;
+
         // First write the bevy.
         {
             AFF4Flusher<AFF4Stream> bevy;
@@ -559,7 +569,6 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
             bevy->reserve(chunks_per_segment * chunk_size);
 
             RETURN_IF_ERROR(bevy->WriteStream(&stream, progress));
-            bevy->Flush();
         }
 
         // Now write the index.
@@ -573,6 +582,8 @@ AFF4Status AFF4Image::WriteStream(AFF4Stream* source,
                                 stream.bevy_writer.index_stream()));
 
         }
+
+        checkpointed = true;
 
         // Report the data read from the source.
         if (!progress->Report(source->Tell())) {
@@ -813,6 +824,16 @@ AFF4Status AFF4Image::_write_metadata() {
 
     resolver->Set(urn, AFF4_IMAGE_COMPRESSION, new URN(
                       CompressionMethodToURN(compression)));
+
+    return STATUS_OK;
+}
+
+bool AFF4Image::CanSwitchVolume() {
+    return checkpointed;
+}
+
+AFF4Status AFF4Image::SwitchVolume(AFF4Volume *volume) {
+    current_volume = volume;
 
     return STATUS_OK;
 }

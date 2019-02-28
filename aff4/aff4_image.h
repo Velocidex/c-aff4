@@ -124,6 +124,11 @@ class AFF4Image: public AFF4Stream {
     // Simple cache of decompressed bevys
     std::unordered_map<unsigned int, std::string> chunk_cache{};
 
+    // When this is true it is ok to switch volumes. This flag will
+    // only be true when the AFF4Image has flushed all its bevies to
+    // the current volume.
+    bool checkpointed = true;
+
   public:
     AFF4Image(DataStore* resolver, URN urn);
 
@@ -134,6 +139,9 @@ class AFF4Image: public AFF4Stream {
     unsigned int chunks_per_segment = 1024; /** Maximum number of chunks in each
                                              * Bevy. */
     unsigned int chunk_cache_size = 1024; /** The max number of cached chunks */
+
+    bool CanSwitchVolume() override;
+    AFF4Status SwitchVolume(AFF4Volume *volume) override;
 
     // Which compression should we use.
     AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;

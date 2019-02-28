@@ -201,10 +201,9 @@ AFF4Status PmemImager::WriteElfFormat_(const URN &output_urn) {
     }
 
     // Create the output object.
-    AFF4Flusher<AFF4Volume> volume;
     AFF4Flusher<AFF4Stream> target_stream;
     RETURN_IF_ERROR(GetWritableStream_(
-                        output_urn, target_stream, volume));
+                        output_urn, target_stream));
 
     DefaultProgress progress(&resolver);
     progress.length = file_offset;
@@ -212,7 +211,6 @@ AFF4Status PmemImager::WriteElfFormat_(const URN &output_urn) {
     // Now write the map into the image.
     return target_stream->WriteStream(&temp_map, &progress);
 }
-
 
 AFF4Status PmemImager::WriteRawFormat_(const URN &target_urn) {
     resolver.logger->info("Will write in raw format.");
@@ -224,10 +222,9 @@ AFF4Status PmemImager::WriteRawFormat_(const URN &target_urn) {
     RETURN_IF_ERROR(CreateMap_(&temp_stream, &total_length));
 
     // Create the map object.
-    AFF4Flusher<AFF4Volume> volume;
     AFF4Flusher<AFF4Stream> target_stream;
     RETURN_IF_ERROR(GetWritableStream_(
-                        target_urn, target_stream, volume));
+                        target_urn, target_stream));
 
     DefaultProgress progress(&resolver);
     progress.length = total_length;
@@ -250,18 +247,18 @@ AFF4Status PmemImager::WriteMapObject_(const URN &map_urn) {
                      CompressionMethodToURN(compression)));
 
     // Create the map object.
-    AFF4Flusher<AFF4Volume> volume;
-    RETURN_IF_ERROR(GetCurrentVolume(volume));
+    AFF4Volume *volume;
+    RETURN_IF_ERROR(GetCurrentVolume(&volume));
 
     AFF4Flusher<AFF4Image> data_stream;
     RETURN_IF_ERROR(AFF4Image::NewAFF4Image(
                         &resolver, map_urn.Append("data"),
-                        volume.get(), data_stream));
+                        volume, data_stream));
 
     AFF4Flusher<AFF4Map> map_stream;
     RETURN_IF_ERROR(
         AFF4Map::NewAFF4Map(
-            &resolver, map_urn, volume.get(), data_stream.get(),
+            &resolver, map_urn, volume, data_stream.get(),
             map_stream));
 
     DefaultProgress progress(&resolver);
@@ -273,25 +270,21 @@ AFF4Status PmemImager::WriteMapObject_(const URN &map_urn) {
 
 AFF4Status PmemImager::GetWritableStream_(
     const URN &output_urn,
-    AFF4Flusher<AFF4Stream> &result,
-    AFF4Flusher<AFF4Volume> &volume) {
+    AFF4Flusher<AFF4Stream> &result) {
+
     // Raw containers should just be flat files.
     if (volume_type == "raw") {
         std::string output_path = GetArg<TCLAP::ValueArg<std::string>>(
             "output")->getValue();
-
 
         if (output_path == "-") {
             RETURN_IF_ERROR(AFF4Stdout::NewAFF4Stdout(
                                 &resolver, result));
 
         } else {
-            AFF4Flusher<FileBackedObject> output_stream;
             RETURN_IF_ERROR(NewFileBackedObject(
                                 &resolver, output_path, "truncate",
-                                output_stream));
-
-            result.reset(output_stream.release());
+                                result));
         }
 
         resolver.logger->info(
@@ -301,7 +294,8 @@ AFF4Status PmemImager::GetWritableStream_(
         return STATUS_OK;
     }
 
-    RETURN_IF_ERROR(GetCurrentVolume(volume));
+    AFF4Volume *volume;
+    RETURN_IF_ERROR(GetCurrentVolume(&volume));
 
     // If the user asked for raw or no compression just write a normal stream.
     std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
@@ -309,36 +303,15 @@ AFF4Status PmemImager::GetWritableStream_(
         // These formats are not compressed.
         return volume->CreateMemberStream(output_urn, result);
     } else {
-        AFF4Flusher<AFF4Image> image_stream;
-
         RETURN_IF_ERROR(AFF4Image::NewAFF4Image(
                             &resolver, output_urn,
-                            volume.get(),
-                            image_stream));
-
-        result.reset(image_stream.release());
+                            volume,
+                            result));
     }
 
     return STATUS_OK;
 }
 
-AFF4Status PmemImager::WriteRawVolume_() {
-  std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
-  std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
-
-  output_volume_backing_urn = URN::NewURNFromFilename(output_path);
-  if (output_path == "-") {
-      output_volume_backing_urn = URN("builtin://stdout");
-  }
-
-  resolver.Set(output_volume_backing_urn, AFF4_STREAM_WRITE_MODE,
-               new XSDString("truncate"));
-
-  if (format == "elf") {
-      return WriteElfFormat_(output_volume_backing_urn);
-  }
-  return WriteRawFormat_(output_volume_backing_urn);
-}
 
 
 AFF4Status PmemImager::process_input() {
@@ -356,16 +329,15 @@ AFF4Status PmemImager::process_input() {
 #ifdef _WIN32
 PmemImager::~PmemImager() {
   // Remove all files that need to be removed.
-  for (URN it : to_be_removed) {
-      std::string filename = it.ToFilename();
-      if (!DeleteFile(filename.c_str())) {
-          resolver.logger->info("Unable to delete {}: {}", filename,
-                                GetLastErrorMessage());
+    for (std::string &filename : to_be_removed) {
+        if (!DeleteFile(filename.c_str())) {
+            resolver.logger->info("Unable to delete {}: {}", filename,
+                                  GetLastErrorMessage());
 
-      } else {
-          resolver.logger->info("Removed {}", filename);
-      }
-  }
+        } else {
+            resolver.logger->info("Removed {}", filename);
+        }
+    }
 }
 #else
 PmemImager::~PmemImager() {
@@ -380,7 +352,8 @@ int main(int argc, char* argv[]) {
     if (res == aff4::STATUS_OK || res == aff4::CONTINUE)
           return 0;
 
-    imager.resolver.logger->error("Imaging failed with error: {}", res);
+    imager.resolver.logger->error("Imaging failed with error: {}",
+                                  AFF4StatusToString(res));
 
     return res;
 }

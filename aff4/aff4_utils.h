@@ -40,6 +40,7 @@ std::shared_ptr<spdlog::logger> get_logger();
     do {                                        \
         AFF4Status res = (expr);                \
         if (res != STATUS_OK) {                 \
+            printf("%s: at %s: %d\n", AFF4StatusToString(res), __FILE__, __LINE__); \
             return res;                         \
         };                                      \
     } while (0);

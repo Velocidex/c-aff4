@@ -60,6 +60,10 @@ std::string member_name_for_urn(const URN member, const URN base_urn,
 
 URN urn_from_member_name(const std::string& member, const URN base_urn);
 
+// Accepts both / and \ separators.
+ std::vector<std::string> break_path_into_components(std::string path);
+ std::string join(const std::vector<std::string>& v, char c);
+ std::string escape_component(std::string filename);
 
 extern "C" {
     const char* AFF4_version();

@@ -600,6 +600,17 @@ AFF4Status AFF4Map::CopyStreamFromMap(
     return STATUS_OK;
 }
 
+bool AFF4Map::CanSwitchVolume() {
+    return true;
+}
+
+AFF4Status AFF4Map::SwitchVolume(AFF4Volume *volume) {
+    current_volume = volume;
+    return STATUS_OK;
+}
+
+
+
 /*
 static AFF4Registrar<AFF4Map> map1(AFF4_MAP_TYPE);
 static AFF4Registrar<AFF4Map> map2(AFF4_LEGACY_MAP_TYPE);

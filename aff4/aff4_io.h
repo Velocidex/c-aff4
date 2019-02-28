@@ -170,16 +170,14 @@ class AFF4Stream: public AFF4Object {
     // likely to be.
     virtual void reserve(size_t size);
 
-    /**
-     * Streams are always reset to their begining when returned from the cache.
-     *
-     *
-     * @return
-     */
-    virtual AFF4Status Prepare() {
-        Seek(0, SEEK_SET);
-        return STATUS_OK;
-    }
+
+    // Requests that this stream change its backing volume if
+    // possible. CanSwitchVolume() returns true if it is possible to
+    // change the backing volume in this object's
+    // lifecycle. Subsequent calls to SwitchVolume() should work - it
+    // is a fatal error if they do not.
+    virtual bool CanSwitchVolume();
+    virtual AFF4Status SwitchVolume(AFF4Volume *volume);
 
     /**
      * Streams can be truncated. This means the older stream data will be removed
@@ -259,6 +257,9 @@ class AFF4Volume: public AFF4Object {
     void AddDependency(URN urn) {
         children.insert(urn.SerializeToString());
     }
+
+    // Estimate how large this volume is.
+    virtual aff4_off_t Size() const;
 };
 
 

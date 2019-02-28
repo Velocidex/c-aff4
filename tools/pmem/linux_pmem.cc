@@ -181,13 +181,8 @@ AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
   std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
   std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
 
-  // When the output volume is raw - we image in raw or elf format.
-  if (volume_type == "raw") {
-      return WriteRawVolume_();
-  }
-
-  AFF4Flusher<AFF4Volume> output_volume;
-  RETURN_IF_ERROR(GetCurrentVolume(output_volume));
+  AFF4Volume *output_volume;
+  RETURN_IF_ERROR(GetCurrentVolume(&output_volume));
 
   // We image memory into this map stream.
   URN map_urn = output_volume->urn.Append("proc/kcore");
