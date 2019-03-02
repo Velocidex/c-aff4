@@ -31,7 +31,7 @@ specific language governing permissions and limitations under the License.
 namespace aff4 {
 
 
-AFF4Status _CreateIntermediateDirectories(
+AFF4Status CreateIntermediateDirectories(
     DataStore *resolver, std::vector<std::string> components);
 
 /***************************************************************
@@ -52,7 +52,7 @@ FileBackedObject implementation.
  }
 
 // Recursively create intermediate directories.
-AFF4Status _CreateIntermediateDirectories(
+AFF4Status CreateIntermediateDirectories(
     DataStore *resolver, std::vector<std::string> components) {
     std::string path = PATH_SEP_STR;
 
@@ -91,8 +91,8 @@ AFF4Status _CreateIntermediateDirectories(
     return STATUS_OK;
 }
 
-AFF4Status _CreateIntermediateDirectories(DataStore *resolver, std::string dir_name) {
-    return _CreateIntermediateDirectories(resolver, break_path_into_components(dir_name));
+AFF4Status CreateIntermediateDirectories(DataStore *resolver, std::string dir_name) {
+    return CreateIntermediateDirectories(resolver, break_path_into_components(dir_name));
 }
 
 // Windows files are read through the CreateFile() API so that devices can be
@@ -121,7 +121,7 @@ AFF4Status _CreateIntermediateDirectories(DataStore *resolver, std::string dir_n
 
         // Only create directories if we are allowed to.
         RETURN_IF_ERROR(
-            _CreateIntermediateDirectories(resolver, directory_components));
+            CreateIntermediateDirectories(resolver, directory_components));
 
     } else if (mode == "append") {
         creation_disposition = OPEN_ALWAYS;
@@ -130,7 +130,7 @@ AFF4Status _CreateIntermediateDirectories(DataStore *resolver, std::string dir_n
 
         // Only create directories if we are allowed to.
         RETURN_IF_ERROR(
-            _CreateIntermediateDirectories(resolver, directory_components));
+            CreateIntermediateDirectories(resolver, directory_components));
     }
 
     new_object->fd = CreateFile(
@@ -277,7 +277,7 @@ FileBackedObject::~FileBackedObject() {
 
          // Only create directories if we are allowed to.
          RETURN_IF_ERROR(
-             _CreateIntermediateDirectories(resolver, directory_components));
+             CreateIntermediateDirectories(resolver, directory_components));
 
      } else if (mode == "append") {
          flags = O_CREAT | O_RDWR;
@@ -285,7 +285,7 @@ FileBackedObject::~FileBackedObject() {
 
          // Only create directories if we are allowed to.
          RETURN_IF_ERROR(
-             _CreateIntermediateDirectories(resolver, directory_components));
+             CreateIntermediateDirectories(resolver, directory_components));
      }
 
     resolver->logger->debug("Opening file {}", filename);
@@ -431,7 +431,5 @@ AFF4Status AFF4Stdout::Seek(aff4_off_t offset, int whence) {
     return IO_ERROR;
 }
 
-
-void aff4_file_init() {}
 
 } // namespace aff4

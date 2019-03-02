@@ -261,6 +261,23 @@ class BasicImager {
     virtual ~BasicImager() {}
 };
 
+class VolumeManager : public DefaultProgress {
+
+public:
+    VolumeManager(DataStore *resolver, BasicImager *imager) :
+    DefaultProgress(resolver), imager(imager) {}
+
+    bool Report(aff4_off_t readptr) override;
+    void ManageStream(AFF4Stream *stream);
+    bool MaybeSwitchVolumes();
+
+protected:
+    // Not owned.
+    BasicImager *imager = nullptr;
+    std::vector<AFF4Stream *> streams;
+};
+
+
 } // namespace aff4
 
 #endif  // SRC_AFF4_IMAGER_UTILS_H_

@@ -27,12 +27,12 @@ AFF4Status ExtractStream(
     // Use the VolumeGroup to figure out which stream to get.
     RETURN_IF_ERROR(volumes.GetStream(input_urn, in_stream));
 
-    resolver.logger->debug("Extracting {} to {} ({})",
-                           input_urn, filename, in_stream->Size());
+    resolver.logger->info("Extracting {} to {} ({})",
+                          input_urn, filename, in_stream->Size());
 
     RETURN_IF_ERROR(NewFileBackedObject(
-                        &resolver, filename,
-                        "truncate", out_stream));
+                        &resolver, filename, truncate ? "truncate" : "append",
+                        out_stream));
 
     DefaultProgress progress(&resolver);
     progress.length = in_stream->Size();
@@ -43,60 +43,48 @@ AFF4Status ExtractStream(
 
 // A Progress indicator which keeps tabs on the size of the output volume.
 // This is used to support output volume splitting.
-class VolumeManager : public DefaultProgress {
+bool VolumeManager::Report(aff4_off_t readptr) {
+    if (!MaybeSwitchVolumes())
+        return false;
 
-public:
-    VolumeManager(DataStore *resolver, BasicImager *imager) :
-        DefaultProgress(resolver), imager(imager) {}
+    return DefaultProgress::Report(readptr);
+}
 
-    bool Report(aff4_off_t readptr) override {
-        if (!MaybeSwitchVolumes())
-            return false;
+void VolumeManager::ManageStream(AFF4Stream *stream) {
+    streams.push_back(stream);
+}
 
-        return DefaultProgress::Report(readptr);
+bool VolumeManager::MaybeSwitchVolumes() {
+    if (imager->max_output_volume_file_size == 0)
+        return true;
+
+    // We are only allowed to switch the volume at valid
+    // checkpoints.
+    for (auto stream: streams) {
+        if (!stream->CanSwitchVolume())
+            return true;  // Just keep reporting - cant do
+        // anything now.
     }
 
-    void ManageStream(AFF4Stream *stream) {
-        streams.push_back(stream);
-    }
-
-    bool MaybeSwitchVolumes() {
-        if (imager->max_output_volume_file_size == 0)
-            return true;
-
-        // We are only allowed to switch the volume at valid
-        // checkpoints.
-        for (auto stream: streams) {
-            if (!stream->CanSwitchVolume())
-                return true;  // Just keep reporting - cant do
-                              // anything now.
-        }
-
-        // Is the output volume still ok?
-        AFF4Volume *volume;
-        imager->GetCurrentVolume(&volume);
-        if (imager->max_output_volume_file_size > volume->Size()) {
-            return true;
-        }
-
-        // Make a new volume.
-        AFF4Volume *new_volume;
-        imager->GetNextPart();
-        imager->GetCurrentVolume(&new_volume);
-        for (auto stream: streams) {
-            stream->SwitchVolume(new_volume);
-        }
-
-
-
+    // Is the output volume still ok?
+    AFF4Volume *volume;
+    imager->GetCurrentVolume(&volume);
+    if (imager->max_output_volume_file_size > volume->Size()) {
         return true;
     }
 
-protected:
-    // Not owned.
-    BasicImager *imager = nullptr;
-    std::vector<AFF4Stream *> streams;
-};
+    // Make a new volume.
+    AFF4Volume *new_volume;
+    imager->GetNextPart();
+    imager->GetCurrentVolume(&new_volume);
+    for (auto stream: streams) {
+        stream->SwitchVolume(new_volume);
+    }
+
+
+
+    return true;
+}
 
 
 AFF4Status BasicImager::Run(int argc, char** argv)  {
@@ -236,33 +224,35 @@ AFF4Status BasicImager::handle_aff4_volumes() {
     auto volumes = GetArg<TCLAP::UnlabeledMultiArg<std::string>>(
         "aff4_volumes")->getValue();
 
-    for (const auto &volume_to_load: volumes) {
-        // Currently we support AFF4Directory and ZipFile. If the
-        // directory does not already exist, and the argument ends
-        // with a / then we create a new directory.
-        if (AFF4Directory::IsDirectory(volume_to_load, /* must_exist= */ false)) {
-            AFF4Flusher<AFF4Directory> volume;
-            RETURN_IF_ERROR(AFF4Directory::OpenAFF4Directory(
-                                &resolver, volume_to_load, volume));
+    for (std::string glob : volumes) {
+        for (const auto &volume_to_load:  GlobFilename(glob)) {
+            // Currently we support AFF4Directory and ZipFile. If the
+            // directory does not already exist, and the argument ends
+            // with a / then we create a new directory.
+            if (AFF4Directory::IsDirectory(volume_to_load, /* must_exist= */ false)) {
+                AFF4Flusher<AFF4Directory> volume;
+                RETURN_IF_ERROR(AFF4Directory::OpenAFF4Directory(
+                                    &resolver, volume_to_load, volume));
 
-            volume_objs.AddVolume(
-                std::move(AFF4Flusher<AFF4Volume>(volume.release())));
+                volume_objs.AddVolume(
+                    std::move(AFF4Flusher<AFF4Volume>(volume.release())));
 
-        } else {
-            AFF4Flusher<FileBackedObject> backing_stream;
-            RETURN_IF_ERROR(NewFileBackedObject(
-                                &resolver, volume_to_load,
-                                "read", backing_stream));
+            } else {
+                AFF4Flusher<FileBackedObject> backing_stream;
+                RETURN_IF_ERROR(NewFileBackedObject(
+                                    &resolver, volume_to_load,
+                                    "read", backing_stream));
 
-            AFF4Flusher<ZipFile> volume;
-            RETURN_IF_ERROR(ZipFile::OpenZipFile(
-                                &resolver,
-                                std::move(AFF4Flusher<AFF4Stream>(
-                                              backing_stream.release())),
-                                volume));
+                AFF4Flusher<ZipFile> volume;
+                RETURN_IF_ERROR(ZipFile::OpenZipFile(
+                                    &resolver,
+                                    std::move(AFF4Flusher<AFF4Stream>(
+                                                  backing_stream.release())),
+                                    volume));
 
-            volume_objs.AddVolume(
-                std::move(AFF4Flusher<AFF4Volume>(volume.release())));
+                volume_objs.AddVolume(
+                    std::move(AFF4Flusher<AFF4Volume>(volume.release())));
+            }
         }
     }
 
@@ -306,12 +296,16 @@ AFF4Status BasicImager::parse_input() {
 }
 
 AFF4Status BasicImager::process_input() {
-    // Get the output volume.
-    AFF4Volume *volume;
-    RETURN_IF_ERROR(GetCurrentVolume(&volume));
-
     for (std::string glob : inputs) {
         for (std::string input : GlobFilename(glob)) {
+
+            // Check if the volume needs to be split.
+            VolumeManager(&resolver, this).MaybeSwitchVolumes();
+
+            // Get the output volume.
+            AFF4Volume *volume;
+            RETURN_IF_ERROR(GetCurrentVolume(&volume));
+
             AFF4Flusher<FileBackedObject> input_stream;
 
             resolver.logger->debug("Will add file {}", input);
@@ -352,8 +346,12 @@ AFF4Status BasicImager::process_input() {
                 // If the underlying stream supports compression, lets do that.
                 segment->compression_method = AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE;
 
+                // This doesnt do anything anyway because segments can
+                // not be split across volumes.
+                VolumeManager progress(&resolver, this);
+                progress.ManageStream(segment.get());
+
                 // Copy the input stream to the output stream.
-                ProgressContext progress(&resolver);
                 RETURN_IF_ERROR(segment->WriteStream(input_stream.get(), &progress));
 
                 // Make this stream as an Image (Should we have
@@ -379,6 +377,7 @@ AFF4Status BasicImager::process_input() {
                 // Copy the input stream to the output stream.
                 VolumeManager progress(&resolver, this);
                 progress.ManageStream(image_stream.get());
+
                 RETURN_IF_ERROR(image_stream->WriteStream(input_stream.get(), &progress));
 
                 // Make this stream as an Image (Should we have
@@ -442,11 +441,13 @@ AFF4Status BasicImager::handle_export() {
         // Prepend the domain (AFF4 volume) to the export directory to
         // make sure the exported stream is unique.
         std::string output_filename = join(components, PATH_SEP);
-        resolver.logger->info("Extracting {} into {}", export_urn, output_filename);
-        RETURN_IF_ERROR(
-            ExtractStream(
-                resolver, volume_objs,
-                export_urn, output_filename, /* truncate = */ true));
+        AFF4Status res = ExtractStream(
+            resolver, volume_objs,
+            export_urn, output_filename, /* truncate = */ true);
+
+        if (res != STATUS_OK) {
+            resolver.logger->error("Error: {}", AFF4StatusToString(res));
+        }
     }
 
     actions_run.insert("export");
@@ -476,12 +477,17 @@ AFF4Status BasicImager::GetCurrentVolume(AFF4Volume **volume) {
         return STATUS_OK;
     }
 
+    bool truncate = GetArg<TCLAP::SwitchArg>("truncate")->getValue();
+
     std::string output_path = GetArg<TCLAP::ValueArg<std::string>>(
         "output")->getValue();
 
     AFF4Flusher<AFF4Stream> output_volume_backing_stream;
+    if (output_path == "" ) {
+        resolver.logger->error("Must specify an output path.");
+        return INVALID_INPUT;
 
-    if (output_path == "-") {
+    } else if (output_path == "-") {
         if (max_output_volume_file_size > 0) {
             resolver.logger->error(
                 "Can not specify splitting volumes when redirecting to stdout!");
@@ -491,6 +497,17 @@ AFF4Status BasicImager::GetCurrentVolume(AFF4Volume **volume) {
         // Write to stdout.
         RETURN_IF_ERROR(AFF4Stdout::NewAFF4Stdout(
                             &resolver, output_volume_backing_stream));
+
+    } else if (output_path.at(output_path.size()-1) == '/' ||
+               output_path.at(output_path.size()-1) == '\\') {
+
+        RETURN_IF_ERROR(AFF4Directory::NewAFF4Directory(
+                            &resolver, output_path,
+                            truncate, current_volume));
+
+        *volume = current_volume.get();
+
+        return STATUS_OK;
 
     } else {
         std::string volume_path = output_path;
@@ -503,7 +520,7 @@ AFF4Status BasicImager::GetCurrentVolume(AFF4Volume **volume) {
         resolver.logger->warn("Output file {} will be truncated.", volume_path);
 
         RETURN_IF_ERROR(NewFileBackedObject(
-                            &resolver, volume_path, "truncate",
+                            &resolver, volume_path, truncate ? "truncate" : "append",
                             output_volume_backing_stream));
     }
 

@@ -519,17 +519,17 @@ AFF4Status ZipFileSegment::NewZipFileSegment(
 AFF4Status ZipFileSegment::OpenZipFileSegment(
     URN urn, ZipFile& owner,
     AFF4Flusher<ZipFileSegment> &result) {
-
     RETURN_IF_ERROR(ZipFileSegment::NewZipFileSegment(urn, owner, result));
 
     auto member_name = member_name_for_urn(urn, owner.urn, true);
 
     // The ZipFileHeaders should have already been parsed and contain
+    // The ZipFileHeaders should have already been parsed and contain
     // the member names.
     auto it = owner.members.find(member_name);
     if (it == owner.members.end()) {
         // The owner does not have this file yet.
-        return STATUS_OK;
+        return NOT_FOUND;
     }
 
     // Just borrow the reference to the ZipInfo.

@@ -332,7 +332,9 @@ AFF4Status WinPmemImager::ImagePageFile() {
                  new XSDInteger(pagefile_number));
 
 
-    DefaultProgress progress(&resolver);
+    VolumeManager progress(&resolver, this);
+    progress.ManageStream(pagefile.get());
+
     _PipedReaderStream reader_stream(&resolver, stdout_rd);
     RETURN_IF_ERROR(pagefile->WriteStream(&reader_stream, &progress));
   }
@@ -393,8 +395,9 @@ AFF4Status WinPmemImager::WriteMapObject_(const URN &map_urn) {
     total_length += info.Runs[i].length;
   }
 
-  DefaultProgress progress(&resolver);
+  VolumeManager progress(&resolver, this);
   progress.length = total_length;
+  progress.ManageStream(map_stream.get());
 
   // Now copy the data one page at the time to be able to properly trap IO errors.
   for (unsigned int i = 0; i < info.NumberOfRuns; i++) {

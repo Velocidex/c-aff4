@@ -202,10 +202,11 @@ AFF4Status PmemImager::WriteElfFormat_(const URN &output_urn) {
 
     // Create the output object.
     AFF4Flusher<AFF4Stream> target_stream;
-    RETURN_IF_ERROR(GetWritableStream_(
-                        output_urn, target_stream));
+    RETURN_IF_ERROR(GetWritableStream_(output_urn, target_stream));
 
-    DefaultProgress progress(&resolver);
+    VolumeManager progress(&resolver, this);
+    progress.ManageStream(target_stream.get());
+
     progress.length = file_offset;
 
     // Now write the map into the image.
@@ -223,10 +224,11 @@ AFF4Status PmemImager::WriteRawFormat_(const URN &target_urn) {
 
     // Create the map object.
     AFF4Flusher<AFF4Stream> target_stream;
-    RETURN_IF_ERROR(GetWritableStream_(
-                        target_urn, target_stream));
+    RETURN_IF_ERROR(GetWritableStream_(target_urn, target_stream));
 
-    DefaultProgress progress(&resolver);
+    VolumeManager progress(&resolver, this);
+    progress.ManageStream(target_stream.get());
+
     progress.length = total_length;
 
     // Now write the map into the image.
@@ -261,7 +263,9 @@ AFF4Status PmemImager::WriteMapObject_(const URN &map_urn) {
             &resolver, map_urn, volume, data_stream.get(),
             map_stream));
 
-    DefaultProgress progress(&resolver);
+    VolumeManager progress(&resolver, this);
+    progress.ManageStream(map_stream.get());
+
     progress.length = total_length;
 
     // Now write the map into the image.

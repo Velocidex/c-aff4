@@ -38,6 +38,10 @@ class AFF4Directory: public AFF4Volume {
 
     static AFF4Status NewAFF4Directory(
         DataStore *resolver, std::string dirname, bool truncate,
+        AFF4Flusher<AFF4Volume> &result);
+
+    static AFF4Status NewAFF4Directory(
+        DataStore *resolver, std::string dirname, bool truncate,
         AFF4Flusher<AFF4Directory> &result);
 
     static AFF4Status OpenAFF4Directory(

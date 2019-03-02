@@ -17,6 +17,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4/libaff4.h"
 
 #include "aff4/aff4_directory.h"
+#include "aff4/aff4_file.h"
 
 #include <sys/types.h>
 #include <dirent.h>
@@ -28,10 +29,22 @@ namespace aff4 {
 AFF4Status AFF4Directory::NewAFF4Directory(
     DataStore* resolver, std::string root_path,
     bool truncate,
+    AFF4Flusher<AFF4Volume> &result) {
+    AFF4Flusher<AFF4Directory> new_obj;
+    RETURN_IF_ERROR(AFF4Directory::NewAFF4Directory(
+                        resolver, root_path, truncate, new_obj));
+
+    result.reset(new_obj.release());
+
+    return STATUS_OK;
+}
+
+AFF4Status AFF4Directory::NewAFF4Directory(
+    DataStore* resolver, std::string root_path,
+    bool truncate,
     AFF4Flusher<AFF4Directory> &result) {
 
     AFF4Flusher<AFF4Directory> new_obj(new AFF4Directory(resolver));
-    new_obj->urn = URN::NewURNFromFilename(root_path, true);
     new_obj->root_path = root_path;
 
     // If mode is truncate we need to clear the directory.
@@ -57,6 +70,8 @@ AFF4Status AFF4Directory::NewAFF4Directory(
     resolver->Set(new_obj->urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE),
                   /* replace= */ false);
 
+    resolver->Set(new_obj->urn, AFF4_STORED, new URN(URN::NewURNFromFilename(root_path, true)));
+
     result.swap(new_obj);
 
     return STATUS_OK;
@@ -81,18 +96,18 @@ AFF4Status AFF4Directory::CreateMemberStream(
 
     // We are allowed to create any files inside the directory volume.
     resolver->Set(child, AFF4_TYPE, new URN(AFF4_FILE_TYPE));
-    resolver->Set(child, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+    resolver->Set(child, AFF4_STORED, new URN(urn));
     resolver->Set(child, AFF4_DIRECTORY_CHILD_FILENAME, new XSDString(filename));
 
     // Store the member inside our storage location.
-    resolver->Set(child, AFF4_STREAM_ORIGINAL_FILENAME,
-                  new XSDString(root_path + PATH_SEP_STR + filename));
+    std::string full_path = root_path + PATH_SEP_STR + filename;
+    std::vector<std::string> directory_components = break_path_into_components(full_path);
+    directory_components.pop_back();
+
+    CreateIntermediateDirectories(resolver, directory_components);
 
     AFF4Flusher<FileBackedObject> child_fd;
-    RETURN_IF_ERROR(NewFileBackedObject(
-                        resolver,
-                        root_path + PATH_SEP_STR + filename,
-                        "write", child_fd));
+    RETURN_IF_ERROR(NewFileBackedObject(resolver, full_path, "truncate", child_fd));
     child_fd->urn = child;
 
     MarkDirty();
@@ -138,8 +153,16 @@ AFF4Status AFF4Directory::OpenAFF4Directory(
     AFF4Flusher<AFF4Directory> &result) {
 
     AFF4Flusher<AFF4Directory> new_obj(new AFF4Directory(resolver));
-    new_obj->urn = URN::NewURNFromFilename(dirname, true);
     new_obj->root_path = dirname;
+
+    AFF4Flusher<FileBackedObject> desc;
+    RETURN_IF_ERROR(
+        NewFileBackedObject(
+            resolver,
+            dirname + PATH_SEP_STR + AFF4_CONTAINER_DESCRIPTION,
+            "read", desc));
+
+    new_obj->urn = URN(desc->Read(10000));
 
     AFF4Flusher<FileBackedObject> turtle_stream;
     RETURN_IF_ERROR(NewFileBackedObject(
@@ -160,7 +183,7 @@ AFF4Status AFF4Directory::Flush() {
             NewFileBackedObject(
                 resolver,
                 root_path + PATH_SEP_STR + AFF4_CONTAINER_DESCRIPTION,
-                "write", desc));
+                "truncate", desc));
 
         std::string urn_str = urn.SerializeToString();
         desc->Write(urn_str.data(), urn_str.size());
@@ -170,7 +193,7 @@ AFF4Status AFF4Directory::Flush() {
             NewFileBackedObject(
                 resolver,
                 root_path + PATH_SEP_STR + AFF4_CONTAINER_INFO_TURTLE,
-                "write", turtle_stream));
+                "truncate", turtle_stream));
 
         resolver->DumpToTurtle(*turtle_stream, urn);
     }

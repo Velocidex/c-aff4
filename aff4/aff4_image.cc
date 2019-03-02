@@ -853,15 +853,6 @@ AFF4Status AFF4Image::Flush() {
     return AFF4Stream::Flush();
 }
 
-/*
-
-static AFF4Registrar<AFF4Image> r1(AFF4_IMAGESTREAM_TYPE);
-static AFF4Registrar<AFF4Image> r2(AFF4_LEGACY_IMAGESTREAM_TYPE);
-
-*/
-
-void aff4_image_init() {}
-
 std::string AFF4Image::_FixupBevyData(std::string* data){
     const uint32_t index_size = data->length() / sizeof(uint32_t);
     std::unique_ptr<BevyIndex[]> bevy_index_array(new BevyIndex[index_size]);
@@ -882,24 +873,5 @@ std::string AFF4Image::_FixupBevyData(std::string* data){
         index_size * sizeof(BevyIndex)
     );
 }
-
-/*
-// In the AFF4 Standard, AFF4_IMAGE_TYPE is an abstract concept which
-// delegates the data stream implementation to some other AFF4 stream
-// (image or map) via the DataStore attribute.
-static AFF4Registrar<AFF4StdImage> image1(AFF4_IMAGE_TYPE);
-static AFF4Registrar<AFF4StdImage> image2(AFF4_DISK_IMAGE_TYPE);
-static AFF4Registrar<AFF4StdImage> image3(AFF4_VOLUME_IMAGE_TYPE);
-static AFF4Registrar<AFF4StdImage> image4(AFF4_MEMORY_IMAGE_TYPE);
-static AFF4Registrar<AFF4StdImage> image5(AFF4_CONTIGUOUS_IMAGE_TYPE);
-static AFF4Registrar<AFF4StdImage> image6(AFF4_DISCONTIGUOUS_IMAGE_TYPE);
-
-// Legacy
-static AFF4Registrar<AFF4StdImage> image7(AFF4_LEGACY_IMAGE_TYPE);
-static AFF4Registrar<AFF4StdImage> image8(AFF4_LEGACY_DISK_IMAGE_TYPE);
-static AFF4Registrar<AFF4StdImage> image9(AFF4_LEGACY_VOLUME_IMAGE_TYPE);
-static AFF4Registrar<AFF4StdImage> image10(AFF4_LEGACY_CONTIGUOUS_IMAGE_TYPE);
-
-*/
 
 } // namespace aff4

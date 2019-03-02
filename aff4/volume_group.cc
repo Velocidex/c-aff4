@@ -15,7 +15,6 @@ void VolumeGroup::AddVolume(AFF4Flusher<AFF4Volume> &&volume) {
 
 // Construct the appropriate stream and return it.
 AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &result) {
-
     // Get all the type attrbutes of the URN.
     std::vector<std::shared_ptr<RDFValue>> types;
     if (STATUS_OK == resolver->Get(stream_urn, AFF4_TYPE, types)) {
@@ -45,7 +44,12 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
             // regular stream with NewAFF4Image or NewAFF4Map and then set
             // the aff4:dataStream of a new object to a concerete Map or
             // ImageStream.
-            if (type_str == AFF4_IMAGE_TYPE) {
+            if (type_str == AFF4_IMAGE_TYPE ||
+                type_str == AFF4_DISK_IMAGE_TYPE ||
+                type_str == AFF4_VOLUME_IMAGE_TYPE ||
+                type_str == AFF4_MEMORY_IMAGE_TYPE ||
+                type_str == AFF4_CONTIGUOUS_IMAGE_TYPE ||
+                type_str == AFF4_DISCONTIGUOUS_IMAGE_TYPE) {
                 URN delegate;
 
                 if (STATUS_OK == resolver->Get(stream_urn, AFF4_DATASTREAM, delegate)) {
@@ -70,10 +74,12 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
             // Zip segments are stored directly in each volume. We use
             // the resolver to figure out which volume has each
             // segment.
-            if (type_str == AFF4_ZIP_SEGMENT_TYPE) {
+            if (type_str == AFF4_ZIP_SEGMENT_TYPE ||
+                type_str == AFF4_FILE_TYPE) {
                 URN owner;
                 RETURN_IF_ERROR(resolver->Get(stream_urn, AFF4_STORED, owner));
 
+                resolver->logger->debug("Openning {} as type {}", stream_urn, type_str);
                 auto it = volume_objs.find(owner);
                 if (it != volume_objs.end()) {
                     return (it->second->OpenMemberStream(stream_urn, result));

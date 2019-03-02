@@ -117,7 +117,11 @@ class AFF4Stdout : public AFF4Stream {
     int fd;
 };
 
-extern void aff4_file_init();
+AFF4Status _CreateIntermediateDirectories(DataStore *resolver,
+                                          std::string dir_name);
+
+AFF4Status CreateIntermediateDirectories(DataStore *resolver,
+                                         std::vector<std::string> components);
 
 } // namespace aff4
 

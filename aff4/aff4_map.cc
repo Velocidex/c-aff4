@@ -601,21 +601,25 @@ AFF4Status AFF4Map::CopyStreamFromMap(
 }
 
 bool AFF4Map::CanSwitchVolume() {
+    for (auto x: targets) {
+        if (!x->CanSwitchVolume()) {
+            return false;
+        }
+    }
+
     return true;
 }
 
 AFF4Status AFF4Map::SwitchVolume(AFF4Volume *volume) {
     current_volume = volume;
+
+    for (auto x: targets) {
+        RETURN_IF_ERROR(x->SwitchVolume(volume));
+    }
+
     return STATUS_OK;
 }
 
 
-
-/*
-static AFF4Registrar<AFF4Map> map1(AFF4_MAP_TYPE);
-static AFF4Registrar<AFF4Map> map2(AFF4_LEGACY_MAP_TYPE);
-*/
-
-void aff4_map_init() {}
 
 } // namespace aff4

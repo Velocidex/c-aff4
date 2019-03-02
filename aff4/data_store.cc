@@ -26,69 +26,6 @@
 
 namespace aff4 {
 
-void aff4_init();
-
-
-#ifdef AFF4_HAS_LIBYAML_CPP
-# include <yaml-cpp/yaml.h>
-
-
-AFF4Status MemoryDataStore::DumpToYaml(AFF4Stream& output, bool verbose) {
-    // Right now this produces crashes on windows. We dont know why exactly.
-    return NOT_IMPLEMENTED;
-
-    YAML::Emitter out;
-    YAML::Node node;
-    int subject_statements = 0;
-
-    for (const auto& it : store) {
-        URN subject(it.first);
-        URN type;
-        YAML::Node subject_node;
-        int emitted_statements = 0;
-
-        // Skip this URN if it is in the suppressed_rdftypes set.
-        if (Get(subject, AFF4_TYPE, type) == STATUS_OK) {
-            if (!verbose &&
-                suppressed_rdftypes.find(type.value) != suppressed_rdftypes.end()) {
-                continue;
-            }
-        }
-
-        for (const auto& attr_it : it.second) {
-            URN predicate(attr_it.first);
-
-            // Volatile predicates are suppressed.
-            if (!verbose && 0 == predicate.SerializeToString().compare(
-                    0, strlen(AFF4_VOLATILE_NAMESPACE), AFF4_VOLATILE_NAMESPACE)) {
-                continue;
-            }
-            subject_node[attr_it.first] = attr_it.second->SerializeToString();
-            emitted_statements++;
-        }
-
-        if (emitted_statements) {
-            node[subject.SerializeToString()] = subject_node;
-            subject_statements++;
-        }
-    }
-
-    // Unfortunately if we try to dump and empty node yaml-cpp will crash.
-    if (subject_statements) {
-        out << node;
-        output.Write(out.c_str());
-    }
-
-    return STATUS_OK;
-}
-
-AFF4Status MemoryDataStore::LoadFromYaml(AFF4Stream& stream) {
-    UNUSED(stream);
-    return NOT_IMPLEMENTED;
-}
-
-#endif
-
 DataStore::DataStore():
     DataStore(DataStoreOptions()) {}
 

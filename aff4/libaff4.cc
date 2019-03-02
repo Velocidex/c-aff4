@@ -533,7 +533,7 @@ std::string member_name_for_urn(const URN member, const URN base_urn,
             }
         }
 
-        return join(components, PATH_SEP);
+        return join(components, '/');
     }
 
     // Make sure zip members do not have leading /.
@@ -624,23 +624,6 @@ std::vector<std::string> split(const std::string& s, char delim) {
     split(s, delim, elems);
     return elems;
 }
-
-// Run all the initialization functions. This will force the object files to
-// link in a more reliable way than specifying --whole-archive.
-class _InitHelper {
-public:
-    _InitHelper() {
-        aff4_lexicon_init();
-        aff4_file_init();
-        aff4_image_init();
-        aff4_map_init();
-    }
-};
-
-void aff4_init() {
-    static _InitHelper init;
-}
-
 
 std::shared_ptr<spdlog::logger> get_logger() {
     auto logger = spdlog::get(aff4::LOGGER);

@@ -120,8 +120,6 @@ spdlog::level::level_enum enum_for_level(unsigned int level) {
 
 extern "C" {
 
-void AFF4_init() {}
-
 void AFF4_set_verbosity(unsigned int level) {
     get_c_api_logger()->set_level(enum_for_level(level));
 }
