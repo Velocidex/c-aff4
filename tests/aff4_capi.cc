@@ -40,7 +40,6 @@ protected:
 TEST_F(AFF4CAPI, Sample1URN) {
     std::string filename = reference_images + "AFF4Std/Base-Linear.aff4";
 
-    AFF4_init();
     AFF4_set_verbosity(0);
 
     AFF4_Handle* handle = AFF4_open(filename.c_str(), nullptr);
@@ -60,7 +59,6 @@ TEST_F(AFF4CAPI, Sample1URN) {
 
 TEST_F(AFF4CAPI, Sample2URN) {
     std::string filename = reference_images + "AFF4Std/Base-Allocated.aff4";
-    AFF4_init();
 
     AFF4_Handle* handle = AFF4_open(filename.c_str(), nullptr);
     ASSERT_TRUE(handle);
@@ -87,8 +85,6 @@ TEST_F(AFF4CAPI, Sample2URN) {
 
 TEST_F(AFF4CAPI, Sample3URN) {
     std::string filename = reference_images + "AFF4Std/Base-Linear-ReadError.aff4";
-    AFF4_init();
-
     AFF4_Handle* handle = AFF4_open(filename.c_str(), nullptr);
     ASSERT_TRUE(handle);
 

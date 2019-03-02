@@ -66,9 +66,8 @@ TEST_F(AFF4DirectoryTest, CreateMemberStream) {
 
   // Check that the metadata is carried over.
   XSDString filename;
-  EXPECT_OK(resolver.Get(child->urn, AFF4_STREAM_ORIGINAL_FILENAME, filename));
-
-  ASSERT_EQ(filename.SerializeToString(), root_path + PATH_SEP_STR + member_name);
+  EXPECT_OK(resolver.Get(child->urn, AFF4_DIRECTORY_CHILD_FILENAME, filename));
+  ASSERT_EQ(filename.SerializeToString(), member_name);
 }
 
 } // namespace aff4

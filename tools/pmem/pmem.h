@@ -16,7 +16,7 @@ specific language governing permissions and limitations under the License.
 #ifndef TOOLS_PMEM_PMEM_H_
 #define TOOLS_PMEM_PMEM_H_
 
-#define PMEM_VERSION "3.2";
+#define PMEM_VERSION "3.3rc1";
 
 #include <vector>
 #include "aff4/libaff4.h"
