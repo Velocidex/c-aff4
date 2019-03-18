@@ -51,6 +51,8 @@ typedef enum {
     ABORTED = -11
 } AFF4Status;
 
+extern const char* AFF4StatusToString(AFF4Status status);
+
 } // namespace aff4
 
 #endif // AFF4_ERRORS_H

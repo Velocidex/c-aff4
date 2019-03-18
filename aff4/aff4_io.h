@@ -112,11 +112,10 @@ class DefaultProgress: public ProgressContext {
 };
 
 class AFF4Stream: public AFF4Object {
-  protected:
+  public:
     aff4_off_t readptr;
     aff4_off_t size;             // How many bytes are used in the stream?
 
-  public:
     AFF4StreamProperties properties;
 
     // Compression method supported by this stream. Note that not all compression
@@ -171,16 +170,14 @@ class AFF4Stream: public AFF4Object {
     // likely to be.
     virtual void reserve(size_t size);
 
-    /**
-     * Streams are always reset to their begining when returned from the cache.
-     *
-     *
-     * @return
-     */
-    virtual AFF4Status Prepare() {
-        Seek(0, SEEK_SET);
-        return STATUS_OK;
-    }
+
+    // Requests that this stream change its backing volume if
+    // possible. CanSwitchVolume() returns true if it is possible to
+    // change the backing volume in this object's
+    // lifecycle. Subsequent calls to SwitchVolume() should work - it
+    // is a fatal error if they do not.
+    virtual bool CanSwitchVolume();
+    virtual AFF4Status SwitchVolume(AFF4Volume *volume);
 
     /**
      * Streams can be truncated. This means the older stream data will be removed
@@ -245,10 +242,13 @@ class AFF4Volume: public AFF4Object {
     AFF4Volume(DataStore* resolver, URN urn): AFF4Object(resolver, urn) {}
     explicit AFF4Volume(DataStore* resolver): AFF4Object(resolver) {}
 
-    // Create a new contained member. Note that if the member already exists you
-    // should be able to just open it with the factory - so this is only for
-    // creating new members.
-    virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child) = 0;
+    virtual AFF4Status CreateMemberStream(
+        URN segment_urn,
+        AFF4Flusher<AFF4Stream> &result) = 0;
+
+    virtual AFF4Status OpenMemberStream(
+        URN segment_urn,
+        AFF4Flusher<AFF4Stream> &result) = 0;
 
     // This is used to notify the volume of a stream which is
     // contained within it. The container will ensure the dependent
@@ -257,6 +257,9 @@ class AFF4Volume: public AFF4Object {
     void AddDependency(URN urn) {
         children.insert(urn.SerializeToString());
     }
+
+    // Estimate how large this volume is.
+    virtual aff4_off_t Size() const;
 };
 
 

@@ -15,13 +15,14 @@ specific language governing permissions and limitations under the License.
 
 #include <gtest/gtest.h>
 #include "aff4/libaff4.h"
+#include "aff4/volume_group.h"
 #include <unistd.h>
 
 namespace aff4 {
 
 class ZipTest: public ::testing::Test {
  protected:
-        std::string filename = "file:///tmp/aff4_test.zip";
+        std::string filename = "/tmp/aff4_test.zip";
         std::string segment_name = "Foobar.txt";
         std::string data1 = "I am a segment!";
         std::string data2 = "I am another segment!";
@@ -32,81 +33,51 @@ class ZipTest: public ::testing::Test {
     unlink(filename.c_str());
   }
 
-  // Create an initial Zip file for each test.
+  // Create an initial Zip file for each test and write a segment in
+  // it.
   virtual void SetUp() {
     MemoryDataStore resolver;
 
-    // We are allowed to write on the output filename.
-    resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
-
-    {
-      AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
-          filename);
-
-      ASSERT_TRUE(file.get()) << "Unable to create zip file";
-    }
-
-    // The backing file is given to the zip.
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
-
-    volume_urn = zip->urn;
+    AFF4Flusher<AFF4Stream> file;
+    AFF4Flusher<ZipFile> zip;
+    EXPECT_EQ(NewFileBackedObject(&resolver, filename, "truncate", file),
+              STATUS_OK);
+    EXPECT_EQ(ZipFile::NewZipFile(&resolver, std::move(file), zip),
+              STATUS_OK);
 
     // The full URN of the segment is relative to the volume URN. When using the
     // generic AFF4Volume interface, we must always store fully qualified
     // URNs. While the ZipFile interface zip->CreateZipSegment() only accepts
     // zip member names.
+    volume_urn = zip->urn;
     URN segment_urn = volume_urn.Append(segment_name);
+    AFF4Flusher<AFF4Stream> segment;
+    EXPECT_EQ(zip->CreateMemberStream(segment_urn, segment), STATUS_OK);
 
-    {
-      AFF4ScopedPtr<AFF4Stream> segment = zip->CreateMember(segment_urn);
-      segment->Write(data1);
-    }
-
-    {
-      // This is actually the same stream as above, we will simply get the same
-      // pointer and so the new message will be appended to the old message.
-      AFF4ScopedPtr<AFF4Stream> segment2 = zip->CreateMember(segment_urn);
-      segment2->Seek(0, SEEK_END);
-      segment2->Write(data2);
-    }
-
-    // Test the streamed interface.
-    {
-      URN streamed_urn = segment_urn.Append("streamed");
-      std::unique_ptr<AFF4Stream> test_stream = StringIO::NewStringIO();
-      test_stream->Write(data1);
-      test_stream->Seek(0, SEEK_SET);
-
-      AFF4ScopedPtr<ZipFileSegment> segment = zip->CreateZipSegment(
-          member_name_for_urn(streamed_urn, zip->urn, true));
-
-      segment->compression_method = ZIP_DEFLATE;
-      segment->WriteStream(test_stream.get());
-    }
+    segment->Write(data1);
   }
 };
 
-TEST_F(ZipTest, CreateMember) {
+TEST_F(ZipTest, CreateMemberStream) {
   // Open the resulting ZipFile.
   MemoryDataStore resolver;
-  AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
-      filename);
 
-  ASSERT_TRUE(file.get()) << "Unable to open zip file";
+  AFF4Flusher<AFF4Stream> file;
+  AFF4Flusher<AFF4Volume> zip;
+  EXPECT_EQ(NewFileBackedObject(&resolver, filename, "read", file),
+            STATUS_OK);
 
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, file->urn);
-
-  ASSERT_TRUE(zip.get()) << "Unable to parse Zip file:" <<
-      file->urn.value.c_str();
+  EXPECT_EQ(ZipFile::OpenZipFile(&resolver, std::move(file), zip),
+            STATUS_OK);
 
   // The parsed URN is the same as was written.
   ASSERT_EQ(zip->urn, volume_urn);
 
-  AFF4ScopedPtr<ZipFileSegment> segment(zip->OpenZipSegment(segment_name));
-  ASSERT_TRUE(segment.get());
+  AFF4Flusher<AFF4Stream> segment;
+  EXPECT_EQ(zip->OpenMemberStream(segment_name, segment),
+            STATUS_OK);
 
-  std::string expected = data1 + data2;
-  EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
+  EXPECT_STREQ(data1.c_str(), (segment->Read(1000).c_str()));
 
   ASSERT_FALSE(zip->IsDirty());
 
@@ -156,38 +127,34 @@ TEST_F(ZipTest, CreateMember) {
 
 
 /**
- * Tests if we can open a segment by its URN alone.
+ * Tests if we can open a segment by its URN alone using the volume
+ * group.
  */
 TEST_F(ZipTest, OpenMemberByURN) {
   MemoryDataStore resolver;
-  URN segment_urn;
 
-  // Open the resulting ZipFile.
-  {
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
-    segment_urn = zip->urn.Append(segment_name);
+  AFF4Flusher<AFF4Stream> file;
+  AFF4Flusher<AFF4Volume> zip;
+  EXPECT_EQ(NewFileBackedObject(&resolver, filename, "read", file),
+            STATUS_OK);
 
-    ASSERT_TRUE(zip.get()) << "Unable to open zipfile: " << filename;
-  }
+  EXPECT_EQ(ZipFile::OpenZipFile(&resolver, std::move(file), zip),
+            STATUS_OK);
 
-  {
-    // The generic AFF4Volume interface must refer to members by their full
-    // URNs. This should fail.
-    AFF4ScopedPtr<AFF4Stream> segment = resolver.AFF4FactoryOpen<AFF4Stream>(
-        segment_name);
+  URN segment_urn = zip->urn.Append(segment_name);
 
-    ASSERT_TRUE(!segment) << "Wrong segment opened.";
-  }
+  VolumeGroup volumes(&resolver);
 
-  // Try with the full URN.
-  AFF4ScopedPtr<AFF4Stream> segment = resolver.AFF4FactoryOpen<AFF4Stream>(
-      segment_urn);
+  // Give the volume group this zip file.
+  volumes.AddVolume(std::move(zip));
 
-  // Should work.
-  ASSERT_TRUE(segment.get()) << "Failed to open segment by URN";
 
-  std::string expected = data1 + data2;
-  EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
+  // Now open the segment using its full URN;
+
+  AFF4Flusher<AFF4Stream> segment;
+  EXPECT_EQ(volumes.GetStream(segment_urn, segment), STATUS_OK);
+
+  EXPECT_STREQ(data1.c_str(), (segment->Read(1000).c_str()));
 }
 
 /**
@@ -199,80 +166,40 @@ TEST_F(ZipTest, ConcatenatedVolumes) {
   {
     MemoryDataStore resolver;
 
-    std::string concate_filename = filename + "_con.zip";
+    std::string concat_filename = filename + "_con.zip";
 
-    resolver.Set(concate_filename, AFF4_STREAM_WRITE_MODE, new XSDString(
-        "truncate"));
-
-    // Copy the files across.
+    // Concatenate the zip file on top of some padding.
     {
-      AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
-          filename);
+        AFF4Flusher<FileBackedObject> concat_file;
+        EXPECT_EQ(NewFileBackedObject(&resolver, concat_filename,
+                                      "truncate", concat_file),
+                  STATUS_OK);
 
-      ASSERT_TRUE(file.get()) << "Unable to create file";
+        AFF4Flusher<FileBackedObject> file;
+        EXPECT_EQ(NewFileBackedObject(&resolver, filename, "read", file),
+                  STATUS_OK);
 
-      AFF4ScopedPtr<AFF4Stream> concate_file = resolver.AFF4FactoryOpen<
-        AFF4Stream>(concate_filename);
-
-      ASSERT_TRUE(concate_file.get()) << "Unable to create file";
-
-      concate_file->Write("pad pad pad pad pad pad pad");
-      file->CopyToStream(*concate_file, file->Size());
+        auto padding = "pad pad pad pad pad pad pad";
+        concat_file->Write(padding, strlen(padding));
+        file->CopyToStream(*concat_file, file->Size());
     }
 
-    // Now open the zip file from the concatenated file.
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
-        &resolver, concate_filename);
+    AFF4Flusher<AFF4Stream> concat_file;
+    EXPECT_EQ(NewFileBackedObject(&resolver, concat_filename,
+                                  "read", concat_file),
+              STATUS_OK);
 
-    ASSERT_TRUE(zip.get()) << "Unable to create zip file";
+    AFF4Flusher<AFF4Volume> zip;
+    EXPECT_EQ(ZipFile::OpenZipFile(&resolver, std::move(concat_file), zip),
+              STATUS_OK);
 
-    AFF4ScopedPtr<ZipFileSegment> segment(zip->OpenZipSegment(segment_name));
-    ASSERT_TRUE(segment.get());
+    AFF4Flusher<AFF4Stream> segment;
+    EXPECT_EQ(zip->OpenMemberStream(segment_name, segment),
+              STATUS_OK);
 
-    std::string expected = data1 + data2;
-    EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
-
-    // Now ensure we can modify the file.
-    segment->Truncate();
-    segment->Write("foobar");
+    EXPECT_STREQ(data1.c_str(), (segment->Read(1000).c_str()));
   }
-
-  // Now check with a fresh resolver.
-  MemoryDataStore resolver;
-
-  std::string concate_filename = filename + "_con.zip";
-
-  // Now open the zip file from the concatenated file.
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, concate_filename);
-  ASSERT_TRUE(zip.get()) << "Unable to create zip file";
-
-  AFF4ScopedPtr<ZipFileSegment> segment(zip->OpenZipSegment(segment_name));
-  ASSERT_TRUE(segment.get());
-
-  // New data should be there.
-  EXPECT_STREQ("foobar", (segment->Read(1000).c_str()));
 }
 
-
-TEST_F(ZipTest, testStreamedSegment) {
-  MemoryDataStore resolver;
-  URN segment_urn;
-
-  // Open the resulting ZipFile.
-  {
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
-    segment_urn = zip->urn.Append(segment_name).Append("streamed");
-
-    ASSERT_TRUE(zip.get()) << "Unable to open zipfile: " << filename;
-  }
-
-  AFF4ScopedPtr<AFF4Stream> segment = resolver.AFF4FactoryOpen<AFF4Stream>(
-          segment_urn);
-
-  ASSERT_TRUE(segment.get());
-
-  std::string expected = data1;
-  EXPECT_STREQ(expected.c_str(), (segment->Read(1000).c_str()));
-}
 
 } // namespace aff4

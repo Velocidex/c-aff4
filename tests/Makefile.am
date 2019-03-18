@@ -28,6 +28,7 @@ noinst_SCRIPTS =
 
 aff4_test_SOURCES =  \
 	aff4tests.cc  \
+	utils_test.cc \
 	data_store_test.cc \
 	stream_test.cc \
 	zip_test.cc	\

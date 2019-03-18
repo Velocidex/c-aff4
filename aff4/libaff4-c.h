@@ -34,11 +34,6 @@ extern "C" {
 const char* AFF4_version();
 
 /**
- * Initialise libaff4.
- */
-void AFF4_init();
-
-/**
  * The message struct. Follow the next pointer for the next message; the last
  * message will have a null next pointer. Every AFF4_Message* produced by the
  * C API MUST be freed by AFF4_free_messages().

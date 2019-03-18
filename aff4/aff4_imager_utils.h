@@ -37,46 +37,22 @@ specific language governing permissions and limitations under the License.
 
 namespace aff4 {
 
+class VolumeManager;
 
-/**
- * A Convenience method to add a vector of input URNs to a volume created on an
- * output URN.
-
- * This is essentially the same as the -i option of the basic imager.
- *
- * @param resolver: A resolver to use.
- * @param input_urns: A vector of URNs to be copied to the output volume.
- * @param output_urn: A URN to create or append the volume to.
- * @param truncate: Should the output file be truncated?
- *
- * @return STATUS_OK if images were added successfully.
- */
-AFF4Status ImageStream(DataStore& resolver, std::vector<URN>& input_urns,
-                       URN output_urn,
-                       bool truncate = true);
-
-/**
- * Copy a stream from a loaded volume into and output stream.
- *
- * @param resolver
- * @param input_urn
- * @param output_urn
- *
- * @return
- */
-AFF4Status ExtractStream(DataStore& resolver, URN input_urn,
-                         URN output_urn,
-                         bool truncate = true);
 
 class BasicImager {
-  protected:
-    std::vector<URN> volume_URNs;
+    friend VolumeManager;
 
-    // The current URN of the volume we write to.
-    URN output_volume_urn;
+ public:
+    // Must be at the top to make sure it is destroyed last.
+    MemoryDataStore resolver;
 
-    // The current URN of the backing file we are writing to.
-    URN output_volume_backing_urn;
+ protected:
+    // The current volume we are writing on.
+    AFF4Flusher<AFF4Volume> current_volume;
+
+    // Volumes we currently have open,
+    VolumeGroup volume_objs;
 
     // For multipart volume.
     int output_volume_part = 0;
@@ -110,7 +86,10 @@ class BasicImager {
         return AFF4_VERSION;
     }
 
-    AFF4Status GetOutputVolumeURN(URN* volume_urn);
+    // Returns a reference to the current volume. Not owned.
+    AFF4Status GetCurrentVolume(AFF4Volume **volume);
+    // Switch to the next volume.
+    AFF4Status GetNextPart();
 
     std::unique_ptr<TCLAP::CmdLine> cmd;
 
@@ -184,8 +163,6 @@ class BasicImager {
     std::vector<std::string> GlobFilename(std::string glob) const;
 
   public:
-    MemoryDataStore resolver;
-
     /**
      * This should be overloaded for imagers that need to do something before they
      * start. The method is called during the imager's initialization routine.
@@ -279,16 +256,27 @@ class BasicImager {
     virtual AFF4Status Run(int argc, char** argv);
 
     virtual void Abort();
+
+    BasicImager() : volume_objs(&resolver) {}
     virtual ~BasicImager() {}
-
-    // Should be called periodically to give the imager a chance to
-    // swap output volume if the output needs to be split.
-    void MaybeSwapOutputVolume(const URN &image_stream);
-
- private:
-    AFF4Status GetNextPart();
-
 };
+
+class VolumeManager : public DefaultProgress {
+
+public:
+    VolumeManager(DataStore *resolver, BasicImager *imager) :
+    DefaultProgress(resolver), imager(imager) {}
+
+    bool Report(aff4_off_t readptr) override;
+    void ManageStream(AFF4Stream *stream);
+    bool MaybeSwitchVolumes();
+
+protected:
+    // Not owned.
+    BasicImager *imager = nullptr;
+    std::vector<AFF4Stream *> streams;
+};
+
 
 } // namespace aff4
 

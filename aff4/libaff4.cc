@@ -89,9 +89,13 @@ AFF4Status AFF4Object::Flush() {
     return STATUS_OK;
 }
 
+bool AFF4Stream::CanSwitchVolume() {
+    return false;
+}
 
-void AFF4Object::Return() {
-    resolver->Return(this);
+AFF4Status AFF4Stream::SwitchVolume(AFF4Volume *volume) {
+    UNUSED(volume);
+    return NOT_IMPLEMENTED;
 }
 
 AFF4Status AFF4Stream::Seek(off_t offset, int whence) {
@@ -365,6 +369,10 @@ void StringIO::reserve(size_t size) {
     buffer.reserve(size);
 }
 
+aff4_off_t AFF4Volume::Size() const {
+    return 0;
+}
+
 
 ClassFactory<AFF4Object>* GetAFF4ClassFactory() {
     static auto* factory = new ClassFactory<AFF4Object>();
@@ -408,6 +416,23 @@ extern "C" {
     }
 }
 
+const char* AFF4StatusToString(AFF4Status status) {
+    switch (status) {
+    case STATUS_OK: return "STATUS_OK";
+    case NOT_FOUND: return "NOT_FOUND";
+    case INCOMPATIBLE_TYPES: return "INCOMPATIBLE_TYPES";
+    case MEMORY_ERROR: return "MEMORY_ERROR";
+    case GENERIC_ERROR: return "GENERIC_ERROR";
+    case INVALID_INPUT: return "INVALID_INPUT";
+    case PARSING_ERROR: return "PARSING_ERROR";
+    case NOT_IMPLEMENTED: return "NOT_IMPLEMENTED";
+    case IO_ERROR: return "IO_ERROR";
+    case FATAL_ERROR: return "FATAL_ERROR";
+    case ABORTED: return "ABORTED";
+    default: return "UNKNOWN";
+    };
+}
+
 AFF4_IMAGE_COMPRESSION_ENUM CompressionMethodFromURN(URN method) {
     if (method.value == AFF4_IMAGE_COMPRESSION_ZLIB) {
         return AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
@@ -448,29 +473,16 @@ URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method) {
 
 // Utilities.
 
-// Convert a member's name into a URN. NOTE: This function is not
-// unicode safe and may mess up the zip segment name if the URN
-// contains unicode chars. Ultimately it does not matter as the member
-// name is just a convenience to the URN.
-std::string member_name_for_urn(const URN member, const URN base_urn,
-                                bool slash_ok) {
-    std::string filename = base_urn.RelativePath(member);
+std::string escape_component(std::string filename) {
     std::stringstream result;
 
-    // Make sure zip members do not have leading /.
-    if (filename[0] == '/') {
-        filename = filename.substr(1, filename.size());
-    }
-
-    // Now escape any chars which are forbidden.
     for (unsigned int i = 0; i < filename.size(); i++) {
         char j = filename[i];
         if ((j == '!' || j == '$' ||
-                j == '\\' || j == ':' || j == '*' || j == '%' ||
-                j == '?' || j == '"' || j == '<' || j == '>' || j == '|') ||
-                (!slash_ok && j == '/')) {
+             j == '\\' || j == ':' || j == '*' || j == '%' ||
+             j == '?' || j == '"' || j == '<' || j == '>' || j == '|')) {
             result << "%" << std::hex << std::uppercase << std::setw(2) << std::setfill('0') <<
-                   static_cast<int>(j);
+                static_cast<int>(j);
             continue;
         }
 
@@ -490,6 +502,47 @@ std::string member_name_for_urn(const URN member, const URN base_urn,
     }
 
     return result.str();
+}
+
+std::string join(const std::vector<std::string>& v, char c) {
+    std::string s;
+    for (auto p = v.begin(); p != v.end(); ++p) {
+        s += *p;
+        if (p != v.end() - 1)
+            s += c;
+    }
+
+    return s;
+}
+
+
+// Convert a member's name into a URN. NOTE: This function is not
+// unicode safe and may mess up the zip segment name if the URN
+// contains unicode chars. Ultimately it does not matter as the member
+// name is just a convenience to the URN.
+std::string member_name_for_urn(const URN member, const URN base_urn,
+                                bool slash_ok) {
+    std::string filename = base_urn.RelativePath(member);
+
+    if (slash_ok) {
+        std::vector<std::string> components;;
+        for (auto &c: break_path_into_components(filename)) {
+            auto escaped = escape_component(c);
+            if (escaped.size() > 0) {
+                components.push_back(escaped);
+            }
+        }
+
+        return join(components, '/');
+    }
+
+    // Make sure zip members do not have leading /.
+    while (filename.size() > 0 && filename[0] == '/') {
+        filename = filename.substr(1, filename.size());
+    }
+
+    // Now escape any chars which are forbidden.
+    return escape_component(filename);
 }
 
 URN urn_from_member_name(const std::string& member, const URN base_urn) {
@@ -521,6 +574,40 @@ URN urn_from_member_name(const std::string& member, const URN base_urn) {
     return base_urn.Append(result);
 }
 
+std::vector<std::string> break_path_into_components(std::string path) {
+    std::vector<std::string> result;
+    for(int i = 0; i < path.size(); i++) {
+        // An aff4:// at the start is special and must be encoded
+        // together with the first component.
+        if (i==0 && path.substr(0, 7) == "aff4://") {
+            int first_slash = path.find_first_of("/\\", 8);
+            if (first_slash == -1) {
+                result.push_back(path);
+                break;
+            }
+
+            result.push_back(path.substr(0, first_slash));
+            i = first_slash;
+            continue;
+        }
+
+        int first_slash = path.find_first_of("/\\", i);
+        if (first_slash == -1) {
+            // No more slashes.
+            result.push_back(path.substr(i, path.size() - i));
+            break;
+        }
+
+        auto substr_len = first_slash - i;
+        if (substr_len > 0) {
+            result.push_back(path.substr(i, first_slash-i));
+        }
+
+        i = first_slash;
+    }
+
+    return result;
+}
 
 std::vector<std::string>& split(const std::string& s, char delim,
                                 std::vector<std::string>& elems) {
@@ -537,24 +624,6 @@ std::vector<std::string> split(const std::string& s, char delim) {
     split(s, delim, elems);
     return elems;
 }
-
-// Run all the initialization functions. This will force the object files to
-// link in a more reliable way than specifying --whole-archive.
-class _InitHelper {
-public:
-    _InitHelper() {
-        aff4_lexicon_init();
-        aff4_file_init();
-        aff4_directory_init();
-        aff4_image_init();
-        aff4_map_init();
-    }
-};
-
-void aff4_init() {
-    static _InitHelper init;
-}
-
 
 std::shared_ptr<spdlog::logger> get_logger() {
     auto logger = spdlog::get(aff4::LOGGER);

@@ -26,8 +26,6 @@ class AFF4SymbolicStream: public AFF4Stream {
 
     AFF4Status ReadBuffer(char* data, size_t* length) override;
 
-    void Return() override;
-
  protected:
     uint8_t symbol;
     std::string pattern;

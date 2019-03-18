@@ -17,6 +17,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4/libaff4.h"
 
 #include "aff4/aff4_directory.h"
+#include "aff4/aff4_file.h"
 
 #include <sys/types.h>
 #include <dirent.h>
@@ -25,54 +26,66 @@ specific language governing permissions and limitations under the License.
 
 namespace aff4 {
 
+AFF4Status AFF4Directory::NewAFF4Directory(
+    DataStore* resolver, std::string root_path,
+    bool truncate,
+    AFF4Flusher<AFF4Volume> &result) {
+    AFF4Flusher<AFF4Directory> new_obj;
+    RETURN_IF_ERROR(AFF4Directory::NewAFF4Directory(
+                        resolver, root_path, truncate, new_obj));
 
+    result.reset(new_obj.release());
 
-AFF4ScopedPtr<AFF4Directory> AFF4Directory::NewAFF4Directory(
-    DataStore* resolver, URN root_urn) {
-    AFF4Directory* result = new AFF4Directory(resolver);
+    return STATUS_OK;
+}
 
-    std::string root_path = root_urn.ToFilename();
-    struct stat s;
-    XSDString mode;
+AFF4Status AFF4Directory::NewAFF4Directory(
+    DataStore* resolver, std::string root_path,
+    bool truncate,
+    AFF4Flusher<AFF4Directory> &result) {
 
-    resolver->Get(root_urn, AFF4_STREAM_WRITE_MODE, mode);
+    AFF4Flusher<AFF4Directory> new_obj(new AFF4Directory(resolver));
+    new_obj->root_path = root_path;
 
     // If mode is truncate we need to clear the directory.
-    if (mode == "truncate") {
+    if (truncate) {
         RemoveDirectory(resolver, root_path.c_str());
-    }
-
-    if (stat(root_path.c_str(), &s) < 0) {
-        if (mode == "truncate" || mode == "append") {
-            // Path does not exist. Try to create it.
-            if (MkDir(resolver, root_path.c_str()) != STATUS_OK) {
-                return AFF4ScopedPtr<AFF4Directory>();
-            }
-        } else {
-            resolver->logger->error(
-                "Directory {} does not exist, and "
-                "AFF4_STREAM_WRITE_MODE is not truncate", root_path);
-
-            return AFF4ScopedPtr<AFF4Directory>();
+    } else {
+        // Try to read the existing turtle file.
+        AFF4Flusher<FileBackedObject> turtle_stream;
+        if (STATUS_OK == NewFileBackedObject(
+                resolver,
+                root_path + PATH_SEP_STR + AFF4_CONTAINER_INFO_TURTLE,
+                "read", turtle_stream)) {
+            resolver->LoadFromTurtle(*turtle_stream.get());
         }
     }
 
-    resolver->Set(result->urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE),
-                  /* replace= */ false);
-    resolver->Set(result->urn, AFF4_STORED, new URN(root_urn));
-
-    if (result) {
-        result->LoadFromURN();
+    struct stat s;
+    if (stat(root_path.c_str(), &s) < 0) {
+        // Path does not exist. Try to create it.
+        RETURN_IF_ERROR(MkDir(resolver, root_path.c_str()));
     }
 
-    return resolver->CachePut<AFF4Directory>(result);
+    resolver->Set(new_obj->urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE),
+                  /* replace= */ false);
+
+    resolver->Set(new_obj->urn, AFF4_STORED, new URN(URN::NewURNFromFilename(root_path, true)));
+
+    result.swap(new_obj);
+
+    return STATUS_OK;
 }
 
-AFF4ScopedPtr<AFF4Stream> AFF4Directory::CreateMember(URN child) {
+AFF4Status AFF4Directory::CreateMemberStream(
+    URN child, AFF4Flusher<AFF4Stream> &result) {
+
     // Check that child is a relative path in our URN.
     std::string relative_path = urn.RelativePath(child);
     if (relative_path == child.SerializeToString()) {
-        return AFF4ScopedPtr<AFF4Stream>();
+        resolver->logger->warn("Can not create URN {} not inside directory {}",
+                               child, urn);
+        return INVALID_INPUT;
     }
 
     // Use this filename. Note that since filesystems cannot typically represent
@@ -83,139 +96,109 @@ AFF4ScopedPtr<AFF4Stream> AFF4Directory::CreateMember(URN child) {
 
     // We are allowed to create any files inside the directory volume.
     resolver->Set(child, AFF4_TYPE, new URN(AFF4_FILE_TYPE));
-    resolver->Set(child, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+    resolver->Set(child, AFF4_STORED, new URN(urn));
     resolver->Set(child, AFF4_DIRECTORY_CHILD_FILENAME, new XSDString(filename));
 
     // Store the member inside our storage location.
-    resolver->Set(child, AFF4_FILE_NAME,
-                  new XSDString(root_path + PATH_SEP_STR + filename));
+    std::string full_path = root_path + PATH_SEP_STR + filename;
+    std::vector<std::string> directory_components = break_path_into_components(full_path);
+    directory_components.pop_back();
 
-    AFF4ScopedPtr<FileBackedObject> result = resolver->AFF4FactoryOpen<
-            FileBackedObject>(child);
+    CreateIntermediateDirectories(resolver, directory_components);
 
-    if (!result) {
-        return AFF4ScopedPtr<AFF4Stream>();
-    }
+    AFF4Flusher<FileBackedObject> child_fd;
+    RETURN_IF_ERROR(NewFileBackedObject(resolver, full_path, "truncate", child_fd));
+    child_fd->urn = child;
 
     MarkDirty();
-    children.insert(child.SerializeToString());
 
-    return result.cast<AFF4Stream>();
-}
-
-
-AFF4Status AFF4Directory::LoadFromURN() {
-    if (resolver->Get(urn, AFF4_STORED, storage) != STATUS_OK) {
-        resolver->logger->error(
-            "Unable to find storage for AFF4Directory {}", urn);
-
-        return NOT_FOUND;
-    }
-
-    // We need to get the URN of the container before we can process anything.
-    AFF4ScopedPtr<AFF4Stream> desc = resolver->AFF4FactoryOpen<AFF4Stream>(
-                                         storage.Append(AFF4_CONTAINER_DESCRIPTION));
-
-    if (desc.get()) {
-        std::string urn_string = desc->Read(1000);
-
-        if (urn.SerializeToString() != urn_string) {
-            resolver->DeleteSubject(urn);
-            urn.Set(urn_string);
-
-            // Set these triples with the new URN so we know how to open it.
-            resolver->Set(urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE),
-                          /* replace= */ false);
-            resolver->Set(urn, AFF4_STORED, new URN(storage));
-
-            resolver->logger->info("AFF4Directory volume found: {}", urn);
-        }
-    }
-
-    // The actual filename for the root directory.
-    root_path = storage.ToFilename();
-
-    // Try to load the RDF metadata file from the storage.
-    AFF4ScopedPtr<AFF4Stream> turtle_stream = resolver->AFF4FactoryOpen<
-            AFF4Stream>(storage.Append(AFF4_CONTAINER_INFO_TURTLE));
-
-    // Its ok if the information file does not exist - we will make it later.
-    if (!turtle_stream) {
-        return STATUS_OK;
-    }
-
-    AFF4Status res = resolver->LoadFromTurtle(*turtle_stream);
-
-    if (res != STATUS_OK) {
-        resolver->logger->error("Unable to parse {} ", turtle_stream->urn);
-        return IO_ERROR;
-    }
-
-    // Find all the contained objects and adjust their filenames.
-    XSDString child_filename;
-
-    for (auto subject : resolver->SelectSubjectsByPrefix(urn)) {
-        if (resolver->Get(subject, AFF4_DIRECTORY_CHILD_FILENAME,
-                          child_filename) == STATUS_OK) {
-            resolver->Set(subject, AFF4_FILE_NAME, new XSDString(
-                              root_path + PATH_SEP_STR +
-                              child_filename.SerializeToString()));
-        }
-    }
+    result.reset(child_fd.release());
 
     return STATUS_OK;
 }
 
 
-AFF4Status AFF4Directory::Flush() {
-    if (IsDirty()) {
-        // Flush all children before us. This ensures that metadata is fully
-        // generated for each child.
-        for (auto it : children) {
-            AFF4ScopedPtr<AFF4Object> obj = resolver->CacheGet<AFF4Object>(it);
-            if (obj.get()) {
-                obj->Flush();
-            }
-        }
+AFF4Status AFF4Directory::OpenMemberStream(
+    URN child, AFF4Flusher<AFF4Stream> &result) {
 
-        // Mark the container with its URN
-        AFF4ScopedPtr<AFF4Stream> desc = CreateMember(urn.Append(AFF4_CONTAINER_DESCRIPTION));
-
-        if (!desc) {
-            return IO_ERROR;
-        }
-
-        desc->Truncate();
-        desc->Write(urn.SerializeToString());
-        desc->Flush();    // Flush explicitly since we already flushed above.
-
-        // Dump the resolver into the zip file.
-        AFF4ScopedPtr<AFF4Stream> turtle_stream = CreateMember(
-                    urn.Append(AFF4_CONTAINER_INFO_TURTLE));
-
-        if (!turtle_stream) {
-            return IO_ERROR;
-        }
-
-        // Overwrite the old turtle file with the newer data.
-        turtle_stream->Truncate();
-        resolver->DumpToTurtle(*turtle_stream, urn);
-        turtle_stream->Flush();
-
-#ifdef AFF4_HAS_LIBYAML_CPP
-        AFF4ScopedPtr<AFF4Stream> yaml_segment = CreateMember(
-                    urn.Append(AFF4_CONTAINER_INFO_YAML));
-
-        if (!yaml_segment) {
-            return IO_ERROR;
-        }
-
-        resolver->DumpToYaml(*yaml_segment);
-        yaml_segment->Flush();
-#endif
+    // Check that child is a relative path in our URN.
+    std::string relative_path = urn.RelativePath(child);
+    if (relative_path == child.SerializeToString()) {
+        resolver->logger->warn("Can not read URN {} not inside directory {}",
+                               child, urn);
+        return INVALID_INPUT;
     }
 
-    return AFF4Volume::Flush();
+    // Use this filename. Note that since filesystems cannot typically represent
+    // files and directories as the same path component we cannot allow slashes
+    // in the filename. Otherwise we will fail to create e.g. stream/0000000 and
+    // stream/0000000.index.
+    std::string filename = member_name_for_urn(child, urn, false);
+
+    AFF4Flusher<FileBackedObject> child_fd;
+    RETURN_IF_ERROR(NewFileBackedObject(
+                        resolver,
+                        root_path + PATH_SEP_STR + filename,
+                        "read", child_fd));
+
+    child_fd->urn = child;
+
+    result.reset(child_fd.release());
+
+    return STATUS_OK;
+}
+
+AFF4Status AFF4Directory::OpenAFF4Directory(
+    DataStore *resolver, std::string dirname,
+    AFF4Flusher<AFF4Directory> &result) {
+
+    AFF4Flusher<AFF4Directory> new_obj(new AFF4Directory(resolver));
+    new_obj->root_path = dirname;
+
+    AFF4Flusher<FileBackedObject> desc;
+    RETURN_IF_ERROR(
+        NewFileBackedObject(
+            resolver,
+            dirname + PATH_SEP_STR + AFF4_CONTAINER_DESCRIPTION,
+            "read", desc));
+
+    new_obj->urn = URN(desc->Read(10000));
+
+    AFF4Flusher<FileBackedObject> turtle_stream;
+    RETURN_IF_ERROR(NewFileBackedObject(
+                        resolver,
+                        dirname + PATH_SEP_STR + AFF4_CONTAINER_INFO_TURTLE,
+                        "read", turtle_stream));
+
+    result.swap(new_obj);
+
+    return resolver->LoadFromTurtle(*turtle_stream);
+}
+
+
+AFF4Status AFF4Directory::Flush() {
+    if (IsDirty()) {
+        AFF4Flusher<FileBackedObject> desc;
+        RETURN_IF_ERROR(
+            NewFileBackedObject(
+                resolver,
+                root_path + PATH_SEP_STR + AFF4_CONTAINER_DESCRIPTION,
+                "truncate", desc));
+
+        std::string urn_str = urn.SerializeToString();
+        desc->Write(urn_str.data(), urn_str.size());
+
+        AFF4Flusher<FileBackedObject> turtle_stream;
+        RETURN_IF_ERROR(
+            NewFileBackedObject(
+                resolver,
+                root_path + PATH_SEP_STR + AFF4_CONTAINER_INFO_TURTLE,
+                "truncate", turtle_stream));
+
+        resolver->DumpToTurtle(*turtle_stream, urn);
+    }
+
+    return STATUS_OK;
 }
 
 
@@ -386,10 +369,5 @@ AFF4Status AFF4Directory::RemoveDirectory(DataStore *resolver, const std::string
 }
 
 #endif
-
-
-static AFF4Registrar<AFF4Directory> r1(AFF4_DIRECTORY_TYPE);
-
-void aff4_directory_init() {}
 
 } // namespace aff4

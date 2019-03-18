@@ -16,13 +16,14 @@ specific language governing permissions and limitations under the License.
 #include "aff4/libaff4.h"
 #include <unistd.h>
 #include <glog/logging.h>
+#include "utils.h"
 
 namespace aff4 {
 
 
 class AFF4ImageTest: public ::testing::Test {
  protected:
-  std::string filename = "file:///tmp/aff4_test.zip";
+  std::string filename = "/tmp/aff4_test.zip";
   std::string image_name = "image.dd";
   URN volume_urn;
   URN image_urn;
@@ -31,7 +32,7 @@ class AFF4ImageTest: public ::testing::Test {
 
   // Remove the file on teardown.
   virtual void TearDown() {
-      unlink(filename.c_str() + 7);
+      unlink(filename.c_str());
   }
 
   // Create an AFF4Image stream with some data in it.
@@ -40,22 +41,19 @@ class AFF4ImageTest: public ::testing::Test {
 
     unlink(filename.c_str());
 
-    // We are allowed to write on the output filename.
-    resolver.Set(filename, AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
-
-    // The backing file is given to the volume.
-    AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
-        &resolver, filename);
+    AFF4Flusher<AFF4Stream> file;
+    AFF4Flusher<ZipFile> zip;
+    EXPECT_OK(NewFileBackedObject(&resolver, filename, "truncate", file));
+    EXPECT_OK(ZipFile::NewZipFile(&resolver, std::move(file), zip));
 
     volume_urn = zip->urn;
 
     {
       image_urn = zip->urn.Append(image_name);
 
-      // Now an image is created inside the volume.
-      AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
-          &resolver, image_urn, zip->urn);
-      ASSERT_NE(image.get(), nullptr);
+      AFF4Flusher<AFF4Image> image;
+      EXPECT_OK(AFF4Image::NewAFF4Image(
+                    &resolver, image_urn, zip.get(), image));
 
       // For testing - rediculously small chunks. This will create many bevies.
       image->chunk_size = 10;
@@ -70,10 +68,10 @@ class AFF4ImageTest: public ::testing::Test {
     {
       image_urn_2 = image_urn.Append("2");
 
-      AFF4ScopedPtr<AFF4Image> image_2 = AFF4Image::NewAFF4Image(
-          &resolver, image_urn_2, zip->urn);
+      AFF4Flusher<AFF4Image> image_2;
+      EXPECT_OK(AFF4Image::NewAFF4Image(
+                    &resolver, image_urn_2, zip.get(), image_2));
 
-      ASSERT_NE(image_2.get(), nullptr);
       // Make the second image use snappy for compression.
       image_2->compression = AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
       image_2->Write("This is a test");
@@ -87,10 +85,10 @@ class AFF4ImageTest: public ::testing::Test {
 
       image_urn_stream = zip->urn.Append(image_name).Append("stream");
 
-      // Now an image is created inside the volume.
-      AFF4ScopedPtr<AFF4Image> image = AFF4Image::NewAFF4Image(
-          &resolver, image_urn_stream, zip->urn);
-      ASSERT_NE(image.get(), nullptr);
+      AFF4Flusher<AFF4Image> image;
+      EXPECT_OK(AFF4Image::NewAFF4Image(
+                    &resolver, image_urn_stream, zip.get(), image));
+
       // For testing - rediculously small chunks. This will create many bevies.
       image->chunk_size = 10;
       image->chunks_per_segment = 3;
@@ -104,15 +102,17 @@ class AFF4ImageTest: public ::testing::Test {
 TEST_F(AFF4ImageTest, OpenImageByURN) {
   MemoryDataStore resolver;
 
-  // Load the zip file into the resolver.
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(&resolver, filename);
+  AFF4Flusher<AFF4Stream> file;
+  AFF4Flusher<AFF4Volume> zip;
+  EXPECT_OK(NewFileBackedObject(&resolver, filename, "read", file));
+  EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
-  ASSERT_TRUE(zip.get());
+  VolumeGroup volumes(&resolver);
+  volumes.AddVolume(std::move(zip));
 
-  AFF4ScopedPtr<AFF4Image> image = resolver.AFF4FactoryOpen<AFF4Image>(
-      image_urn);
-
-  ASSERT_TRUE(image.get()) << "Unable to open the image urn!";
+  AFF4Flusher<AFF4Image> image;
+  EXPECT_OK(AFF4Image::OpenAFF4Image(
+                &resolver, image_urn, &volumes, image));
 
   // Ensure the newly opened image has the correct parameters.
   EXPECT_EQ(image->chunk_size, 10);
@@ -130,16 +130,17 @@ TEST_F(AFF4ImageTest, OpenImageByURN) {
 TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
   MemoryDataStore resolver;
 
-  // Load the zip file into the resolver.
-  AFF4ScopedPtr<ZipFile> zip = ZipFile::NewZipFile(
-      &resolver, filename);
+  AFF4Flusher<AFF4Stream> file;
+  AFF4Flusher<AFF4Volume> zip;
+  EXPECT_OK(NewFileBackedObject(&resolver, filename, "read", file));
+  EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
-  ASSERT_TRUE(zip.get());
+  VolumeGroup volumes(&resolver);
+  volumes.AddVolume(std::move(zip));
 
-  AFF4ScopedPtr<AFF4Image> image = resolver.AFF4FactoryOpen<AFF4Image>(
-      image_urn);
-
-  ASSERT_TRUE(image.get()) << "Unable to open the image urn!";
+  AFF4Flusher<AFF4Image> image;
+  EXPECT_OK(AFF4Image::OpenAFF4Image(
+                &resolver, image_urn, &volumes, image));
 
   std::unique_ptr<StringIO> stream_copy = StringIO::NewStringIO();
   for (int i = 0; i < 100; i++) {
@@ -162,14 +163,12 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
 
   {
     // Now test snappy decompression.
-    AFF4ScopedPtr<AFF4Image> image_2 = resolver.AFF4FactoryOpen<AFF4Image>(
-        image_urn_2);
-
-    ASSERT_TRUE(image_2.get()) << "Unable to open the image urn!";
+    AFF4Flusher<AFF4Image> image_2;
+    EXPECT_OK(AFF4Image::OpenAFF4Image(
+                  &resolver, image_urn_2, &volumes, image_2));
 
     URN compression_urn;
-    EXPECT_EQ(resolver.Get(image_2->urn, AFF4_IMAGE_COMPRESSION, compression_urn),
-              STATUS_OK);
+    EXPECT_OK(resolver.Get(image_2->urn, AFF4_IMAGE_COMPRESSION, compression_urn));
 
     EXPECT_STREQ(compression_urn.SerializeToString().c_str(),
                  AFF4_IMAGE_COMPRESSION_SNAPPY);
@@ -180,21 +179,19 @@ TEST_F(AFF4ImageTest, TestAFF4ImageStream) {
 
   // Now test streaming interface.
   {
-    // Now test snappy decompression.
-    AFF4ScopedPtr<AFF4Image> image_stream = resolver.AFF4FactoryOpen<AFF4Image>(
-        image_urn_stream);
+      AFF4Flusher<AFF4Image> image_stream;
+      EXPECT_OK(AFF4Image::OpenAFF4Image(
+                    &resolver, image_urn_stream, &volumes, image_stream));
 
-    ASSERT_TRUE(image_stream.get()) << "Unable to open the image urn!";
+      URN compression_urn;
+      EXPECT_OK(resolver.Get(image_stream->urn, AFF4_IMAGE_COMPRESSION,
+                             compression_urn));
 
-    URN compression_urn;
-    EXPECT_EQ(resolver.Get(image_stream->urn, AFF4_IMAGE_COMPRESSION, compression_urn),
-              STATUS_OK);
+      EXPECT_STREQ(compression_urn.SerializeToString().c_str(),
+                   AFF4_IMAGE_COMPRESSION_SNAPPY);
 
-    EXPECT_STREQ(compression_urn.SerializeToString().c_str(),
-                 AFF4_IMAGE_COMPRESSION_SNAPPY);
-
-    std::string data = image_stream->Read(100);
-    EXPECT_STREQ(data.c_str(), "This is a test");
+      std::string data = image_stream->Read(100);
+      EXPECT_STREQ(data.c_str(), "This is a test");
   }
 }
 

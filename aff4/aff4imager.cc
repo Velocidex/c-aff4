@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    imager.resolver.logger->error("Imaging failed with error: {}", res);
+    imager.resolver.logger->error("Imaging failed with error: {}", AFF4StatusToString(res));
 
     return res;
 }

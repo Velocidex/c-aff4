@@ -52,13 +52,6 @@ class FileBackedObject: public AFF4Stream {
     AFF4Status ReadBuffer(char* data, size_t *length) override;
     AFF4Status Write(const char* data, size_t length) override;
 
-    /**
-     * Load the file from a file:/ URN.
-     *
-     *
-     * @return STATUS_OK if we were able to open it successfully.
-     */
-    AFF4Status LoadFromURN() override;
     AFF4Status Truncate() override;
 
     // We provide access to the underlying file handle so callers can do other
@@ -70,6 +63,21 @@ class FileBackedObject: public AFF4Stream {
 #endif
 };
 
+
+AFF4Status NewFileBackedObject(
+     DataStore *resolver,
+     std::string filename,
+     std::string mode,
+     AFF4Flusher<FileBackedObject> &result
+);
+
+// A generic interface.
+AFF4Status NewFileBackedObject(
+     DataStore *resolver,
+     std::string filename,
+     std::string mode,
+     AFF4Flusher<AFF4Stream> &result
+);
 
 
 /*
@@ -84,11 +92,6 @@ class AFF4ConstantStream: public AFF4Stream {
         return -1;
     }
 
-    AFF4Status LoadFromURN() override {
-        size = Size();
-        return STATUS_OK;
-    }
-
     std::string Read(size_t length) override {
         return std::string(length, constant);
     }
@@ -99,19 +102,26 @@ class AFF4ConstantStream: public AFF4Stream {
     }
 };
 
-class AFF4BuiltInStreams : public AFF4Stream {
+class AFF4Stdout : public AFF4Stream {
  public:
-    explicit AFF4BuiltInStreams(DataStore *resolver): AFF4Stream(resolver) {}
+    static AFF4Status NewAFF4Stdout(
+        DataStore *resolver,
+        AFF4Flusher<AFF4Stream> &result);
+
+    explicit AFF4Stdout(DataStore *resolver): AFF4Stream(resolver) {}
     AFF4Status Write(const char* data, size_t length) override;
     AFF4Status Seek(aff4_off_t offset, int whence) override;
-    AFF4Status LoadFromURN() override;
     AFF4Status Truncate() override;
 
  private:
     int fd;
 };
 
-extern void aff4_file_init();
+AFF4Status _CreateIntermediateDirectories(DataStore *resolver,
+                                          std::string dir_name);
+
+AFF4Status CreateIntermediateDirectories(DataStore *resolver,
+                                         std::vector<std::string> components);
 
 } // namespace aff4
 

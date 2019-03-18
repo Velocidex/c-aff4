@@ -62,31 +62,6 @@ namespace aff4 {
 /**
  * The base class for all AFF4 objects. It is not usually possible to
  * instantiate a plain AFF4 Object since it does not really do anything.
- *
-
- AFF4Objects must implement the following protocol:
-
-1. The object must be instantiatable using the resolver alone. This is termed
-   the empty object. Empty objects receive a random URN so they are always valid
-   and unique in the AFF4 space.
-
-2. Each object must be completely serializable into the resolver data
-   store. This means that the state of the object can be fully reconstructed
-   from the data store at any time. Objects must implement the LoadFromURN()
-   method to reconstruct the state of the object from the data store (from its
-   current URN). Similarly the Flush() method should write the current object
-   state to the data store. Note that technically there is no restriction of the
-   lexicon of RDF pairs that can be used to serialize an object. Standard AFF4
-   objects define their lexicon in "lexicon.h".
-
-3. AFF4Objects are cached and reused in different contexts. The object must
-   implement the Prepare() method to restore itself to a known fixed state prior
-   to being given to a new user. Since AFF4Objects are always created by the
-   AFF4Factory, the factory will prepare the object prior to returning it to
-   users.
-
-4. An AFF4Object must call Flush on all objects which depend on it to ensure the
-   proper order of flushing.
 
  * @param resolver: Each AFF4Object must be instantiated with an instance of the
  *        resolver. The resolver is assumed to outlive all AFF4Object instances
@@ -110,43 +85,10 @@ class AFF4Object {
         urn = new_urn;
     }
 
-    // Return this object to the resolver.
-    virtual void Return();
-
     // By defining a virtual destructor this allows the destructor of derived
     // objects to be called when deleting a pointer to a base object.
     virtual ~AFF4Object() {}
 
-    /**
-     * Load this AFF4 object from the URN provided.
-     *
-     *
-     * @return STATUS_OK if the object was properly loaded.
-     */
-    virtual AFF4Status LoadFromURN() {
-        return NOT_IMPLEMENTED;
-    }
-
-    /**
-     * Prepares an object for re-use. Since AFF4Objects can be cached, we need a
-     * way to reset the object to a consistent state when returning it from the
-     * cache. The AFF4FactoryOpen() function will call this method before
-     * returning it to the caller in order to reset the object into a consistent
-     * state.
-     *
-     *
-     * @return STATUS_OK
-     */
-    virtual AFF4Status Prepare() {
-        return STATUS_OK;
-    }
-
-    /**
-     * Flush the object state to the resolver data store.
-     * This is the reverse of LoadFromURN().
-     *
-     * @return
-     */
     virtual AFF4Status Flush();
 
     /**
@@ -171,45 +113,6 @@ class AFF4Object {
     // AFF4Objects are not trivially copyable.
     AFF4Object(const AFF4Object&) = delete;
     AFF4Object& operator=(const AFF4Object&) = delete;
-};
-
-
-/**
- * A registry for AFF4 objects. This is used to instantiate the correct
- * AFF4Object at a specific URN.
- *
- */
-ClassFactory<AFF4Object>* GetAFF4ClassFactory();
-
-
-/**
- * A registration class for new AFF4 objects.
- *
- * Registration occurs through static instances of the AFF4Registrar class. For
- * example the following registers the ZipFile class to handle the AFF4_ZIP_TYPE
- * type:
-
-~~~~~~~~~~~{.c}
-static AFF4Registrar<ZipFile> r1(AFF4_ZIP_TYPE);
-~~~~~~~~~~~
-
- *
- * @param name
- */
-template<class T>
-class AFF4Registrar {
-  public:
-    std::string name;
-    explicit AFF4Registrar(std::string name) {
-        this->name = name;
-
-        GetAFF4ClassFactory()->RegisterFactoryFunction(
-            name,
-        [](DataStore *resolver, const URN *urn) -> T * {
-            UNUSED(urn);
-            return new T(resolver);
-        });
-    }
 };
 
 // In the AFF4 library all offsets are 64 bits - even on windows!

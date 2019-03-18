@@ -94,9 +94,12 @@ std::shared_ptr<spdlog::logger> get_c_api_logger() {
 struct AFF4_Handle {
     aff4::MemoryDataStore resolver;
     aff4::URN urn;
+    aff4::VolumeGroup volumes;
+    aff4::AFF4Flusher<aff4::AFF4Stream> stream;
 
     AFF4_Handle():
-        resolver(aff4::DataStoreOptions(get_c_api_logger(), 1))
+        resolver(aff4::DataStoreOptions(get_c_api_logger(), 1)),
+        volumes(&resolver)
     {}
 };
 
@@ -117,10 +120,8 @@ spdlog::level::level_enum enum_for_level(unsigned int level) {
 
 extern "C" {
 
-void AFF4_init() {}
-
 void AFF4_set_verbosity(unsigned int level) {
-    spdlog::get(aff4::LOGGER)->set_level(enum_for_level(level));
+    get_c_api_logger()->set_level(enum_for_level(level));
 }
 
 void AFF4_free_messages(AFF4_Message* msg) {
@@ -134,49 +135,54 @@ void AFF4_free_messages(AFF4_Message* msg) {
 
 AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
     std::unique_ptr<AFF4_Handle> h(new AFF4_Handle());
+    std::unordered_set<aff4::URN> images;
+    const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
+    aff4::AFF4Flusher<aff4::AFF4Volume> zip;
+
     get_log_handler().use(msg);
 
-    aff4::URN urn = aff4::URN::NewURNFromFilename(filename);
-    aff4::AFF4ScopedPtr<aff4::ZipFile> zip = aff4::ZipFile::NewZipFile(
-        &h->resolver, urn);
-    if (!zip) {
-        errno = ENOENT;
-        return nullptr;
+    aff4::AFF4Flusher<aff4::FileBackedObject> file;
+    if (aff4::STATUS_OK != aff4::NewFileBackedObject(
+            &h->resolver, filename, "read", file)) {
+        goto fail;
     }
 
+    if (aff4::STATUS_OK != aff4::ZipFile::OpenZipFile(
+            &h->resolver, aff4::AFF4Flusher<aff4::AFF4Stream>(file.release()), zip)) {
+        goto fail;
+    };
+
+    h->volumes.AddVolume(std::move(zip));
+
     // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
-    const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
-    std::unordered_set<aff4::URN> images = h->resolver.Query(aff4::AFF4_TYPE, &type);
+    images = h->resolver.Query(aff4::AFF4_TYPE, &type);
 
     if (images.empty()) {
         const aff4::URN legacy_type(aff4::AFF4_LEGACY_IMAGE_TYPE);
         images = h->resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
         if (images.empty()) {
-            h->resolver.Close(zip);
-            errno = ENOENT;
-            return nullptr;
+            goto fail;
         }
     }
 
-    // Sort URNs so that we have some sort of determinism
-    std::vector<aff4::URN> sorted_images{images.begin(), images.end()};
-    std::sort(sorted_images.begin(), sorted_images.end());
+    {
+        // Sort URNs so that we have some sort of determinism
+        std::vector<aff4::URN> sorted_images{images.begin(), images.end()};
+        std::sort(sorted_images.begin(), sorted_images.end());
 
-    // Make sure we only load an image that is stored in the filename provided
-    for (const auto& img_urn: sorted_images) {
-        if (!h->resolver.HasURNWithAttributeAndValue(img_urn, aff4::AFF4_STORED, zip->urn)) {
-            continue;
+        for (const auto& img_urn: sorted_images) {
+            aff4::AFF4Flusher<aff4::AFF4Stream> image;
+            if (aff4::STATUS_OK != h->volumes.GetStream(img_urn, image)) {
+                goto fail;
+            }
+
+            h->stream.reset(image.release());
+
+            return h.release();
         }
-
-        if (!h->resolver.AFF4FactoryOpen<aff4::AFF4StdImage>(img_urn)) {
-            continue;
-        }
-
-        h->urn = img_urn;
-        return h.release();
     }
 
-    h->resolver.Close(zip);
+ fail:
     errno = ENOENT;
     return nullptr;
 }
@@ -185,34 +191,30 @@ uint64_t AFF4_object_size(AFF4_Handle* handle, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
     if (handle) {
-        auto stream = handle->resolver.AFF4FactoryOpen<aff4::AFF4Stream>(handle->urn);
-        if (stream.get()) {
-            return stream->Size();
-        }
+        return handle->stream->Size();
     }
     return 0;
 }
 
-ssize_t AFF4_read(AFF4_Handle* handle, uint64_t offset, void* buffer, size_t length, AFF4_Message** msg) {
+ssize_t AFF4_read(AFF4_Handle* handle, uint64_t offset,
+                  void* buffer, size_t length, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
     if (!handle) {
         return -1;
     }
 
-    auto stream = handle->resolver.AFF4FactoryOpen<aff4::AFF4Stream>(handle->urn);
-    if (stream.get()) {
-        if (stream->Seek(offset, SEEK_SET) != aff4::STATUS_OK ||
-            stream->ReadBuffer(static_cast<char*>(buffer), &length) != aff4::STATUS_OK)
-        {
-            errno = EIO;
-            return -1;
-        }
-    }
-    else {
+    if (!handle->stream) {
         errno = ENOENT;
         return -1;
     }
+
+    if (handle->stream->Seek(offset, SEEK_SET) != aff4::STATUS_OK ||
+        handle->stream->ReadBuffer(static_cast<char*>(buffer), &length) != aff4::STATUS_OK) {
+        errno = EIO;
+        return -1;
+    }
+
     return length;
 }
 
@@ -220,12 +222,7 @@ int AFF4_close(AFF4_Handle* handle, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
     if (handle) {
-        auto obj = handle->resolver.AFF4FactoryOpen<aff4::AFF4Object>(handle->urn);
-        if (obj.get()) {
-            handle->resolver.Close(obj);
-        }
-
-        delete handle;
+        handle->stream.release();
     }
     return 0;
 }

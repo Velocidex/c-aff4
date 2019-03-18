@@ -32,32 +32,29 @@ namespace aff4 {
 class AFF4Directory: public AFF4Volume {
   public:
     // Where we are stored.
-    URN storage;
     std::string root_path;
 
     explicit AFF4Directory(DataStore* resolver): AFF4Volume(resolver) {}
-    AFF4Directory(DataStore* resolver, URN urn):
-        AFF4Volume(resolver, urn) {}
 
-    /**
-     * Creates a new AFF4Directory object.
-     *
-     * @param root_urn: The URN of a root directory.
-     *
-     * @return A new AFF4Directory reference.
-     */
-    static AFF4ScopedPtr<AFF4Directory> NewAFF4Directory(
-        DataStore* resolver, URN root_urn);
+    static AFF4Status NewAFF4Directory(
+        DataStore *resolver, std::string dirname, bool truncate,
+        AFF4Flusher<AFF4Volume> &result);
 
-    // Generic volume interface. NOTE: The AFF4Directory can only contain
-    // FileBackedObject instances so this is what will be returned here.
-    virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child);
+    static AFF4Status NewAFF4Directory(
+        DataStore *resolver, std::string dirname, bool truncate,
+        AFF4Flusher<AFF4Directory> &result);
 
-    // Load the AFF4Directory from its URN and the information in the oracle.
-    virtual AFF4Status LoadFromURN();
+    static AFF4Status OpenAFF4Directory(
+        DataStore *resolver, std::string dirname, AFF4Flusher<AFF4Directory> &result);
+
+    AFF4Status OpenMemberStream(
+        URN child, AFF4Flusher<AFF4Stream> &result) override;
+
+    AFF4Status CreateMemberStream(
+        URN child, AFF4Flusher<AFF4Stream> &result) override;
 
     // Update the information.turtle file.
-    virtual AFF4Status Flush();
+    AFF4Status Flush() override;
 
     // Some handy static methods.
     static bool IsDirectory(const URN& urn, bool must_exist=false);
@@ -65,8 +62,6 @@ class AFF4Directory: public AFF4Volume {
     static AFF4Status RemoveDirectory(DataStore *resolver, const std::string& root_path);
     static AFF4Status MkDir(DataStore *resolver, const std::string& path);
 };
-
-void aff4_directory_init();
 
 } // namespace aff4
 

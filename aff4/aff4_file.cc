@@ -16,6 +16,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4/aff4_base.h"
 #include "aff4/aff4_file.h"
 #include "aff4/aff4_directory.h"
+#include "aff4/libaff4.h"
 #include <sys/types.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -29,24 +30,29 @@ specific language governing permissions and limitations under the License.
 
 namespace aff4 {
 
+
+AFF4Status CreateIntermediateDirectories(
+    DataStore *resolver, std::vector<std::string> components);
+
 /***************************************************************
 FileBackedObject implementation.
 ****************************************************************/
+ AFF4Status NewFileBackedObject(
+     DataStore *resolver,
+     std::string filename,
+     std::string mode,
+     AFF4Flusher<AFF4Stream> &result
+ ) {
+     AFF4Flusher<FileBackedObject> file;
+     RETURN_IF_ERROR(NewFileBackedObject(resolver, filename, mode, file));
 
-static std::string _GetFilename(DataStore* resolver, const URN& urn) {
-    XSDString filename;
-    if (resolver->Get(urn, AFF4_FILE_NAME, filename) != STATUS_OK) {
-        // Only file:// URNs are supported.
-        if (urn.Scheme() == "file") {
-            return urn.ToFilename();
-        }
-    }
+     result.reset(file.release());
 
-    return filename.SerializeToString();
-}
+     return STATUS_OK;
+ }
 
 // Recursively create intermediate directories.
-AFF4Status _CreateIntermediateDirectories(
+AFF4Status CreateIntermediateDirectories(
     DataStore *resolver, std::vector<std::string> components) {
     std::string path = PATH_SEP_STR;
 
@@ -85,70 +91,58 @@ AFF4Status _CreateIntermediateDirectories(
     return STATUS_OK;
 }
 
-AFF4Status _CreateIntermediateDirectories(DataStore *resolver, std::string dir_name) {
-    return _CreateIntermediateDirectories(resolver, split(dir_name, PATH_SEP));
+AFF4Status CreateIntermediateDirectories(DataStore *resolver, std::string dir_name) {
+    return CreateIntermediateDirectories(resolver, break_path_into_components(dir_name));
 }
 
 // Windows files are read through the CreateFile() API so that devices can be
 // read.
 #if defined(_WIN32)
 
-AFF4Status FileBackedObject::LoadFromURN() {
-    DWORD desired_access = GENERIC_READ;
-    DWORD creation_disposition = OPEN_EXISTING;
-
-    XSDString mode("read");
-
-    // The Resolver might have the correct filename for this URN.
-    filename = _GetFilename(resolver, urn);
-    if (filename.size() == 0) {
-        return INVALID_INPUT;
-    }
-
-    resolver->logger->debug("Opening file {}", filename);
+ AFF4Status NewFileBackedObject(
+     DataStore *resolver,
+     std::string filename,
+     std::string mode,
+     AFF4Flusher<FileBackedObject> &result) {
+     auto new_object = AFF4Flusher<FileBackedObject>(new FileBackedObject(resolver));
+     new_object->urn = URN::NewURNFromFilename(filename, false);
 
     std::vector<std::string> directory_components = split(filename, PATH_SEP);
     directory_components.pop_back();
 
-    // Attribute is optional so if it is not there we just go with false.
-    resolver->Get(urn, AFF4_STREAM_WRITE_MODE, mode);
+    DWORD creation_disposition = OPEN_EXISTING;
+    DWORD desired_access = GENERIC_READ;
 
     if (mode == "truncate") {
         creation_disposition = CREATE_ALWAYS;
         desired_access |= GENERIC_WRITE;
 
-        // Next call will append.
-        resolver->Set(urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"),
-                      /* replace = */ true);
-        properties.writable = true;
+        new_object->properties.writable = true;
 
         // Only create directories if we are allowed to.
-        AFF4Status res = _CreateIntermediateDirectories(resolver, directory_components);
-        if (res != STATUS_OK) {
-            return res;
-        }
+        RETURN_IF_ERROR(
+            CreateIntermediateDirectories(resolver, directory_components));
 
     } else if (mode == "append") {
         creation_disposition = OPEN_ALWAYS;
         desired_access |= GENERIC_WRITE;
-        properties.writable = true;
+        new_object->properties.writable = true;
 
         // Only create directories if we are allowed to.
-        AFF4Status res = _CreateIntermediateDirectories(resolver, directory_components);
-        if (res != STATUS_OK) {
-            return res;
-        }
+        RETURN_IF_ERROR(
+            CreateIntermediateDirectories(resolver, directory_components));
     }
 
-    fd = CreateFile(filename.c_str(),
-                    desired_access,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE,
-                    nullptr,
-                    creation_disposition,
-                    FILE_ATTRIBUTE_NORMAL,
-                    nullptr);
+    new_object->fd = CreateFile(
+        filename.c_str(),
+        desired_access,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        nullptr,
+        creation_disposition,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
 
-    if (fd == INVALID_HANDLE_VALUE) {
+    if (new_object->fd == INVALID_HANDLE_VALUE) {
         resolver->logger->error(
             "Cannot open file {} : {}", filename,
             GetLastErrorMessage());
@@ -159,15 +153,15 @@ AFF4Status FileBackedObject::LoadFromURN() {
     LARGE_INTEGER tmp;
 
     // Now deduce the size of the stream.
-    if (GetFileSizeEx(fd, &tmp)) {
-        size = tmp.QuadPart;
+    if (GetFileSizeEx(new_object->fd, &tmp)) {
+        new_object->size = tmp.QuadPart;
     } else {
         // The file may be a raw device so we need to issue an ioctl to see how
         // large it is.
         GET_LENGTH_INFORMATION lpOutBuffer;
         DWORD lpBytesReturned;
         if (DeviceIoControl(
-                    fd,                // handle to device
+                    new_object->fd,                // handle to device
                     IOCTL_DISK_GET_LENGTH_INFO,    // dwIoControlCode
                     nullptr,                          // lpInBuffer
                     0,                             // nInBufferSize
@@ -175,13 +169,15 @@ AFF4Status FileBackedObject::LoadFromURN() {
                     sizeof(GET_LENGTH_INFORMATION),
                     (LPDWORD) &lpBytesReturned,    // number of bytes returned
                     nullptr)) {
-            size = lpOutBuffer.Length.QuadPart;
+            new_object->size = lpOutBuffer.Length.QuadPart;
         } else {
             // We dont know the size - seek relative to the end will fail now.
-            size = -1;
-            properties.sizeable = false;
+            new_object->size = -1;
+            new_object->properties.sizeable = false;
         }
     }
+
+    result.swap(new_object);
 
     return STATUS_OK;
 }
@@ -261,53 +257,43 @@ FileBackedObject::~FileBackedObject() {
 // On other systems the posix open() API is used.
 #else
 
-AFF4Status FileBackedObject::LoadFromURN() {
-    int flags = O_RDONLY | O_BINARY;
+ AFF4Status NewFileBackedObject(
+     DataStore *resolver,
+     std::string filename,
+     std::string mode,
+     AFF4Flusher<FileBackedObject> &result
+ ) {
+     auto new_object = AFF4Flusher<FileBackedObject>(new FileBackedObject(resolver));
+     new_object->urn = URN::NewURNFromFilename(filename, false);
 
-    XSDString mode("read");
+     std::vector<std::string> directory_components = split(filename, PATH_SEP);
+     directory_components.pop_back();
 
-    // The Resolver might have the correct filename for this URN.
-    filename = _GetFilename(resolver, urn);
-    if (filename.size() == 0) {
-        return INVALID_INPUT;
-    }
+     auto flags = O_RDONLY;
 
-    std::vector<std::string> directory_components = split(filename, PATH_SEP);
-    directory_components.pop_back();
+     if (mode == "truncate" ) {
+         flags = O_TRUNC | O_CREAT | O_RDWR;
+         new_object->properties.writable = true;
 
-    // Attribute is optional so if it is not there we just go with false.
-    resolver->Get(urn, AFF4_STREAM_WRITE_MODE, mode);
+         // Only create directories if we are allowed to.
+         RETURN_IF_ERROR(
+             CreateIntermediateDirectories(resolver, directory_components));
 
-    if (mode == "truncate") {
-        flags |= O_CREAT | O_TRUNC | O_RDWR;
+     } else if (mode == "append") {
+         flags = O_CREAT | O_RDWR;
+         new_object->properties.writable = true;
 
-        // Next call will append.
-        resolver->Set(urn, AFF4_STREAM_WRITE_MODE, new XSDString("append"));
-        properties.writable = true;
-
-        // Only create directories if we are allowed to.
-        AFF4Status res = _CreateIntermediateDirectories(resolver, directory_components);
-        if (res != STATUS_OK) {
-            return res;
-        }
-
-    } else if (mode == "append") {
-        flags |= O_CREAT | O_RDWR;
-        properties.writable = true;
-
-        // Only create directories if we are allowed to.
-        AFF4Status res = _CreateIntermediateDirectories(resolver, directory_components);
-        if (res != STATUS_OK) {
-            return res;
-        }
-    }
+         // Only create directories if we are allowed to.
+         RETURN_IF_ERROR(
+             CreateIntermediateDirectories(resolver, directory_components));
+     }
 
     resolver->logger->debug("Opening file {}", filename);
 
-    fd = open(filename.c_str(), flags,
+    new_object->fd = open(filename.c_str(), flags,
               S_IRWXU | S_IRWXG | S_IRWXO);
 
-    if (fd < 0) {
+    if (new_object->fd < 0) {
         resolver->logger->error("Cannot open file {}: {}", filename,
                                 GetLastErrorMessage());
         return IO_ERROR;
@@ -315,18 +301,20 @@ AFF4Status FileBackedObject::LoadFromURN() {
 
     // If this fails we dont know the size - this can happen e.g. with devices. In
     // this case seeks relative to the end will fail.
-    size = lseek(fd, 0, SEEK_END);
-    if (size < 0) {
-        properties.sizeable = false;
+    new_object->size = lseek(new_object->fd, 0, SEEK_END);
+    if (new_object->size < 0) {
+        new_object->properties.sizeable = false;
     }
 
     // Detect if the file is seekable (e.g. a pipe).
-    if (lseek(fd, 0, SEEK_CUR) < 0) {
-        properties.seekable = false;
+    if (lseek(new_object->fd, 0, SEEK_CUR) < 0) {
+        new_object->properties.seekable = false;
     }
 
-    return STATUS_OK;
-}
+     result.swap(new_object);
+
+     return STATUS_OK;
+ }
 
 AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
     lseek(fd, readptr, SEEK_SET);
@@ -361,7 +349,7 @@ AFF4Status FileBackedObject::Write(const char* data, size_t length) {
     if (readptr > size) {
         size = readptr;
     }
-    resolver->logger->debug("Writing {} on {}/{}\n", length, readptr, size);
+    resolver->logger->debug("Writing {} on {}/{}", length, readptr, size);
     return STATUS_OK;
 }
 
@@ -386,58 +374,32 @@ FileBackedObject::~FileBackedObject() {
 #endif
 
 
-// For file:// URN schemes we need to instantiate different objects, depending
-// on a stat() of the target. So we register a specialized factory function.
-class AFF4FileRegistrer {
-  public:
-    explicit AFF4FileRegistrer(std::string name) {
-        GetAFF4ClassFactory()->RegisterFactoryFunction(
-        name, [this](DataStore *d, const URN *urn) -> AFF4Object * {
-            return GetObject(d, urn);
-        });
-    }
+AFF4Status AFF4Stdout::NewAFF4Stdout(
+        DataStore *resolver,
+        AFF4Flusher<AFF4Stream> &result) {
 
-    AFF4Object* GetObject(DataStore* resolver, const URN* urn) const {
-        if (AFF4Directory::IsDirectory(*urn)) {
-            return new AFF4Directory(resolver, *urn);
-        }
+    AFF4Flusher<AFF4Stdout> new_object(new AFF4Stdout(resolver));
 
-        return new FileBackedObject(resolver);
-    }
-};
-
-// The FileBackedObject will be invoked for file:// style urns.
-AFF4FileRegistrer file1("file");
-AFF4Registrar<FileBackedObject> file2(AFF4_FILE_TYPE);
-
-
-AFF4Status AFF4BuiltInStreams::LoadFromURN() {
-    auto type = urn.Domain();
-
-    // Right now we only support writing to stdout.
-    if (type == "stdout") {
-        properties.seekable = false;
-        properties.writable = true;
-        properties.sizeable = false;
+    new_object->properties.seekable = false;
+    new_object->properties.writable = true;
+    new_object->properties.sizeable = false;
 
 #ifdef _WIN32
-        // On windows stdout is set to text mode, we need to force it
-        // to binary mode or else it will corrupt the output (issue
-        // #31)
-        fd = _fileno( stdout );
-        _setmode (fd, _O_BINARY);
+    // On windows stdout is set to text mode, we need to force it
+    // to binary mode or else it will corrupt the output (issue
+    // #31)
+    new_object->fd = _fileno( stdout );
+    _setmode (new_object->fd, _O_BINARY);
 #else
-        fd = STDOUT_FILENO;
+    new_object->fd = STDOUT_FILENO;
 #endif
 
-        return STATUS_OK;
-    }
+    result.reset(new_object.release());
 
-    resolver->logger->error("Unsupported builtin stream {}", urn);
-    return IO_ERROR;
+    return STATUS_OK;
 }
 
-AFF4Status AFF4BuiltInStreams::Write(const char* data, size_t length) {
+AFF4Status AFF4Stdout::Write(const char* data, size_t length) {
     int res = write(fd, data, length);
     if (res >= 0) {
         readptr += res;
@@ -452,12 +414,12 @@ AFF4Status AFF4BuiltInStreams::Write(const char* data, size_t length) {
     return STATUS_OK;
 }
 
-AFF4Status AFF4BuiltInStreams::Truncate() {
+AFF4Status AFF4Stdout::Truncate() {
     return IO_ERROR;
 }
 
 
-AFF4Status AFF4BuiltInStreams::Seek(aff4_off_t offset, int whence) {
+AFF4Status AFF4Stdout::Seek(aff4_off_t offset, int whence) {
     if (whence == SEEK_END && offset == 0) {
         return STATUS_OK;
     }
@@ -469,9 +431,5 @@ AFF4Status AFF4BuiltInStreams::Seek(aff4_off_t offset, int whence) {
     return IO_ERROR;
 }
 
-AFF4Registrar<AFF4BuiltInStreams> builtin("builtin");
-
-
-void aff4_file_init() {}
 
 } // namespace aff4

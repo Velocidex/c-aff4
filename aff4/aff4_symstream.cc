@@ -56,10 +56,4 @@ namespace aff4 {
         }
         return STATUS_OK;
     }
-
-    void AFF4SymbolicStream::Return() {
-        // Don't return to the resolver as we are a permanent entity.
-        //resolver->Return(this);
-    }
-
 } // namespace aff4

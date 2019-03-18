@@ -24,15 +24,10 @@ AFF4Status LinuxPmemImager::ParseIOMap_(std::vector<ram_range> *ram) {
     resolver.logger->info("Will parse /proc/iomem");
     ram->clear();
 
-    URN iomap_urn = URN::NewURNFromFilename("/proc/iomem");
-    AFF4ScopedPtr<AFF4Stream> stream = resolver.AFF4FactoryOpen<AFF4Stream>(
-        iomap_urn);
-    if (!stream) {
-        resolver.logger->error("Unable to open /proc/iomap");
-        return IO_ERROR;
-    }
+    AFF4Flusher<FileBackedObject> iomap;
+    RETURN_IF_ERROR(NewFileBackedObject(&resolver, "/proc/iomem", "read", iomap));
 
-    std::string data = stream->Read(0x10000);
+    std::string data = iomap->Read(0x10000);
     std::regex RAM_regex("(([0-9a-f]+)-([0-9a-f]+) : System RAM)");
     auto begin = std::sregex_iterator(data.begin(), data.end(), RAM_regex);
     auto end = std::sregex_iterator();
@@ -61,18 +56,12 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
   RETURN_IF_ERROR(ParseIOMap_(&physical_range_start));
 
   *length = 0;
-  URN kcore_urn = URN::NewURNFromFilename("/proc/kcore");
-
-  AFF4ScopedPtr<AFF4Stream> stream = resolver.AFF4FactoryOpen<AFF4Stream>(
-      kcore_urn);
-
-  if (!stream) {
-      resolver.logger->critical("Unable to open /proc/kcore - Are you root?");
-      return IO_ERROR;
-  }
+  AFF4Flusher<FileBackedObject> kcore;
+  RETURN_IF_ERROR(NewFileBackedObject(
+                      &resolver, "/proc/kcore", "read", kcore));
 
   Elf64_Ehdr header;
-  if (stream->ReadIntoBuffer(
+  if (kcore->ReadIntoBuffer(
           reinterpret_cast<char *>(&header),
           sizeof(header)) != sizeof(header)) {
       resolver.logger->critical("Unable to read /proc/kcore - Are you root?");
@@ -96,7 +85,7 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
   }
 
   // Read the physical headers.
-  stream->Seek(header.phoff, SEEK_SET);
+  kcore->Seek(header.phoff, SEEK_SET);
 
   // The index in physical_range_start vector we are currently seeking.
   int physical_range_start_index = 0;
@@ -105,7 +94,7 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
 
   for (int i = 0; i < header.phnum; i++) {
     Elf64_Phdr pheader;
-    if (stream->ReadIntoBuffer(
+    if (kcore->ReadIntoBuffer(
             reinterpret_cast<char *>(&pheader),
             sizeof(pheader)) != sizeof(pheader)) {
       return IO_ERROR;
@@ -168,7 +157,7 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
     map->AddRange(pheader.paddr,
                   pheader.off,
                   pheader.memsz,
-                  kcore_urn);
+                  kcore.get());
 
     physical_range_start_index++;
     if (physical_range_start_index >= physical_range_start.size())
@@ -180,6 +169,9 @@ AFF4Status LinuxPmemImager::CreateMap_(AFF4Map *map, aff4_off_t *length) {
       return NOT_FOUND;
   }
 
+  // The kcore needs to outlive this method.
+  map->GiveTarget(std::move(AFF4Flusher<AFF4Stream>(kcore.release())));
+
   return STATUS_OK;
 }
 
@@ -189,35 +181,21 @@ AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
   std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
   std::string output_path = GetArg<TCLAP::ValueArg<std::string>>("output")->getValue();
 
-  // When the output volume is raw - we image in raw or elf format.
-  if (volume_type == "raw") {
-      return WriteRawVolume_();
-  }
-
-  URN output_urn;
-  AFF4Status res = GetOutputVolumeURN(&output_volume_urn);
-  if (res != STATUS_OK)
-    return res;
+  AFF4Volume *output_volume;
+  RETURN_IF_ERROR(GetCurrentVolume(&output_volume));
 
   // We image memory into this map stream.
-  URN map_urn = output_volume_urn.Append("proc/kcore");
-
-  AFF4ScopedPtr<AFF4Volume> volume = resolver.AFF4FactoryOpen<AFF4Volume>(
-      output_volume_urn);
+  URN map_urn = output_volume->urn.Append("proc/kcore");
 
   // This is a physical memory image.
   resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
 
   if (format == "map") {
-    res = WriteMapObject_(map_urn, output_volume_urn);
+      RETURN_IF_ERROR(WriteMapObject_(map_urn));
   } else if (format == "raw") {
-    res = WriteRawFormat_(map_urn, output_volume_urn);
+      RETURN_IF_ERROR(WriteRawFormat_(map_urn));
   } else if (format == "elf") {
-    res = WriteElfFormat_(map_urn, output_volume_urn);
-  }
-
-  if (res != STATUS_OK) {
-    return res;
+      RETURN_IF_ERROR(WriteElfFormat_(map_urn));
   }
 
   resolver.Set(map_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
@@ -235,8 +213,7 @@ AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
       inputs.push_back("/proc/kallsyms");
   }
 
-  res = process_input();
-  return res;
+  return process_input();
 }
 
 } // namespace aff4

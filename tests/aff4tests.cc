@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
   // turn off logging to suppress noise
   spdlog::set_level(spdlog::level::off);
   // turn on logging to see what's happening
-//  spdlog::set_level(spdlog::level::debug);
+  spdlog::set_level(spdlog::level::debug);
 
   ::testing::InitGoogleTest(&argc, argv);
 

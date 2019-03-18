@@ -145,35 +145,26 @@ class ZipFileSegment: public StringIO {
     friend class ZipFile;
 
   protected:
-    URN owner_urn;                        /**< The zip file who owns us. */
-
     // If this is set, we are backing a backing store for reading. Otherwise we
     // use our own StringIO buffers.
-    URN _backing_store_urn;
+    AFF4Stream * _backing_store = nullptr;  /* Not owned */
 
     // The start offset for the backing store.
     aff4_off_t _backing_store_start_offset = -1;
     size_t _backing_store_length = 0;
 
   public:
-    /**
-     * A convenience function to add a new segment to an existing ZipFile volume.
-     *
-     * @param resolver
-     * @param segment_urn
-     * @param volume_urn
-     *
-     * @return An AFF4ScopedPtr reference to the new segment or NULL if the
-     * segment could not be created.
-     */
-    static AFF4ScopedPtr<ZipFileSegment> NewZipFileSegment(
-        DataStore* resolver, const URN& segment_urn, const URN& volume_urn);
+    ZipFile *owner = nullptr;   /* Not owned */
 
     explicit ZipFileSegment(DataStore* resolver);
-    ZipFileSegment(std::string filename, ZipFile& zipfile);
 
-    AFF4Status LoadFromURN() override;
-    AFF4Status LoadFromZipFile(const std::string &member_name, ZipFile& owner);
+    static AFF4Status NewZipFileSegment(
+        URN urn, ZipFile& zipfile,
+        AFF4Flusher<ZipFileSegment> &result);
+
+    static AFF4Status OpenZipFileSegment(
+        URN urn, ZipFile& zipfile,
+        AFF4Flusher<ZipFileSegment> &result);
 
     AFF4Status Flush() override;
     AFF4Status Truncate() override;
@@ -271,7 +262,6 @@ class ZipFile: public AFF4Volume {
 
   protected:
     int directory_number_of_entries = -1;
-    URN backing_store_urn;
 
     /// The global offset of all zip file references from the real file
     /// references. This might be non-zero if the zip file was appended to another
@@ -299,32 +289,37 @@ class ZipFile: public AFF4Volume {
   public:
     explicit ZipFile(DataStore* resolver);
 
-    /**
-     * Creates a new ZipFile object.
-     *
-     * @param backing_store_urn: An URN of an object to write the zip file
-     *                onto. Note that we first read and preserve the objects in
-     *                the existing volume and just append new objects to it.
-     *
-     * @return A new ZipFile reference.
-     */
-    static AFF4ScopedPtr<ZipFile> NewZipFile(
-        DataStore* resolver, URN backing_store_urn);
+    AFF4Flusher<AFF4Stream> backing_stream;
+
+    static AFF4Status NewZipFile(
+        DataStore* resolver,
+        AFF4Flusher<AFF4Stream> &&backing_stream,
+        AFF4Flusher<ZipFile> &result);
+
+    static AFF4Status NewZipFile(
+        DataStore* resolver,
+        AFF4Flusher<AFF4Stream> &&backing_stream,
+        AFF4Flusher<AFF4Volume> &result);
+
+    // Open an existing zip file.
+    static AFF4Status OpenZipFile(
+        DataStore *resolver,
+        AFF4Flusher<AFF4Stream> &&backing_stream,
+        AFF4Flusher<ZipFile> &result);
+
+    static AFF4Status OpenZipFile(
+        DataStore *resolver,
+        AFF4Flusher<AFF4Stream> &&backing_stream,
+        AFF4Flusher<AFF4Volume> &result);
 
     // Generic volume interface.
-    virtual AFF4ScopedPtr<AFF4Stream> CreateMember(URN child);
+    AFF4Status CreateMemberStream(
+        URN segment_urn,
+        AFF4Flusher<AFF4Stream> &result) override;
 
-    /**
-     * Creates a new ZipFileSegment object. The new object is automatically added
-     * to the resolver cache and therefore the caller does not own it (it is
-     * always owned by the resolver cache).
-     *
-     * @param filename
-     *
-     * @return
-     */
-    AFF4ScopedPtr<ZipFileSegment> CreateZipSegment(std::string filename);
-    AFF4ScopedPtr<ZipFileSegment> OpenZipSegment(std::string filename);
+    AFF4Status OpenMemberStream(
+        URN segment_urn,
+        AFF4Flusher<AFF4Stream> &result) override;
 
     // Supports a stream interface.
     // An efficient interface to add a new archive member.
@@ -338,10 +333,9 @@ class ZipFile: public AFF4Volume {
                                        int compression_method,
                                        ProgressContext* progress = nullptr);
 
-    // Load the ZipFile from its URN and the information in the oracle.
-    virtual AFF4Status LoadFromURN();
+    AFF4Status Flush() override;
 
-    virtual AFF4Status Flush();
+    aff4_off_t Size() const override;
 
     // All the members of the zip file. Used to reconstruct the central
     // directory. Note these store the members as the ZipFile sees them. The

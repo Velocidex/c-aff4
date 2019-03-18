@@ -19,6 +19,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4/config.h"
 
 #include "aff4/aff4_io.h"
+#include "aff4/volume_group.h"
+
 #include <map>
 
 
@@ -55,27 +57,65 @@ class Range: public BinaryRange {
 
 class AFF4Map: public AFF4Stream {
   protected:
-    // The URN that will be used as the target of the next Write() operation.
-    URN last_target;
+    // The target of the next Write() operation.
+    AFF4Stream* last_target = nullptr;
 
-    aff4_off_t size{}; // Logical size of the map stream
+    aff4_off_t size = 0; // Logical size of the map stream
 
   public:
-    // The target list.
-    std::vector<URN> targets;
-    std::map<std::string, int> target_idx_map;
+    // The target list. Non-owning references.
+    std::vector<AFF4Stream*> targets;
+    std::map<AFF4Stream*, int> target_idx_map;
+
+    // A list of target streams we actually own. We hold on to these
+    // until we get destroyed.
+    std::vector<AFF4Flusher<AFF4Stream>> our_targets;
+
     std::map<aff4_off_t, Range> map;
+
+    // We write our data to this volume.
+    AFF4Volume *current_volume = nullptr;
+
+    // Use this volume group to locate target streams.
+    VolumeGroup *volumes = nullptr;
 
     // Specifies the fallback read-size to use when Read encounters
     // an unreadable region.
     size_t max_reread_size = 4096;
 
+    bool CanSwitchVolume() override;
+    AFF4Status SwitchVolume(AFF4Volume *volume) override;
+
     explicit AFF4Map(DataStore* resolver): AFF4Stream(resolver) {}
 
-    static AFF4ScopedPtr<AFF4Map> NewAFF4Map(
-        DataStore* resolver, const URN& object_urn, const URN& volume_urn);
+    // When creating a new map we must give the map the first data
+    // stream. Subsequent writes will be appended on this stream. It
+    // is up to the caller to create the write stream by themselves
+    // and they may specify any URN for it. By default the aff4_imager
+    // just appends the string "data" to the map urn. We must also
+    // provide a reference to the volume on which to write the map
+    // index file (contains the targets) and the map file (contains
+    // the ranges). You should probably not write to the data stream
+    // and the map at the same time.
+    static AFF4Status NewAFF4Map(
+        DataStore* resolver, const URN& map_urn,
+        AFF4Volume *volume, AFF4Stream* data_stream,
+        AFF4Flusher<AFF4Map> &result);
 
-    AFF4Status LoadFromURN() override;
+
+    static AFF4Status OpenAFF4Map(
+        DataStore* resolver, const URN& stream_urn,
+        VolumeGroup *volume, AFF4Flusher<AFF4Map> &result);
+
+
+    static AFF4Status CopyStreamFromMap(
+        AFF4Map* source,
+        AFF4Map* dest,
+        ProgressContext* progress);
+
+    // Accepts ownership of this target. We will hold it until we get
+    // destroyed.
+    void GiveTarget(AFF4Flusher<AFF4Stream> &&target);
 
     AFF4Status ReadBuffer(char* data, size_t* length) override;
     AFF4Status Write(const char* data, size_t length) override;
@@ -84,21 +124,15 @@ class AFF4Map: public AFF4Stream {
         AFF4Stream* source,
         ProgressContext* progress = nullptr) override;
 
-    AFF4Status WriteStream(
-        AFF4Map* source,
-        ProgressContext* progress = nullptr);
-
     AFF4Status Flush() override;
 
     AFF4Status AddRange(aff4_off_t map_offset, aff4_off_t target_offset,
-                        aff4_off_t length, URN target);
+                        aff4_off_t length,
+                        AFF4Stream* target /* Not owned */);
 
     void Dump();
 
     std::vector<Range> GetRanges() const;
-
-    // Creates or retrieves the underlying map data stream.
-    AFF4Status GetBackingStream(URN& target);
 
     void Clear();
 
@@ -107,6 +141,11 @@ class AFF4Map: public AFF4Stream {
 
     using AFF4Stream::Write;
 };
+
+
+
+
+
 
 extern void aff4_map_init();
 

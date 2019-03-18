@@ -77,17 +77,9 @@ class FileBackedStreamTest: public StreamTest {
 
 TEST_F(FileBackedStreamTest, FileBackedObjectIOTest) {
   MemoryDataStore resolver;
-  URN filename_urn = URN::NewURNFromFilename(filename);
-
-  // We are allowed to write on the output filename.
-  resolver.Set(filename_urn, AFF4_STREAM_WRITE_MODE,
-               new XSDString("truncate"));
-
-  AFF4ScopedPtr<AFF4Stream> file = resolver.AFF4FactoryOpen<AFF4Stream>(
-      filename_urn);
-
-  EXPECT_NE((AFF4Stream *)NULL, file.get());
-
+  AFF4Flusher<FileBackedObject> file;
+  EXPECT_EQ(NewFileBackedObject(&resolver, filename,
+                                "truncate", file), STATUS_OK);
   test_Stream(*file);
 }
 
