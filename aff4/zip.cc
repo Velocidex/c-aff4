@@ -737,6 +737,7 @@ AFF4Status ZipFileSegment::Flush() {
 
             RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
             RETURN_IF_ERROR(backing_store->Write(cdata));
+            RETURN_IF_ERROR(zip_info->WriteDataDescriptor(*backing_store));
 
             // Compression method not known - ignore and store uncompressed.
         } else {
@@ -744,6 +745,7 @@ AFF4Status ZipFileSegment::Flush() {
 
             RETURN_IF_ERROR(zip_info->WriteFileHeader(*backing_store));
             RETURN_IF_ERROR(backing_store->Write(buffer));
+            RETURN_IF_ERROR(zip_info->WriteDataDescriptor(*backing_store));
         }
 
         // Replace ourselves in the members map.

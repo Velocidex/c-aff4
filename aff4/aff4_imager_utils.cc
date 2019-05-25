@@ -643,6 +643,13 @@ AFF4Status BasicImager::handle_compression() {
 // We only allow a wild card in the last component.
 std::vector<std::string> BasicImager::GlobFilename(std::string glob) const {
     std::vector<std::string> result;
+
+    // Devices do not glob.
+    if (glob.substr(0,2) == "\\\\") {
+        result.push_back(glob);
+        return result;
+    }
+
     WIN32_FIND_DATA ffd;
     unsigned int found = glob.find_last_of("/\\");
     std::string path = "";
