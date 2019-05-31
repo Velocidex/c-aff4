@@ -566,7 +566,7 @@ AFF4Status AFF4Map::WriteStream(AFF4Stream* source, ProgressContext* progress) {
     RETURN_IF_ERROR(last_target->WriteStream(source, progress));
 
     // Add a single range to cover the bulk of the image.
-    AddRange(0, last_target->Size(), last_target->Size(), last_target);
+    AddRange(0, 0, last_target->Size(), last_target);
 
     return STATUS_OK;
 }
