@@ -1,22 +1,9 @@
-brew install 
-brew install 
-brew install snappy lz4 raptor pkgconfig tclap uriparser spdlog
-
-BUILDING OS X
+BUILDING MacOS
 ================
 
-Install the following via macports
-* zlib
-* raptor2
-* google-glog
-* pcrexx
-* tclap (missing *.pc file - place in /opt/local/lib/pkgconfig/)
-* yaml-cpp
-* snappy 
+Install the following via brew
 
-Install the following manually as they aren't in macports
-
-* uuid 
+brew install snappy lz4 raptor pkgconfig tclap uriparser spdlog
 
 Then do the following
 
