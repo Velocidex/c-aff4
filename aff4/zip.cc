@@ -1009,6 +1009,160 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
     }
 
     return STATUS_OK;
+    }
+
+    std::string ZipFile::GetResourceID(std::string& filename, std::shared_ptr<spdlog::logger> logger) {
+        /*
+         * The container.description file is the first file in the container.
+         * So rather than opening the whole container, simply stream in the first 
+         * part of the file, extract the Zip entry details, and read the contents of
+         * the first file.
+         * This is MUCH quicker than a full open/scan/read operation.
+         * If any of these fail, switch to a slow path execution.
+         */
+        std::unique_ptr<uint8_t[]> buffer(new uint8_t[4096]);
+        uint64_t segmentEntrySize = 0;
+        uint16_t filenameLength = 0;
+        std::string segmentName;
+#ifndef _WIN32
+        /*
+         * POSIX based systems.
+         */
+        int fileHandle = ::open(filename.c_str(), O_RDONLY | O_LARGEFILE);
+        if (fileHandle == -1) {
+            // we failed, so return nothing. (error will be in errno).
+            logger->critical("Unable to open container {} = {}", filename, GetLastErrorMessage());
+            return "";
+        }
+        int read = ::pread64(fileHandle, buffer.get(), 4096, 0);
+        ::close(fileHandle);
+        if (read != 4096) {
+            logger->critical("Unable to read {} bytes from the container : {} = {}", 4096, filename, read);
+            return "";
+        }
+#else
+        /*
+         * Windows based systems
+         */
+        // Note: DO NOT ADD OVERLAPPED ATTRIBUTE for opening the file.
+        std::wstring wpath = aff4::s2ws(filename); // Convert the filename to UTF-16/WString for Win32 API
+        HANDLE fileHandle = CreateFile(wpath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, NULL);
+        if (fileHandle == INVALID_HANDLE_VALUE) {
+            logger->critical("Unable to open container {} = {}", filename, GetLastErrorMessage());            
+            return "";
+        }
+        DWORD read = 0;
+        BOOL res = ReadFile(fileHandle, buffer.get(), 4096, &read, NULL);
+        ::CloseHandle(fileHandle);
+        if (res == FALSE || read != 4096) {
+            logger->critical("Unable to read {} bytes from the container : {} = {}", 4096, filename, read);
+            return "";
+        }
+#endif
+
+        /*
+         * The buffer should now contain the first 512bytes of the container.
+         */
+        aff4::ZipFileHeader* header = (aff4::ZipFileHeader*)(buffer.get());
+        // Start sanity check.
+        if (le32toh(header->magic) != 0x4034b50) {
+            logger->critical("Invalid PKZIP Magic number : {} = {}", filename, header->magic);
+            return "";
+        }
+        if (le16toh(header->compression_method) != 0) {
+            logger->info("Unexpected PKZIP compression method : {} = {}", filename, header->compression_method);
+            goto slowPath;
+        }
+        if (le16toh(header->file_name_length) != 0x15) { // 'container.description'
+            logger->info("Unexpected segment name length : {} = {} != 0x15", filename, header->file_name_length);
+            goto slowPath;
+        }
+        // Get the filename.
+        filenameLength = le16toh(header->file_name_length);
+        segmentName = std::string((char*) (buffer.get() + sizeof (aff4::ZipFileHeader)), filenameLength);
+        if (segmentName.compare("container.description") != 0) {
+            logger->info("Unexpected segment name : {} = {}", filename, segmentName);
+            goto slowPath;
+        }
+
+        // At this point the segment name checks out, so let get the content.
+        if (le32toh(header->file_size) == -1) {
+            // Check for extra headers.
+            if (le16toh(header->extra_field_len) > 0) {
+                aff4::ZipExtraFieldHeader* extra = (aff4::ZipExtraFieldHeader*)(buffer.get() + sizeof (aff4::ZipFileHeader) + filenameLength);
+                if (le16toh(extra->header_id) == 1) {
+                    uint64_t exHeaderOffset = sizeof(aff4::ZipExtraFieldHeader);
+                    uint16_t dataSize = extra->data_size;
+                    if((le32toh(header->file_size) == -1) && (dataSize >= 8)){
+                        uint64_t* off = (uint64_t*) ((uint8_t*)extra + exHeaderOffset);
+                        segmentEntrySize = le64toh(*off);
+                        exHeaderOffset += 8;
+                        dataSize -=8;
+                    }
+                    if((le32toh(header->compress_size) == -1) && (dataSize >= 8)){
+                        if(segmentEntrySize == 0 || segmentEntrySize == (size_t)-1){
+                            uint64_t* off = (uint64_t*) ((uint8_t*)extra + exHeaderOffset);
+                            segmentEntrySize = le64toh(*off);
+                        }
+                        exHeaderOffset += 8;
+                        dataSize -=8;
+                    }
+                }
+            }
+            if(segmentEntrySize == 0 || segmentEntrySize == (uint64_t)-1){
+                // We need to scan for the ZipDataDescriptor64 structure... this should be in the first 512 bytes that we have read.	
+                int dd64magic = 0x08074b50;
+                size_t dd64Size = sizeof (aff4::Zip64DataDescriptorHeader);
+                uint8_t* offset = buffer.get();
+                aff4::Zip64DataDescriptorHeader* dd64 = (Zip64DataDescriptorHeader*)offset;
+                while (le32toh(dd64->magic) != dd64magic) {
+                    offset++;
+                    if (offset > (buffer.get() + 4096 - dd64Size)) {
+                        break;
+                    }
+                    dd64 = (aff4::Zip64DataDescriptorHeader*)offset;
+                }
+                if (le32toh(dd64->magic) == dd64magic) {
+                    segmentEntrySize = le64toh(dd64->file_size);
+                }
+            }
+        } else {
+            segmentEntrySize = le32toh(header->file_size);
+        }
+        if ((segmentEntrySize == 0) || //
+                (segmentEntrySize > (4096 - (sizeof (aff4::ZipFileHeader) - filenameLength - le16toh(header->extra_field_len))))) {
+            // Too large...
+            logger->critical("Segment appears too large for container.description? {} = {}", filename, segmentEntrySize);
+            goto slowPath;
+        }
+        // And get our data.
+        goto slowPath;
+        {
+        char* data = (char*) buffer.get() + sizeof (aff4::ZipFileHeader) + filenameLength + le16toh(header->extra_field_len);
+        std::string resource(data, segmentEntrySize);
+        return resource;
+        }
+
+        /*
+         * Slow path, open as Zip file and read the container.description file.
+         */
+    slowPath:
+		MemoryDataStore resolver;
+		aff4::AFF4Flusher<aff4::AFF4Stream> file;
+		aff4::AFF4Flusher<aff4::ZipFile> zip(new aff4::ZipFile(&resolver));
+		aff4::AFF4Flusher<aff4::AFF4Stream> stream;
+		if (aff4::STATUS_OK != aff4::NewFileBackedObject(&resolver, filename, "read", file)) {
+			return "";
+		}
+		zip->backing_stream.swap(file);
+		zip->parse_cd();
+
+		// Open the 'container.description' file and read it's contents.
+		if (aff4::STATUS_OK != zip->OpenMemberStream(URN("container.description"), stream)) {
+			return "";
+		}
+		std::string value = stream->Read(stream->Size());
+		return value;
 }
 
 // Register ZipFile as an AFF4 object.
