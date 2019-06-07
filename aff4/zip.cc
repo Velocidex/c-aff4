@@ -833,26 +833,61 @@ AFF4Status ZipInfo::WriteDataDescriptor(AFF4Stream& output) {
 }
 
 AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream& output) {
-    struct CDFileHeader header;
-    struct Zip64FileHeaderExtensibleField zip64header;
+    struct CDFileHeader header{};
 
     header.compression_method = compression_method;
     header.crc32_cs = crc32_cs;
     header.file_name_length = filename.length();
     header.dostime = lastmodtime;
     header.dosdate = lastmoddate;
-    header.extra_field_len = sizeof(zip64header);
+
+    uint16_t extra_len = 24;
+
+    if (file_size < 0xFFFFFFFFUL) {
+        header.file_size = file_size;
+        extra_len -= 8;
+    }
+
+    if (compress_size < 0xFFFFFFFFUL) {
+        header.compress_size = compress_size;
+        extra_len -= 8;
+    }
+
+    if (local_header_offset < 0xFFFFFFFFL) {
+        header.relative_offset_local_header = local_header_offset;
+        extra_len -= 8;
+    }
+
+    header.extra_field_len = (extra_len == 0) ? 0 : extra_len + sizeof(ZipExtraFieldHeader);
 
     RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header),
                                  sizeof(header)));
     RETURN_IF_ERROR(output.Write(filename));
 
-    zip64header.file_size = file_size;
-    zip64header.compress_size = compress_size;
-    zip64header.relative_offset_local_header = local_header_offset;
+    if (extra_len > 0) {
+        ZipExtraFieldHeader header;
 
-    RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&zip64header),
-                                 sizeof(zip64header)));
+        header.header_id = 1;
+        header.len = extra_len;
+
+        RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header),
+                                     sizeof(header)));
+
+        if (file_size >= 0xFFFFFFFF) {
+            RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&file_size),
+                                     sizeof(file_size)));
+        }
+
+        if (compress_size >= 0xFFFFFFFF) {
+            RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&compress_size),
+                                     sizeof(compress_size)));
+        }
+
+        if (local_header_offset >= 0xFFFFFFFF) {
+            RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&local_header_offset),
+                                     sizeof(local_header_offset)));
+        }
+    }
 
     return STATUS_OK;
 }
