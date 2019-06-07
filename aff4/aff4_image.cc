@@ -353,6 +353,7 @@ AFF4Status AFF4Image::OpenAFF4Image(
             resolver->logger->error(
                 "ImageStream {} does not specify a size. "
                 "Is this part of a split image set?", new_obj->urn);
+            return NOT_FOUND;
         }
 
     } else {
