@@ -153,6 +153,7 @@ AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
     };
 
     h->volumes.AddVolume(std::move(zip));
+    h->volumes.AddSearchPath(filename);
 
     // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
     images = h->resolver.Query(aff4::AFF4_TYPE, &type);

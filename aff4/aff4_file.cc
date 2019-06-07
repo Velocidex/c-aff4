@@ -263,9 +263,8 @@ FileBackedObject::~FileBackedObject() {
      std::string mode,
      AFF4Flusher<FileBackedObject> &result
  ) {
-     auto new_object = AFF4Flusher<FileBackedObject>(new FileBackedObject(resolver));
+     auto new_object = AFF4Flusher<FileBackedObject>(new FileBackedObject(resolver, filename));
      new_object->urn = URN::NewURNFromFilename(filename, false);
-
      std::vector<std::string> directory_components = split(filename, PATH_SEP);
      directory_components.pop_back();
 
