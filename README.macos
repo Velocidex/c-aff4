@@ -1,0 +1,42 @@
+brew install 
+brew install 
+brew install snappy lz4 raptor pkgconfig tclap uriparser spdlog
+
+BUILDING OS X
+================
+
+Install the following via macports
+* zlib
+* raptor2
+* google-glog
+* pcrexx
+* tclap (missing *.pc file - place in /opt/local/lib/pkgconfig/)
+* yaml-cpp
+* snappy 
+
+Install the following manually as they aren't in macports
+
+* uuid 
+
+Then do the following
+
+cd ~/git
+git clone https://github.com/gabime/spdlog.git
+cd spdlog
+git checkout v0.17.0
+cmake  . && make all install 
+cd ..
+git clone https://github.com/Velocidex/c-aff4.git
+cd c-aff4
+git submodule update --init third_party/gtest
+
+   Ignore the error about tree reference.
+
+cd third_party/gtest
+git reset --hard
+cd ../..
+./autogen.sh
+./configure CC=clang CXX=clang++ CXXFLAGS="-std=c++11 -stdlib=libc++ -O2 -g0 -I/opt/local/include" LDFLAGS="-stdlib=libc++ -L/opt/local/lib"
+make
+
+For the manual installations, need to ensure they are installed in /opt/local. ("./configure --prefix=/opt/local")
