@@ -65,8 +65,12 @@ namespace aff4 {
 // Compression methods we support.
 AFF4Status CompressZlib_(const char* data, size_t length, std::string* output);
 AFF4Status DeCompressZlib_(const char* data, size_t length, std::string* output);
+AFF4Status CompressDeflate_(const char* data, size_t length, std::string* output);
+AFF4Status DeCompressDeflate_(const char* data, size_t length, std::string* output);
 AFF4Status CompressSnappy_(const char* data, size_t length, std::string* output);
 AFF4Status DeCompressSnappy_(const char* data, size_t length, std::string* output);
+AFF4Status CompressLZ4_(const char* data, size_t length, std::string* output);
+AFF4Status DeCompressLZ4_(const char* data, size_t length, std::string* output);
 
 
 // This is the type written to the map stream in this exact binary layout.
@@ -144,7 +148,7 @@ class AFF4Image: public AFF4Stream {
     AFF4Status SwitchVolume(AFF4Volume *volume) override;
 
     // Which compression should we use.
-    AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
+    AFF4_IMAGE_COMPRESSION_ENUM compression = AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE;
 
     static AFF4Status NewAFF4Image(
         DataStore* resolver,

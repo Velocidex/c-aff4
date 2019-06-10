@@ -41,6 +41,7 @@ AFF4Status CompressZlib_(const std::string &input, std::string* output) {
     return STATUS_OK;
 }
 
+
 AFF4Status DeCompressZlib_(const std::string &input, std::string* output) {
     uLongf buffer_size = output->size();
 
@@ -52,6 +53,66 @@ AFF4Status DeCompressZlib_(const std::string &input, std::string* output) {
     }
 
     return IO_ERROR;
+}
+
+
+AFF4Status CompressDeflate_(const std::string &input, std::string* output) {
+    constexpr size_t chunk_size = 16 * 1024;
+
+    z_stream zs{};
+    if (deflateInit(&zs, Z_DEFAULT_COMPRESSION) != Z_OK) {
+        return MEMORY_ERROR;
+    }
+
+    int ret = Z_OK;
+
+    zs.next_in = (Bytef *) input.c_str();
+    zs.avail_in = input.length();
+
+    while (ret == Z_OK) {
+        // Allocate space for another chunk of output
+        output->resize(output->size() + chunk_size);
+
+        zs.avail_out = chunk_size;
+        zs.next_out = (Bytef*) &output->back() - (chunk_size - 1);
+
+        ret = deflate(&zs, Z_SYNC_FLUSH);
+    }
+
+    output->resize(zs.total_out);
+    deflateEnd(&zs);
+
+    return (ret == Z_STREAM_END) ? STATUS_OK : IO_ERROR;
+}
+
+
+AFF4Status DeCompressDeflate_(const std::string &input, std::string* output) {
+    constexpr size_t chunk_size = 16 * 1024;
+
+    z_stream zs{};
+    if (inflateInit(&zs) != Z_OK) {
+        return MEMORY_ERROR;
+    }
+
+    int ret = Z_OK;
+
+    zs.next_in = (Bytef *) input.c_str();
+    zs.avail_in = input.length();
+
+    while (ret == Z_OK) {
+        // Allocate space for another chunk of output
+        output->resize(output->size() + chunk_size);
+
+        zs.avail_out = chunk_size;
+        zs.next_out = (Bytef*) &output->back() - (chunk_size - 1);
+
+        ret = inflate(&zs, Z_SYNC_FLUSH);
+    }
+
+    output->resize(zs.total_out);
+    inflateEnd(&zs);
+
+    return (ret == Z_STREAM_END) ? STATUS_OK : IO_ERROR;
 }
 
 
@@ -184,6 +245,11 @@ private:
         switch (compression) {
         case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB: {
             RETURN_IF_ERROR(CompressZlib_(data, &c_data));
+        }
+            break;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE: {
+            RETURN_IF_ERROR(CompressDeflate_(data, &c_data));
         }
             break;
 
@@ -665,6 +731,10 @@ AFF4Status AFF4Image::ReadChunkFromBevy(
         switch (compression) {
         case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB:
             res = DeCompressZlib_(cbuffer, &buffer);
+            break;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE:
+            res = DeCompressDeflate_(cbuffer, &buffer);
             break;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:

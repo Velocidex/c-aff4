@@ -436,6 +436,8 @@ const char* AFF4StatusToString(AFF4Status status) {
 AFF4_IMAGE_COMPRESSION_ENUM CompressionMethodFromURN(URN method) {
     if (method.value == AFF4_IMAGE_COMPRESSION_ZLIB) {
         return AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
+    } else if (method.value == AFF4_IMAGE_COMPRESSION_DEFLATE) {
+        return AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE;
     } else if (method.value == AFF4_IMAGE_COMPRESSION_SNAPPY) {
         return AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
     } else if (method.value == AFF4_IMAGE_COMPRESSION_SNAPPY2) {
@@ -455,6 +457,9 @@ URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method) {
     switch (method) {
         case AFF4_IMAGE_COMPRESSION_ENUM_ZLIB:
             return AFF4_IMAGE_COMPRESSION_ZLIB;
+
+        case AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE:
+            return AFF4_IMAGE_COMPRESSION_DEFLATE;
 
         case AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY:
             return AFF4_IMAGE_COMPRESSION_SNAPPY;
