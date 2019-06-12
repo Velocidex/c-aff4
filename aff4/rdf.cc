@@ -118,6 +118,93 @@ raptor_term* XSDString::GetRaptorTerm(raptor_world* world) const {
     return result;
 }
 
+raptor_term* MD5Hash::GetRaptorTerm(raptor_world* world) const {
+    std::string value_string(SerializeToString());
+    raptor_uri* uri = raptor_new_uri(
+        world, (const unsigned char*)AFF4_HASH_MD5);
+
+    raptor_term* result= raptor_new_term_from_counted_literal(
+                             world,
+                             (const unsigned char*)value_string.c_str(),
+                             value_string.size(),
+                             uri,
+                             nullptr, 0);
+
+    raptor_free_uri(uri);
+
+    return result;
+}
+
+raptor_term* SHA1Hash::GetRaptorTerm(raptor_world* world) const {
+    std::string value_string(SerializeToString());
+    raptor_uri* uri = raptor_new_uri(
+        world, (const unsigned char*)AFF4_HASH_SHA1);
+
+    raptor_term* result= raptor_new_term_from_counted_literal(
+                             world,
+                             (const unsigned char*)value_string.c_str(),
+                             value_string.size(),
+                             uri,
+                             nullptr, 0);
+
+    raptor_free_uri(uri);
+
+    return result;
+}
+
+raptor_term* SHA256Hash::GetRaptorTerm(raptor_world* world) const {
+    std::string value_string(SerializeToString());
+    raptor_uri* uri = raptor_new_uri(
+        world, (const unsigned char*)AFF4_HASH_SHA256);
+
+    raptor_term* result= raptor_new_term_from_counted_literal(
+                             world,
+                             (const unsigned char*)value_string.c_str(),
+                             value_string.size(),
+                             uri,
+                             nullptr, 0);
+
+    raptor_free_uri(uri);
+
+    return result;
+}
+
+raptor_term* SHA512Hash::GetRaptorTerm(raptor_world* world) const {
+    std::string value_string(SerializeToString());
+    raptor_uri* uri = raptor_new_uri(
+        world, (const unsigned char*)AFF4_HASH_SHA512);
+
+    raptor_term* result= raptor_new_term_from_counted_literal(
+                             world,
+                             (const unsigned char*)value_string.c_str(),
+                             value_string.size(),
+                             uri,
+                             nullptr, 0);
+
+    raptor_free_uri(uri);
+
+    return result;
+}
+
+raptor_term* Blake2BHash::GetRaptorTerm(raptor_world* world) const {
+    std::string value_string(SerializeToString());
+    raptor_uri* uri = raptor_new_uri(
+        world, (const unsigned char*)AFF4_HASH_BLAKE2B);
+
+    raptor_term* result= raptor_new_term_from_counted_literal(
+                             world,
+                             (const unsigned char*)value_string.c_str(),
+                             value_string.size(),
+                             uri,
+                             nullptr, 0);
+
+    raptor_free_uri(uri);
+
+    return result;
+}
+
+
+
 std::string URN::Scheme() const {
     // We only support aff4 and file URNs:
     if (value.compare(0, strlen(AFF4_PREFIX), AFF4_PREFIX) == 0) {
@@ -507,5 +594,11 @@ static RDFValueRegistrar<XSDInteger> r3(XSDIntegerType);
 static RDFValueRegistrar<XSDInteger> r4(XSDIntegerTypeInt);
 static RDFValueRegistrar<XSDInteger> r5(XSDIntegerTypeLong);
 static RDFValueRegistrar<XSDBoolean> r6(XSDBooleanType);
+
+static RDFValueRegistrar<MD5Hash> r7(AFF4_HASH_MD5);
+static RDFValueRegistrar<SHA1Hash> r8(AFF4_HASH_SHA1);
+static RDFValueRegistrar<SHA256Hash> r9(AFF4_HASH_SHA256);
+static RDFValueRegistrar<SHA512Hash> r10(AFF4_HASH_SHA512);
+static RDFValueRegistrar<Blake2BHash> r11(AFF4_HASH_BLAKE2B);
 
 } // namespace aff4
