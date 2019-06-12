@@ -234,8 +234,7 @@ AFF4Status BasicImager::handle_aff4_volumes() {
                 RETURN_IF_ERROR(AFF4Directory::OpenAFF4Directory(
                                     &resolver, volume_to_load, volume));
 
-                volume_objs.AddVolume(
-                    std::move(AFF4Flusher<AFF4Volume>(volume.release())));
+                volume_objs.AddVolume(AFF4Flusher<AFF4Volume>(volume.release()));
 
             } else {
                 AFF4Flusher<FileBackedObject> backing_stream;
@@ -246,12 +245,10 @@ AFF4Status BasicImager::handle_aff4_volumes() {
                 AFF4Flusher<ZipFile> volume;
                 RETURN_IF_ERROR(ZipFile::OpenZipFile(
                                     &resolver,
-                                    std::move(AFF4Flusher<AFF4Stream>(
-                                                  backing_stream.release())),
+                                    AFF4Flusher<AFF4Stream>(backing_stream.release()),
                                     volume));
 
-                volume_objs.AddVolume(
-                    std::move(AFF4Flusher<AFF4Volume>(volume.release())));
+                volume_objs.AddVolume(AFF4Flusher<AFF4Volume>(volume.release()));
             }
         }
     }
