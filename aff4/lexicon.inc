@@ -27,10 +27,6 @@ LEXICON_DEFINE(BUILTIN_PREFIX, "builtin://");
 // object internally.
 LEXICON_DEFINE(AFF4_VOLATILE_NAMESPACE, "http://aff4.org/VolatileSchema#");
 
-// We just store the member_name -> URN mapping so we can ensure the
-// right member is opened.
-LEXICON_DEFINE(AFF4_SEGMENT_FOR_URN, "http://aff4.org/VolatileSchema#segment_for_urn");
-
 // Commonly used RDF types.
 LEXICON_DEFINE(URNType, "URN");
 LEXICON_DEFINE(XSDStringType, "http://www.w3.org/2001/XMLSchema#string");
