@@ -868,7 +868,7 @@ AFF4Status ZipInfo::WriteCDFileHeader(AFF4Stream& output) {
         ZipExtraFieldHeader header;
 
         header.header_id = 1;
-        header.len = extra_len;
+        header.data_size = extra_len;
 
         RETURN_IF_ERROR(output.Write(reinterpret_cast<char*>(&header),
                                      sizeof(header)));
