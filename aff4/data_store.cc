@@ -36,6 +36,12 @@ bool DataStore::ShouldSuppress(const URN& subject,
                                const URN& predicate,
                                const std::string& value) {
     URN type(AFF4_TYPE);
+
+    if (!HasURNWithAttribute(subject, type)) {
+        // This is assumed to be an object of type AFF4_ZIP_SEGMENT_TYPE
+        return true;
+    }
+
     if (predicate == AFF4_STORED &&
         (HasURNWithAttributeAndValue(
             subject, type, URN(AFF4_ZIP_SEGMENT_TYPE)) ||
@@ -396,6 +402,14 @@ AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute,
 
     auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
     if (attribute_itr == urn_it->second.end()) {
+        // Since the majority of AFF4 objects in practice are zip segments,
+        // as an optimization we don't store type attributes for these
+        // objects.  Instead, objects without type attriutes are assumed to
+        // be zip segments.
+        if (attribute == AFF4_TYPE) {
+            value.UnSerializeFromString(AFF4_ZIP_SEGMENT_TYPE);
+        }
+
         return NOT_FOUND;
     }
 
@@ -424,6 +438,14 @@ AFF4Status MemoryDataStore::Get(const URN& urn,
 
     auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
     if (attribute_itr == urn_it->second.end()) {
+        // Since the majority of AFF4 objects in practice are zip segments,
+        // as an optimization we don't store type attributes for these
+        // objects.  Instead, objects without type attriutes are assumed to
+        // be zip segments.
+        if (attribute == AFF4_TYPE) {
+            values.emplace_back(new URN(AFF4_ZIP_SEGMENT_TYPE));
+            return STATUS_OK;
+        }
         return NOT_FOUND;
     }
 
