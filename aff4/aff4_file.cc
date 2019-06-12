@@ -30,6 +30,82 @@ specific language governing permissions and limitations under the License.
 
 namespace aff4 {
 
+std::string FileBackedObject::Read(size_t length) {
+    if (length == 0) {
+        return "";
+    }
+
+    std::string result(length, '\0');
+    if (ReadBuffer(&result[0], &length) != STATUS_OK) {
+        return "";
+    }
+    result.resize(length);
+    return result;
+}
+
+AFF4Status FileBackedObject::ReadBuffer(char * data, size_t * length) {
+    // If we're trying to read larger than a cache block, then we skip the cache
+    if (*length > cache_block_size) {
+        return _ReadBuffer(data, length);
+    }
+
+    // Save current position
+    const auto startpos = readptr;
+
+    // Calculate block number
+    const auto bn = startpos / cache_block_size;
+
+    // Calculate block offset
+    const auto offset = startpos % cache_block_size;
+
+    // If there's an overlap, then skip the cache
+    if (offset + *length > cache_block_size) {
+        return _ReadBuffer(data, length);
+    }
+
+    // Search the cache for a block
+    const auto block = read_cache.find(bn);
+    if (block != read_cache.end()) {
+        // We've got a cache hit!
+        const auto & block_data = block->second;
+
+        // Copy data to buffer
+        *length = block_data.copy(data, *length, offset);
+
+        // Adjust the read pointer
+        readptr += *length;
+
+        return STATUS_OK;
+    }
+
+    // We've got a cache miss
+
+    // Read a block of data
+    std::string block_data(cache_block_size, 0);
+    size_t read = cache_block_size;
+    readptr = bn * cache_block_size;
+    RETURN_IF_ERROR(_ReadBuffer(&block_data[0], &read));
+    block_data.resize(read);
+
+    // Copy data to buffer
+    *length = block_data.copy(data, *length, offset);
+
+    // Adjust the read pointer
+    readptr = startpos + *length;
+
+    // If the cache is full then remove a random block from the cache
+    if (read_cache.size() == cache_block_limit) {
+        auto el = read_cache.begin();
+        std::advance(el, rand() % cache_block_limit);
+        read_cache.erase(el);
+    }
+
+    // Add block to cache
+    read_cache.emplace(bn, std::move(block_data));
+
+    return STATUS_OK;
+}
+
 
 AFF4Status CreateIntermediateDirectories(
     DataStore *resolver, std::vector<std::string> components);

@@ -25,6 +25,8 @@ specific language governing permissions and limitations under the License.
 
 #include <cstring>
 
+#include <unordered_map>
+
 namespace aff4 {
 
 /*
@@ -61,6 +63,15 @@ class FileBackedObject: public AFF4Stream {
 #else
     int fd;
 #endif
+
+    static constexpr size_t cache_block_size = 2 * 1024 * 1024; // 2 MiB
+    static constexpr size_t cache_block_limit = 32; // 32 MiB total
+
+  private:
+    // Read buffer, bypassing cache
+    AFF4Status _ReadBuffer(char* data, size_t *length);
+    
+    std::unordered_map<size_t, std::string> read_cache{};
 };
 
 
