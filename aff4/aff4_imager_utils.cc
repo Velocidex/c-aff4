@@ -619,16 +619,14 @@ AFF4Status BasicImager::handle_compression() {
     std::string compression_setting = GetArg<TCLAP::ValueArg<std::string>>(
                                           "compression")->getValue();
 
-    if (compression_setting == "zlib") {
-        compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
+    if (compression_setting == "deflate") {
+        compression = AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE;
     } else if (compression_setting == "snappy") {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
     } else if (compression_setting == "lz4") {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_LZ4;
-
     } else if (compression_setting == "none") {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
-
     } else {
         resolver.logger->error("Unknown compression scheme {}", compression);
         return INVALID_INPUT;
