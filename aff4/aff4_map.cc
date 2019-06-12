@@ -111,17 +111,18 @@ AFF4Status AFF4Map::OpenAFF4Map(
 
     // Calculate number of ranges
     const auto n = map_stream->Size() / sizeof(BinaryRange);
-    auto buffer = new BinaryRange[n];
 
-    map_stream->ReadIntoBuffer(buffer, n * sizeof(BinaryRange));
+    // Ensure the Range type hasn't added any extra data members
+    static_assert(sizeof(BinaryRange) == sizeof(Range), 
+                  "Range has been extended and must be converted here");
+    auto buffer = std::unique_ptr<Range[]>{new Range[n]};
+
+    map_stream->ReadIntoBuffer(buffer.get(), n * sizeof(BinaryRange));
 
     for (size_t i = 0; i < n; i++) {
-        const auto & binary_range = buffer[i];
-        Range range{binary_range};
+        auto & range = buffer[i];
         map_obj->map[range.map_end()] = range;
     }
-
-    delete [] buffer;
 
     // If the map has a STREAM_SIZE property we set the size based on that,
     // otherwise we fall back to the last range in the map.
