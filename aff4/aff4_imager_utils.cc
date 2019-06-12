@@ -649,7 +649,7 @@ std::vector<std::string> BasicImager::GlobFilename(std::string glob) const {
     }
 
     WIN32_FIND_DATA ffd;
-    unsigned int found = glob.find_last_of("/\\");
+    const auto found = glob.find_last_of("/\\");
     std::string path = "";
 
     // The path before the last PATH_SEP
