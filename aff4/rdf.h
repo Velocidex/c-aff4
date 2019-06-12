@@ -161,6 +161,38 @@ class XSDString: public RDFBytes {
     raptor_term* GetRaptorTerm(raptor_world* world) const;
 };
 
+// Hash types
+
+class MD5Hash : public XSDString {
+  public:
+    using XSDString::XSDString;
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
+};
+
+class SHA1Hash : public XSDString {
+  public:
+    using XSDString::XSDString;
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
+};
+
+class SHA256Hash : public XSDString {
+  public:
+    using XSDString::XSDString;
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
+};
+
+class SHA512Hash : public XSDString {
+  public:
+    using XSDString::XSDString;
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
+};
+
+class Blake2BHash : public XSDString {
+  public:
+    using XSDString::XSDString;
+    raptor_term* GetRaptorTerm(raptor_world* world) const;
+};
+
 
 /**
  * A XSDInteger stores an integer. We can parse xsd:integer, xsd:int and

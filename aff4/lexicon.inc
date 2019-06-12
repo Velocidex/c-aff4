@@ -209,3 +209,14 @@ LEXICON_DEFINE(AFF4_DIRECTORY_TYPE, "http://aff4.org/Schema#directory");
 // between the URN and the filename. This attribute stores the _relative_ path
 // of the filename for the member URN relative to the container's path.
 LEXICON_DEFINE(AFF4_DIRECTORY_CHILD_FILENAME, "http://aff4.org/Schema#directory/filename");
+
+// Cryptographic Hashing
+
+LEXICON_DEFINE(AFF4_HASH_TYPE, "http://aff4.org/Schema#hash");
+
+LEXICON_DEFINE(AFF4_HASH_MD5, "http://aff4.org/Schema#MD5");
+LEXICON_DEFINE(AFF4_HASH_SHA1, "http://aff4.org/Schema#SHA1");
+LEXICON_DEFINE(AFF4_HASH_SHA256, "http://aff4.org/Schema#SHA256");
+LEXICON_DEFINE(AFF4_HASH_SHA512, "http://aff4.org/Schema#SHA512");
+LEXICON_DEFINE(AFF4_HASH_BLAKE2B, "http://aff4.org/Schema#blake2b");
+
