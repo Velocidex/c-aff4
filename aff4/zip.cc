@@ -352,7 +352,6 @@ AFF4Status ZipFile::parse_cd() {
             // Store this information in the resolver. Ths allows segments to be
             // directly opened by URN.
             URN member_urn = urn_from_member_name(zip_info->filename, urn);
-            resolver->Set(member_urn, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
             resolver->Set(member_urn, AFF4_STORED, new URN(urn));
 
             // Store the URL->member name mapping so we can open the
@@ -476,7 +475,6 @@ AFF4Status ZipFile::CreateMemberStream(
     URN segment_urn,
     AFF4Flusher<AFF4Stream> &result) {
 
-    resolver->Set(segment_urn, AFF4_TYPE, new URN(AFF4_ZIP_SEGMENT_TYPE));
     resolver->Set(segment_urn, AFF4_STORED, new URN(urn));
 
     auto new_obj = new ZipFileSegment(resolver);
