@@ -235,8 +235,8 @@ class BasicImager {
                    "Size (E.g. 100Mb)"));
 
         AddArg(new TCLAP::ValueArg<std::string>(
-                   "c", "compression", "Type of compression to use (default zlib).",
-                   false, "", "zlib, snappy, lz4, none"));
+                   "c", "compression", "Type of compression to use (default deflate).",
+                   false, "", "deflate, snappy, lz4, none"));
 
         AddArg(new TCLAP::ValueArg<int>(
                    "", "threads", "Total number of threads to use.",

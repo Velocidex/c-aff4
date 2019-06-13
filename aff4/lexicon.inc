@@ -27,10 +27,6 @@ LEXICON_DEFINE(BUILTIN_PREFIX, "builtin://");
 // object internally.
 LEXICON_DEFINE(AFF4_VOLATILE_NAMESPACE, "http://aff4.org/VolatileSchema#");
 
-// We just store the member_name -> URN mapping so we can ensure the
-// right member is opened.
-LEXICON_DEFINE(AFF4_SEGMENT_FOR_URN, "http://aff4.org/VolatileSchema#segment_for_urn");
-
 // Commonly used RDF types.
 LEXICON_DEFINE(URNType, "URN");
 LEXICON_DEFINE(XSDStringType, "http://www.w3.org/2001/XMLSchema#string");
@@ -209,3 +205,14 @@ LEXICON_DEFINE(AFF4_DIRECTORY_TYPE, "http://aff4.org/Schema#directory");
 // between the URN and the filename. This attribute stores the _relative_ path
 // of the filename for the member URN relative to the container's path.
 LEXICON_DEFINE(AFF4_DIRECTORY_CHILD_FILENAME, "http://aff4.org/Schema#directory/filename");
+
+// Cryptographic Hashing
+
+LEXICON_DEFINE(AFF4_HASH_TYPE, "http://aff4.org/Schema#hash");
+
+LEXICON_DEFINE(AFF4_HASH_MD5, "http://aff4.org/Schema#MD5");
+LEXICON_DEFINE(AFF4_HASH_SHA1, "http://aff4.org/Schema#SHA1");
+LEXICON_DEFINE(AFF4_HASH_SHA256, "http://aff4.org/Schema#SHA256");
+LEXICON_DEFINE(AFF4_HASH_SHA512, "http://aff4.org/Schema#SHA512");
+LEXICON_DEFINE(AFF4_HASH_BLAKE2B, "http://aff4.org/Schema#blake2b");
+

@@ -95,6 +95,70 @@ AFF4Status CreateIntermediateDirectories(DataStore *resolver, std::string dir_na
     return CreateIntermediateDirectories(resolver, break_path_into_components(dir_name));
 }
 
+AFF4Status FileBackedObject::ReadBuffer(char * data, size_t * length) {
+    // If we're trying to read larger than a cache block, then we skip the cache
+    if (*length > cache_block_size) {
+        return _ReadBuffer(data, length);
+    }
+
+    // Save current position
+    const auto startpos = readptr;
+
+    // Calculate block number
+    const auto bn = startpos / cache_block_size;
+
+    // Calculate block offset
+    const auto offset = startpos % cache_block_size;
+
+    // If there's an overlap, then skip the cache
+    if (offset + *length > cache_block_size) {
+        return _ReadBuffer(data, length);
+    }
+
+    // Search the cache for a block
+    const auto block = read_cache.find(bn);
+    if (block != read_cache.end()) {
+        // We've got a cache hit!
+        const auto & block_data = block->second;
+
+        // Copy data to buffer
+        *length = block_data.copy(data, *length, offset);
+
+        // Adjust the read pointer
+        readptr += *length;
+
+        return STATUS_OK;
+    }
+
+    // We've got a cache miss
+
+    // Read a block of data
+    std::string block_data(cache_block_size, 0);
+    size_t read = cache_block_size;
+    readptr = bn * cache_block_size;
+    RETURN_IF_ERROR(_ReadBuffer(&block_data[0], &read));
+    block_data.resize(read);
+
+    // Copy data to buffer
+    *length = block_data.copy(data, *length, offset);
+
+    // Adjust the read pointer
+    readptr = startpos + *length;
+
+    // If the cache is full then remove a random block from the cache
+    if (read_cache.size() == cache_block_limit) {
+        auto el = read_cache.begin();
+        std::advance(el, rand() % cache_block_limit);
+        read_cache.erase(el);
+    }
+
+    // Add block to cache
+    read_cache.emplace(bn, std::move(block_data));
+
+    return STATUS_OK;
+}
+
+
 // Windows files are read through the CreateFile() API so that devices can be
 // read.
 #if defined(_WIN32)
@@ -182,7 +246,7 @@ AFF4Status CreateIntermediateDirectories(DataStore *resolver, std::string dir_na
     return STATUS_OK;
 }
 
-AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
+AFF4Status FileBackedObject::_ReadBuffer(char* data, size_t *length) {
     DWORD buf_length = (DWORD)*length;
 
     if (properties.seekable) {
@@ -315,7 +379,7 @@ FileBackedObject::~FileBackedObject() {
      return STATUS_OK;
  }
 
-AFF4Status FileBackedObject::ReadBuffer(char* data, size_t *length) {
+AFF4Status FileBackedObject::_ReadBuffer(char* data, size_t *length) {
     lseek(fd, readptr, SEEK_SET);
     const int res = read(fd, data, *length);
     if (res < 0) {
