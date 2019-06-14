@@ -79,14 +79,14 @@ public:
 };
 
 
-std::shared_ptr<spdlog::logger> setup_c_api_logger() {
+static std::shared_ptr<spdlog::logger> setup_c_api_logger() {
     spdlog::drop(aff4::LOGGER);
     auto logger = spdlog::create(aff4::LOGGER, std::make_shared<LogSink>());
     logger->set_level(spdlog::level::err);
     return logger;
 }
 
-std::shared_ptr<spdlog::logger> get_c_api_logger() {
+static std::shared_ptr<spdlog::logger> get_c_api_logger() {
     static std::shared_ptr<spdlog::logger> the_logger = setup_c_api_logger();
     return the_logger;
 }
@@ -103,24 +103,31 @@ struct AFF4_Handle {
     {}
 };
 
-spdlog::level::level_enum enum_for_level(unsigned int level) {
+static spdlog::level::level_enum enum_for_level(AFF4_LOG_LEVEL level) {
     switch (level) {
-    case 0:
-        return spdlog::level::trace;
-    case 1:
-        return spdlog::level::debug;
-    case 2:
-        return spdlog::level::info;
-    case 3:
-        return spdlog::level::warn;
-    default:
-        return spdlog::level::err;
+        case AFF4_LOG_LEVEL_TRACE:
+            return spdlog::level::trace;
+        case AFF4_LOG_LEVEL_DEBUG:
+            return spdlog::level::debug;
+        case AFF4_LOG_LEVEL_INFO:
+            return spdlog::level::info;
+        case AFF4_LOG_LEVEL_WARNING:
+            return spdlog::level::warn;
+        case AFF4_LOG_LEVEL_ERROR:
+            return spdlog::level::err;
+        case AFF4_LOG_LEVEL_CRITICAL:
+            return spdlog::level::critical;
+        case AFF4_LOG_LEVEL_OFF:
+            return spdlog::level::off;
     }
+
+    // Should be unreachable
+    return spdlog::level::err;
 }
 
 extern "C" {
 
-void AFF4_set_verbosity(unsigned int level) {
+void AFF4_set_verbosity(AFF4_LOG_LEVEL level) {
     get_c_api_logger()->set_level(enum_for_level(level));
 }
 
