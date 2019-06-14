@@ -51,19 +51,24 @@ typedef struct AFF4_Message {
 void AFF4_free_messages(AFF4_Message* msg);
 
 /**
+ * Log verbosity levels
+ */
+typedef enum {
+    AFF4_LOG_LEVEL_TRACE,
+    AFF4_LOG_LEVEL_DEBUG,
+    AFF4_LOG_LEVEL_INFO,
+    AFF4_LOG_LEVEL_WARNING,
+    AFF4_LOG_LEVEL_ERROR,
+    AFF4_LOG_LEVEL_CRITICAL,
+    AFF4_LOG_LEVEL_OFF
+} AFF4_LOG_LEVEL;
+
+/**
  * Set the verbosity level for logging.
- * Levels are:
- *    0 trace
- *    1 debug
- *    2 info
- *    3 warning
- *    4 error
- *    5 critical
- *    6 off
  *
  * @param level The verbosity level
  */
-void AFF4_set_verbosity(unsigned int level);
+void AFF4_set_verbosity(AFF4_LOG_LEVEL level);
 
 typedef struct AFF4_Handle AFF4_Handle;
 
