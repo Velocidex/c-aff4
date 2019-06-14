@@ -45,68 +45,19 @@ class AFF4SymbolicStream;
 // AFF4_Attributes are a collection of RDFValue objects, keyed by attributes.
 typedef std::unordered_map<std::string, std::vector<std::shared_ptr<RDFValue>>> AFF4_Attributes;
 
+// Deleter for AFF4Flusher
+struct AFF4Flusher_deleter {
+    template<typename AFF4ObjectType>
+    void operator()(AFF4ObjectType * obj) {
+        obj->Flush();
+        delete obj;
+    }
+};
+
+// Special type of unique_ptr that flushes an AFF4 object before freeing
 template<typename AFF4ObjectType>
-class AFF4Flusher {
- public:
-    AFF4Flusher(): ptr(nullptr) {}
-    explicit AFF4Flusher(std::unique_ptr<AFF4ObjectType> p): ptr(p) {}
-    explicit AFF4Flusher(AFF4ObjectType* p): ptr(p) {}
+using AFF4Flusher = std::unique_ptr<AFF4ObjectType, AFF4Flusher_deleter>;
 
-    ~AFF4Flusher() {
-        if (ptr) {
-            ptr->Flush();
-        }
-    }
-
-    AFF4ObjectType* operator->() const {
-        if (ptr == nullptr) abort();
-        return ptr.get();
-    }
-
-    bool operator!(void) const {
-        return ptr ? false : true;
-    }
-
-    AFF4ObjectType& operator*()  {
-        return *ptr;
-    }
-
-    AFF4ObjectType* get() const {
-        return ptr.get();
-    }
-
-    AFF4ObjectType* release() {
-        return ptr.release();
-    }
-
-    void reset(AFF4ObjectType* p) {
-        if (ptr) {
-            ptr->Flush();
-        }
-        ptr.reset(p);
-    }
-
-    void swap(AFF4Flusher<AFF4ObjectType> &p) {
-         ptr.swap(p.ptr);
-    }
-
-    AFF4Flusher(AFF4Flusher&& other) {
-        ptr.reset(other.release());
-    }
-
-    AFF4Flusher& operator=(AFF4Flusher &&other) {
-      if (this != &other) {
-          ptr = other.ptr;
-      }
-      return *this;
-    }
-
-
-    AFF4Flusher(const AFF4Flusher& other) = delete;
-    void operator=(const AFF4Flusher& other) = delete;
-
-    std::unique_ptr<AFF4ObjectType> ptr;
- };
 
 /**
  * @file   data_store.h
