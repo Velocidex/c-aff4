@@ -17,6 +17,7 @@
 #define LIBAFF4_C_H_
 
 #include <stdint.h>
+#include <unistd.h>
 
 /*
  * This is the C interface into libaff4.
