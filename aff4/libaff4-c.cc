@@ -177,6 +177,7 @@ AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
             }
 
             h->stream.reset(image.release());
+            h->urn = img_urn;
 
             return h.release();
         }
@@ -224,7 +225,106 @@ int AFF4_close(AFF4_Handle* handle, AFF4_Message** msg) {
     if (handle) {
         handle->stream.release();
     }
+
     return 0;
+}
+
+int AFF4_get_boolean_property(AFF4_Handle* handle, const char * property, int* result, AFF4_Message** msg) {
+  if (!handle || !result) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  get_log_handler().use(msg);
+
+  aff4::XSDBoolean value;
+  if (handle->resolver.Get(handle->urn, aff4::URN(property), value) != aff4::STATUS_OK) {
+      errno = ENOENT;
+      return -1;
+  }
+
+  *result = (value.value) ? 1 : 0;
+
+  return 0;
+}
+
+int AFF4_get_integer_property(AFF4_Handle* handle, const char * property, int64_t* result, AFF4_Message** msg) {
+  if (!handle || !result) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  get_log_handler().use(msg);
+
+  aff4::XSDInteger value;
+  if (handle->resolver.Get(handle->urn, aff4::URN(property), value) != aff4::STATUS_OK) {
+      errno = ENOENT;
+      return -1;
+  }
+
+  *result = value.value;
+
+  return 0;
+}
+
+int AFF4_get_string_property(AFF4_Handle* handle, const char * property, char** result, AFF4_Message** msg) {
+  if (!handle || !result) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  *result = nullptr;
+
+  get_log_handler().use(msg);
+
+  aff4::XSDString value;
+  if (handle->resolver.Get(handle->urn, aff4::URN(property), value) != aff4::STATUS_OK) {
+      errno = ENOENT;
+      return -1;
+  }
+
+  const std::string & res = value.value;
+
+  *result = (char *) malloc(res.length() + 1);
+  if (*result == nullptr) {
+      errno = ENOMEM;
+      return -1;
+  }
+
+  res.copy(*result, res.length());
+  *result[res.length()] = 0; // null terminate string
+
+  return 0;
+}
+
+int AFF4_get_binary_property(AFF4_Handle* handle, const char * property, AFF4_Binary_Result* result, AFF4_Message** msg) {
+  if (!handle || !result) {
+    errno = EINVAL;
+    return -1;
+  }
+
+  *result = {};
+
+  get_log_handler().use(msg);
+
+  aff4::RDFBytes value;
+  if (handle->resolver.Get(handle->urn, aff4::URN(property), value) != aff4::STATUS_OK) {
+      errno = ENOENT;
+      return -1;
+  }
+
+  const std::string & res = value.value;
+
+  result->data = malloc(res.length());
+  if (result->data == nullptr) {
+      errno = ENOMEM;
+      return -1;
+  }
+  result->length = res.length();
+
+  res.copy(static_cast<char *>(result->data), res.length());
+
+  return 0;
 }
 
 }
