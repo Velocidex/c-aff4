@@ -99,6 +99,50 @@ ssize_t AFF4_read(AFF4_Handle* handle, uint64_t offset, void* buffer, size_t len
  */
 int AFF4_close(AFF4_Handle* handle, AFF4_Message** msg);
 
+/**
+ * @param handle The Object handle.
+ * @param property The property key
+ * @param result Pointer to store the result
+ * @param msg A pointer to log messages.
+ * @return 0 on success or non-zero on error
+ */
+int AFF4_get_boolean_property(AFF4_Handle* handle, const char * property, int* result, AFF4_Message** msg);
+
+/**
+ * @param handle The Object handle.
+ * @param property The property key
+ * @param result Pointer to store the result
+ * @param msg A pointer to log messages.
+ * @return 0 on success or non-zero on error
+ */
+int AFF4_get_integer_property(AFF4_Handle* handle, const char * property, int64_t* result, AFF4_Message** msg);
+
+/**
+ * @param handle The Object handle.
+ * @param property The property key
+ * @param result Pointer to store the result (must be freed by caller)
+ * @param msg A pointer to log messages.
+ * @return 0 on success or non-zero on error
+ */
+int AFF4_get_string_property(AFF4_Handle* handle, const char * property, char** result, AFF4_Message** msg);
+
+/**
+ * Result of binary data
+ */
+typedef struct {
+    void * data;    // Pointer to data (must be freed by caller)
+    size_t length;  // Size of data
+} AFF4_Binary_Result;
+
+/**
+ * @param handle The Object handle.
+ * @param property The property key
+ * @param result Pointer to store the result (data must be freed by caller)
+ * @param msg A pointer to log messages.
+ * @return 0 on success or non-zero on error
+ */
+int AFF4_get_binary_property(AFF4_Handle* handle, const char * property, AFF4_Binary_Result* result, AFF4_Message** msg);
+
 #ifdef __cplusplus
 }
 #endif
