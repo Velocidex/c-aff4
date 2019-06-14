@@ -223,7 +223,7 @@ int AFF4_close(AFF4_Handle* handle, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
     if (handle) {
-        handle->stream.release();
+        delete handle;
     }
 
     return 0;
