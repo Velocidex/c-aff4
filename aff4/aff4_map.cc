@@ -99,8 +99,20 @@ AFF4Status AFF4Map::OpenAFF4Map(
             line.erase(line.length()-1, 1);
         }
         AFF4Flusher<AFF4Stream> target;
-        RETURN_IF_ERROR(volumes->GetStream(URN(line), target));
-
+        if((volumes->GetStream(URN(line), target)) != STATUS_OK){
+            // Search in the repository for this target.
+            resolver->logger->info("Attempting to locate resource {} ", line);
+            if(resolver->HasURNWithAttribute(URN(line), AFF4_STORED)){
+                // Get the ID of the container with this stream.
+                URN targetContainer;
+                RETURN_IF_ERROR(resolver->Get(URN(line), AFF4_STORED, targetContainer));
+                RETURN_IF_ERROR(volumes->LocateAndAdd(targetContainer));
+                RETURN_IF_ERROR(volumes->GetStream(URN(line), target));
+            } else {
+                return NOT_FOUND;
+            }
+        }
+        
         resolver->logger->debug("MAP: Opened {} {} for target {}",
                                 target->urn, line,  map_obj->targets.size());
 

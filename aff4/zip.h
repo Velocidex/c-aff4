@@ -312,6 +312,10 @@ class ZipFile: public AFF4Volume {
         AFF4Flusher<AFF4Stream> &&backing_stream,
         AFF4Flusher<AFF4Volume> &result);
 
+    static std::string GetResourceID(
+        std::string& filename, 
+        std::shared_ptr<spdlog::logger> logger);
+    
     // Generic volume interface.
     AFF4Status CreateMemberStream(
         URN segment_urn,

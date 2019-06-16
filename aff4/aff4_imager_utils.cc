@@ -248,7 +248,8 @@ AFF4Status BasicImager::handle_aff4_volumes() {
                                     AFF4Flusher<AFF4Stream>(backing_stream.release()),
                                     volume));
 
-                volume_objs.AddVolume(AFF4Flusher<AFF4Volume>(volume.release()));
+                volume_objs.AddVolume(std::move(AFF4Flusher<AFF4Volume>(volume.release())));
+                volume_objs.AddSearchPath(volume_to_load);
             }
         }
     }
