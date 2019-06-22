@@ -143,8 +143,78 @@ struct AFF4_Handle {
         return true;
     }
 
-    friend AFF4_Handle* AFF4_open(const char*, AFF4_Message**);
+    friend class HandlePool;
 };
+
+class HandlePool {
+    using pool_type = std::vector<std::unique_ptr<AFF4_Handle>>;
+
+  public:
+
+    AFF4_Handle * get(const std::string & filename) {
+        std::lock_guard<std::mutex> lock{pool_lock};
+
+        const auto it = std::find_if(pool.begin(), pool.end(),
+            [&filename](const std::unique_ptr<AFF4_Handle> & el) {
+                return (el != nullptr && el->filename == filename);
+            });
+
+        if (it != pool.end()) {
+            return it->release();
+        }
+
+        std::unique_ptr<AFF4_Handle> h(new AFF4_Handle(filename));
+
+        if (h->open()) {
+            return h.release();
+        }
+
+        return nullptr;
+    }
+
+    void put(AFF4_Handle * h) {
+        std::lock_guard<std::mutex> lock{pool_lock};
+
+        if (pool.empty()) {
+            delete h;
+            return;
+        }
+
+        if (next == pool.end()) {
+            next = pool.begin();
+        }
+
+        next->reset(h);
+        next++;
+    }
+
+    void set_cache_size(size_t n) {
+        std::lock_guard<std::mutex> lock{pool_lock};
+
+        pool.resize(n);
+        next = pool.begin();
+    }
+
+    void clear_cache() {
+        std::lock_guard<std::mutex> lock{pool_lock};
+
+        const auto n = pool.size();
+
+        pool.clear();
+        pool.resize(n);
+        next = pool.begin();
+    }
+
+  private:
+    std::mutex pool_lock{};
+    pool_type pool{};
+    pool_type::iterator next{pool.begin()};
+};
+
+static HandlePool & handle_pool() {
+    static HandlePool pool{};
+    return pool;
+}
 
 static spdlog::level::level_enum enum_for_level(AFF4_LOG_LEVEL level) {
     switch (level) {
@@ -174,6 +244,14 @@ void AFF4_set_verbosity(AFF4_LOG_LEVEL level) {
     get_c_api_logger()->set_level(enum_for_level(level));
 }
 
+void AFF4_set_handle_cache_size(size_t n) {
+    handle_pool().set_cache_size(n);
+}
+
+void AFF4_clear_handle_cache() {
+    handle_pool().clear_cache();
+}
+
 void AFF4_free_messages(AFF4_Message* msg) {
     while (msg) {
         AFF4_Message* next = msg->next;
@@ -186,14 +264,13 @@ void AFF4_free_messages(AFF4_Message* msg) {
 AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
-    std::unique_ptr<AFF4_Handle> h(new AFF4_Handle(filename));
+    AFF4_Handle * h = handle_pool().get(filename);
 
-    if (h->open()) {
-        return h.release();
+    if (h == nullptr) {
+        errno = ENOENT;
     }
 
-    errno = ENOENT;
-    return nullptr;
+    return h;
 }
 
 uint64_t AFF4_object_size(AFF4_Handle* handle, AFF4_Message** msg) {
@@ -230,9 +307,7 @@ ssize_t AFF4_read(AFF4_Handle* handle, uint64_t offset,
 int AFF4_close(AFF4_Handle* handle, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
-    if (handle) {
-        delete handle;
-    }
+    handle_pool().put(handle);
 
     return 0;
 }
