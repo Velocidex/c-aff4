@@ -34,7 +34,7 @@ AFF4Status AFF4Directory::NewAFF4Directory(
     RETURN_IF_ERROR(AFF4Directory::NewAFF4Directory(
                         resolver, root_path, truncate, new_obj));
 
-    result.reset(new_obj.release());
+    result = std::move(new_obj);
 
     return STATUS_OK;
 }
@@ -44,7 +44,7 @@ AFF4Status AFF4Directory::NewAFF4Directory(
     bool truncate,
     AFF4Flusher<AFF4Directory> &result) {
 
-    AFF4Flusher<AFF4Directory> new_obj(new AFF4Directory(resolver));
+    auto new_obj = make_flusher<AFF4Directory>(resolver);
     new_obj->root_path = root_path;
 
     // If mode is truncate we need to clear the directory.
@@ -72,7 +72,7 @@ AFF4Status AFF4Directory::NewAFF4Directory(
 
     resolver->Set(new_obj->urn, AFF4_STORED, new URN(URN::NewURNFromFilename(root_path, true)));
 
-    result.swap(new_obj);
+    result = std::move(new_obj);
 
     return STATUS_OK;
 }
@@ -112,7 +112,7 @@ AFF4Status AFF4Directory::CreateMemberStream(
 
     MarkDirty();
 
-    result.reset(child_fd.release());
+    result = std::move(child_fd);
 
     return STATUS_OK;
 }
@@ -143,7 +143,7 @@ AFF4Status AFF4Directory::OpenMemberStream(
 
     child_fd->urn = child;
 
-    result.reset(child_fd.release());
+    result = std::move(child_fd);
 
     return STATUS_OK;
 }
@@ -152,7 +152,7 @@ AFF4Status AFF4Directory::OpenAFF4Directory(
     DataStore *resolver, std::string dirname,
     AFF4Flusher<AFF4Directory> &result) {
 
-    AFF4Flusher<AFF4Directory> new_obj(new AFF4Directory(resolver));
+    auto new_obj = make_flusher<AFF4Directory>(resolver);
     new_obj->root_path = dirname;
 
     AFF4Flusher<FileBackedObject> desc;
@@ -170,7 +170,7 @@ AFF4Status AFF4Directory::OpenAFF4Directory(
                         dirname + PATH_SEP_STR + AFF4_CONTAINER_INFO_TURTLE,
                         "read", turtle_stream));
 
-    result.swap(new_obj);
+    result = std::move(new_obj);
 
     return resolver->LoadFromTurtle(*turtle_stream);
 }

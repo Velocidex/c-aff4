@@ -59,6 +59,13 @@ template<typename AFF4ObjectType>
 using AFF4Flusher = std::unique_ptr<AFF4ObjectType, AFF4Flusher_deleter>;
 
 
+// Constructs an AFF4 Object and wraps it in a AFF4Flusher
+template<typename AFF4ObjectType, typename ...Args>
+AFF4Flusher<AFF4ObjectType> make_flusher(Args && ...args) {
+    return AFF4Flusher<AFF4ObjectType>(new AFF4ObjectType(std::forward<Args>(args)...));
+}
+
+
 /**
  * @file   data_store.h
  * @author scudette <scudette@google.com>

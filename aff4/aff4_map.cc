@@ -45,7 +45,7 @@ AFF4Status AFF4Map::NewAFF4Map(
         return INVALID_INPUT;
     }
 
-    AFF4Flusher<AFF4Map> new_object(new AFF4Map(resolver));
+    auto new_object = make_flusher<AFF4Map>(resolver);
     new_object->urn = object_urn;
 
     // If callers did not provide a data stream we create a default
@@ -69,7 +69,7 @@ AFF4Status AFF4Map::NewAFF4Map(
     resolver->Set(object_urn, AFF4_STORED, new URN(volume->urn));
     new_object->current_volume = volume;
 
-    result.reset(new_object.release());
+    result = std::move(new_object);
 
     return STATUS_OK;
 }
@@ -78,7 +78,7 @@ AFF4Status AFF4Map::OpenAFF4Map(
     DataStore* resolver, const URN& object_urn,
     VolumeGroup *volumes, AFF4Flusher<AFF4Map> &map_obj) {
 
-    map_obj.reset(new AFF4Map(resolver));
+    map_obj = make_flusher<AFF4Map>(resolver);
     map_obj->urn = object_urn;
     map_obj->volumes = volumes;
 
