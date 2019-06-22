@@ -96,11 +96,54 @@ struct AFF4_Handle {
     aff4::URN urn;
     aff4::VolumeGroup volumes;
     aff4::AFF4Flusher<aff4::AFF4Stream> stream;
+    std::string filename;
 
-    AFF4_Handle():
+    AFF4_Handle(const std::string & filename):
         resolver(aff4::DataStoreOptions(get_c_api_logger(), 1)),
-        volumes(&resolver)
+        volumes(&resolver),
+        filename(filename)
     {}
+
+  protected:
+    bool open() {
+        aff4::AFF4Flusher<aff4::FileBackedObject> file;
+        if (aff4::STATUS_OK != aff4::NewFileBackedObject(
+                &resolver, filename, "read", file)) {
+            return false;
+        }
+
+        aff4::AFF4Flusher<aff4::AFF4Volume> zip;
+        if (aff4::STATUS_OK != aff4::ZipFile::OpenZipFile(
+                &resolver, aff4::AFF4Flusher<aff4::AFF4Stream>(file.release()), zip)) {
+            return false;
+        };
+
+        volumes.AddVolume(std::move(zip));
+
+        // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
+
+        const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
+        auto images = resolver.Query(aff4::AFF4_TYPE, &type);
+
+        if (images.empty()) {
+            const aff4::URN legacy_type(aff4::AFF4_LEGACY_IMAGE_TYPE);
+            images = resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
+            if (images.empty()) {
+                return false;
+            }
+        }
+
+        // For determinism, get the "first" sorted urn in the set
+        urn = *std::min_element(images.begin(), images.end());
+
+        if (aff4::STATUS_OK != volumes.GetStream(urn, stream)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    friend AFF4_Handle* AFF4_open(const char*, AFF4_Message**);
 };
 
 static spdlog::level::level_enum enum_for_level(AFF4_LOG_LEVEL level) {
@@ -141,56 +184,14 @@ void AFF4_free_messages(AFF4_Message* msg) {
 }
 
 AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
-    std::unique_ptr<AFF4_Handle> h(new AFF4_Handle());
-    std::unordered_set<aff4::URN> images;
-    const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
-    aff4::AFF4Flusher<aff4::AFF4Volume> zip;
-
     get_log_handler().use(msg);
 
-    aff4::AFF4Flusher<aff4::FileBackedObject> file;
-    if (aff4::STATUS_OK != aff4::NewFileBackedObject(
-            &h->resolver, filename, "read", file)) {
-        goto fail;
+    std::unique_ptr<AFF4_Handle> h(new AFF4_Handle(filename));
+
+    if (h->open()) {
+        return h.release();
     }
 
-    if (aff4::STATUS_OK != aff4::ZipFile::OpenZipFile(
-            &h->resolver, aff4::AFF4Flusher<aff4::AFF4Stream>(file.release()), zip)) {
-        goto fail;
-    };
-
-    h->volumes.AddVolume(std::move(zip));
-
-    // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
-    images = h->resolver.Query(aff4::AFF4_TYPE, &type);
-
-    if (images.empty()) {
-        const aff4::URN legacy_type(aff4::AFF4_LEGACY_IMAGE_TYPE);
-        images = h->resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
-        if (images.empty()) {
-            goto fail;
-        }
-    }
-
-    {
-        // Sort URNs so that we have some sort of determinism
-        std::vector<aff4::URN> sorted_images{images.begin(), images.end()};
-        std::sort(sorted_images.begin(), sorted_images.end());
-
-        for (const auto& img_urn: sorted_images) {
-            aff4::AFF4Flusher<aff4::AFF4Stream> image;
-            if (aff4::STATUS_OK != h->volumes.GetStream(img_urn, image)) {
-                goto fail;
-            }
-
-            h->stream.reset(image.release());
-            h->urn = img_urn;
-
-            return h.release();
-        }
-    }
-
- fail:
     errno = ENOENT;
     return nullptr;
 }
