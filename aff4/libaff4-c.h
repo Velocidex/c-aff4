@@ -71,6 +71,20 @@ typedef enum {
  */
 void AFF4_set_verbosity(AFF4_LOG_LEVEL level);
 
+/**
+ * Set the maximum number of handles to be retained in a cache for reuse.
+ * By default no handles are cached.
+ *
+ * @param n The number of handles to cache
+ */
+void AFF4_set_handle_cache_size(size_t n);
+
+/**
+ * Empties the handle cache, freeing all cached handles.
+ * This does not affect the cache size.
+ */
+void AFF4_clear_handle_cache();
+
 typedef struct AFF4_Handle AFF4_Handle;
 
 /**
