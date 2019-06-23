@@ -46,7 +46,7 @@ FileBackedObject implementation.
      AFF4Flusher<FileBackedObject> file;
      RETURN_IF_ERROR(NewFileBackedObject(resolver, filename, mode, file));
 
-     result.reset(file.release());
+     result = std::move(file);
 
      return STATUS_OK;
  }
@@ -168,7 +168,7 @@ AFF4Status FileBackedObject::ReadBuffer(char * data, size_t * length) {
      std::string filename,
      std::string mode,
      AFF4Flusher<FileBackedObject> &result) {
-     auto new_object = AFF4Flusher<FileBackedObject>(new FileBackedObject(resolver));
+     auto new_object = make_flusher<FileBackedObject>(resolver);
      new_object->urn = URN::NewURNFromFilename(filename, false);
 
     std::vector<std::string> directory_components = split(filename, PATH_SEP);
@@ -241,7 +241,7 @@ AFF4Status FileBackedObject::ReadBuffer(char * data, size_t * length) {
         }
     }
 
-    result.swap(new_object);
+    result = std::move(new_object);
 
     return STATUS_OK;
 }
@@ -327,7 +327,7 @@ FileBackedObject::~FileBackedObject() {
      std::string mode,
      AFF4Flusher<FileBackedObject> &result
  ) {
-     auto new_object = AFF4Flusher<FileBackedObject>(new FileBackedObject(resolver));
+     auto new_object = make_flusher<FileBackedObject>(resolver);
      new_object->urn = URN::NewURNFromFilename(filename, false);
 
      std::vector<std::string> directory_components = split(filename, PATH_SEP);
@@ -375,7 +375,7 @@ FileBackedObject::~FileBackedObject() {
         new_object->properties.seekable = false;
     }
 
-     result.swap(new_object);
+     result = std::move(new_object);
 
      return STATUS_OK;
  }
@@ -442,7 +442,7 @@ AFF4Status AFF4Stdout::NewAFF4Stdout(
         DataStore *resolver,
         AFF4Flusher<AFF4Stream> &result) {
 
-    AFF4Flusher<AFF4Stdout> new_object(new AFF4Stdout(resolver));
+    auto new_object = make_flusher<AFF4Stdout>(resolver);
 
     new_object->properties.seekable = false;
     new_object->properties.writable = true;
@@ -458,7 +458,7 @@ AFF4Status AFF4Stdout::NewAFF4Stdout(
     new_object->fd = STDOUT_FILENO;
 #endif
 
-    result.reset(new_object.release());
+    result = std::move(new_object);
 
     return STATUS_OK;
 }

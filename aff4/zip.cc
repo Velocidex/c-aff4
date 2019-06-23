@@ -47,7 +47,7 @@ AFF4Status ZipFile::NewZipFile(
     RETURN_IF_ERROR(ZipFile::NewZipFile(
                         resolver, std::move(backing_stream), new_obj));
 
-    result.reset(new_obj.release());
+    result = std::move(new_obj);
 
     return STATUS_OK;
 }
@@ -58,9 +58,9 @@ AFF4Status ZipFile::NewZipFile(
         AFF4Flusher<ZipFile> &result) {
 
     // We need to create an empty temporary object to get a new URN.
-    AFF4Flusher<ZipFile> self(new ZipFile(resolver));
+    auto self = make_flusher<ZipFile>(resolver);
 
-    self->backing_stream.swap(backing_stream);
+    self->backing_stream = std::move(backing_stream);
 
     resolver->Set(self->urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE),
                   /* replace = */ false);
@@ -91,7 +91,7 @@ AFF4Status ZipFile::NewZipFile(
                                     AFF4_TOOL, PACKAGE_VERSION)));
     }
 
-    result.swap(self);
+    result = std::move(self);
 
     return STATUS_OK;
 }
@@ -120,7 +120,7 @@ AFF4Status ZipFile::OpenMemberStream(
         ZipFileSegment::OpenZipFileSegment(
             segment_urn, *this, segment));
 
-    result.reset(segment.release());
+    result = std::move(segment);
 
     return STATUS_OK;
 }
@@ -135,7 +135,7 @@ AFF4Status ZipFile::OpenZipFile(
     RETURN_IF_ERROR(ZipFile::OpenZipFile(
                         resolver, std::move(backing_stream), zip));
 
-    result.reset(zip.release());
+    result = std::move(zip);
     return STATUS_OK;
 }
 
@@ -144,14 +144,14 @@ AFF4Status ZipFile::OpenZipFile(
     AFF4Flusher<AFF4Stream> &&backing_stream,
     AFF4Flusher<ZipFile> &result) {
 
-    AFF4Flusher<ZipFile> self(new ZipFile(resolver));
-    self->backing_stream.swap(backing_stream);
+    auto self = make_flusher<ZipFile>(resolver);
+    self->backing_stream = std::move(backing_stream);
 
     // Parse the ZIP file.
     RETURN_IF_ERROR(self->parse_cd());
     RETURN_IF_ERROR(self->LoadTurtleMetadata());
 
-    result.reset(self.release());
+    result = std::move(self);
 
     return STATUS_OK;
 }
@@ -470,11 +470,11 @@ AFF4Status ZipFile::CreateMemberStream(
 
     resolver->Set(segment_urn, AFF4_STORED, new URN(urn));
 
-    auto new_obj = new ZipFileSegment(resolver);
+    auto new_obj = make_flusher<ZipFileSegment>(resolver);
     new_obj->urn = segment_urn;
     new_obj->owner = this;
 
-    result.reset(new_obj);
+    result = std::move(new_obj);
 
     resolver->logger->debug("Creating ZipFileSegment {}", result->urn);
 
@@ -496,13 +496,13 @@ AFF4Status ZipFileSegment::NewZipFileSegment(
     URN urn, ZipFile& owner,
     AFF4Flusher<ZipFileSegment> &result) {
 
-    AFF4Flusher<ZipFileSegment> new_obj(new ZipFileSegment(owner.resolver));
+    auto new_obj = make_flusher<ZipFileSegment>(owner.resolver);
 
     new_obj->resolver = owner.resolver;
     new_obj->owner = &owner;
     new_obj->urn = urn;
 
-    result.swap(new_obj);
+    result = std::move(new_obj);
 
     return STATUS_OK;
 }

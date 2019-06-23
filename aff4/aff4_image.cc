@@ -390,7 +390,7 @@ AFF4Status AFF4Image::OpenAFF4Image(
     VolumeGroup *volumes,
     AFF4Flusher<AFF4Image> &result) {
 
-    auto new_obj = AFF4Flusher<AFF4Image>(new AFF4Image(resolver));
+    auto new_obj = make_flusher<AFF4Image>(resolver);
     new_obj->urn.Set(image_urn);
     new_obj->volumes = volumes;
 
@@ -462,7 +462,7 @@ AFF4Status AFF4Image::OpenAFF4Image(
         }
     }
 
-    result.swap(new_obj);
+    result = std::move(new_obj);
 
     return STATUS_OK;
 }
@@ -478,7 +478,7 @@ AFF4Status AFF4Image::NewAFF4Image(
         AFF4Image::NewAFF4Image(
             resolver, image_urn, volume, image));
 
-    result.reset(image.release());
+    result = std::move(image);
 
     return STATUS_OK;
 }
@@ -490,7 +490,7 @@ AFF4Status AFF4Image::NewAFF4Image(
     AFF4Volume *volume,
     AFF4Flusher<AFF4Image> &result) {
 
-    auto new_obj = AFF4Flusher<AFF4Image>(new AFF4Image(resolver));
+    auto new_obj = make_flusher<AFF4Image>(resolver);
     new_obj->urn = image_urn;
     new_obj->current_volume = volume;
 
@@ -501,7 +501,7 @@ AFF4Status AFF4Image::NewAFF4Image(
         resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
     }
 
-    new_obj.swap(result);
+    new_obj = std::move(result);
 
     return STATUS_OK;
 }

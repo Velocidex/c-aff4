@@ -28,7 +28,7 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
                     AFF4Image::OpenAFF4Image(
                         resolver, stream_urn, this, image_stream));
 
-                result.reset(image_stream.release());
+                result = std::move(image_stream);
 
                 resolver->logger->debug("Openning {} as type {}",
                                         stream_urn, type_str);
@@ -64,7 +64,7 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
                     AFF4Map::OpenAFF4Map(
                         resolver, stream_urn, this, map_stream));
 
-                result.reset(map_stream.release());
+                result = std::move(map_stream);
                 resolver->logger->debug("Openning {} as type {}",
                                         stream_urn, type_str);
 
@@ -90,19 +90,19 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
 
     // Handle symbolic streams now.
     if (stream_urn == AFF4_IMAGESTREAM_ZERO) {
-        result.reset(new AFF4SymbolicStream(resolver, stream_urn, 0));
+        result = make_flusher<AFF4SymbolicStream>(resolver, stream_urn, 0);
         return STATUS_OK;
     }
     if (stream_urn == AFF4_IMAGESTREAM_FF) {
-        result.reset(new AFF4SymbolicStream(resolver, stream_urn, 0xff));
+        result = make_flusher<AFF4SymbolicStream>(resolver, stream_urn, 0xff);
         return STATUS_OK;
     }
     if (stream_urn == AFF4_IMAGESTREAM_UNKNOWN) {
-        result.reset(new AFF4SymbolicStream(resolver, stream_urn, "UNKNOWN"));
+        result = make_flusher<AFF4SymbolicStream>(resolver, stream_urn, "UNKNOWN");
         return STATUS_OK;
     }
     if (stream_urn == AFF4_IMAGESTREAM_UNREADABLE) {
-        result.reset(new AFF4SymbolicStream(resolver, stream_urn, "UNREADABLEDATA"));
+        result = make_flusher<AFF4SymbolicStream>(resolver, stream_urn, "UNREADABLEDATA");
         return STATUS_OK;
     }
 
@@ -111,7 +111,7 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
             "%s%02X", AFF4_IMAGESTREAM_SYMBOLIC_PREFIX, i);
 
         if (stream_urn == urn) {
-            result.reset(new AFF4SymbolicStream(resolver, stream_urn, i));
+            result = make_flusher<AFF4SymbolicStream>(resolver, stream_urn, i);
             return STATUS_OK;
         }
     }
