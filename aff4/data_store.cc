@@ -408,6 +408,7 @@ AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute,
         // be zip segments.
         if (attribute == AFF4_TYPE) {
             value.UnSerializeFromString(AFF4_ZIP_SEGMENT_TYPE);
+            return STATUS_OK;
         }
 
         return NOT_FOUND;
