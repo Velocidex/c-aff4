@@ -67,10 +67,10 @@ AFF4Status AFF4Directory::NewAFF4Directory(
         RETURN_IF_ERROR(MkDir(resolver, root_path.c_str()));
     }
 
-    resolver->Set(new_obj->urn, AFF4_TYPE, new URN(AFF4_DIRECTORY_TYPE),
+    resolver->Set(new_obj->urn, AFF4_TYPE, URN(AFF4_DIRECTORY_TYPE),
                   /* replace= */ false);
 
-    resolver->Set(new_obj->urn, AFF4_STORED, new URN(URN::NewURNFromFilename(root_path, true)));
+    resolver->Set(new_obj->urn, AFF4_STORED, URN::NewURNFromFilename(root_path, true));
 
     result = std::move(new_obj);
 
@@ -95,9 +95,9 @@ AFF4Status AFF4Directory::CreateMemberStream(
     std::string filename = member_name_for_urn(child, urn, false);
 
     // We are allowed to create any files inside the directory volume.
-    resolver->Set(child, AFF4_TYPE, new URN(AFF4_FILE_TYPE));
-    resolver->Set(child, AFF4_STORED, new URN(urn));
-    resolver->Set(child, AFF4_DIRECTORY_CHILD_FILENAME, new XSDString(filename));
+    resolver->Set(child, AFF4_TYPE, URN(AFF4_FILE_TYPE));
+    resolver->Set(child, AFF4_STORED, URN(urn));
+    resolver->Set(child, AFF4_DIRECTORY_CHILD_FILENAME, XSDString(filename));
 
     // Store the member inside our storage location.
     std::string full_path = root_path + PATH_SEP_STR + filename;

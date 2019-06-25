@@ -494,11 +494,11 @@ AFF4Status AFF4Image::NewAFF4Image(
     new_obj->urn = image_urn;
     new_obj->current_volume = volume;
 
-    resolver->Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
+    resolver->Set(image_urn, AFF4_TYPE, URN(AFF4_IMAGESTREAM_TYPE),
                   /* replace = */ false);
-    resolver->Set(image_urn, AFF4_STORED, new URN(volume->urn));
+    resolver->Set(image_urn, AFF4_STORED, volume->urn);
     if(!resolver->HasURNWithAttribute(image_urn, AFF4_STREAM_SIZE)) {
-        resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
+        resolver->Set(image_urn, AFF4_STREAM_SIZE, XSDInteger(0ULL));
     }
 
     new_obj = std::move(result);
@@ -541,7 +541,7 @@ AFF4Status AFF4Image::FlushBevy() {
     RETURN_IF_ERROR(bevy_member->WriteStream(&bevy_stream, &empty_progress));
 
     // Done with this bevy - make a new writer.
-    bevy_writer.reset(new _BevyWriter(
+    bevy_writer.reset(new _BevyWriter( // "new" needed here due to custom _BevyWriter deleter
                           resolver, compression, chunk_size,
                           chunks_per_segment));
     bevy_number++;
@@ -556,8 +556,8 @@ AFF4Status AFF4Image::Write(const char* data, size_t length) {
 
     // Prepare a bevy writer to collect the first bevy.
     if (bevy_writer == nullptr) {
-        bevy_writer.reset(new _BevyWriter(resolver, compression, chunk_size,
-                                          chunks_per_segment));
+        bevy_writer.reset(new _BevyWriter(resolver, // "new" needed here due to custom _BevyWriter deleter
+            compression, chunk_size, chunks_per_segment));
     }
 
     // This object is now dirty.
@@ -882,18 +882,17 @@ AFF4Status AFF4Image::ReadBuffer(char* data, size_t* length) {
 }
 
 AFF4Status AFF4Image::_write_metadata() {
-    resolver->Set(urn, AFF4_TYPE, new URN(AFF4_IMAGESTREAM_TYPE),
+    resolver->Set(urn, AFF4_TYPE, URN(AFF4_IMAGESTREAM_TYPE),
                   /* replace = */ false);
 
-    resolver->Set(urn, AFF4_STREAM_CHUNK_SIZE, new XSDInteger(chunk_size));
+    resolver->Set(urn, AFF4_STREAM_CHUNK_SIZE, XSDInteger(chunk_size));
 
     resolver->Set(urn, AFF4_STREAM_CHUNKS_PER_SEGMENT,
-                  new XSDInteger(chunks_per_segment));
+        XSDInteger(chunks_per_segment));
 
-    resolver->Set(urn, AFF4_STREAM_SIZE, new XSDInteger(size));
+    resolver->Set(urn, AFF4_STREAM_SIZE, XSDInteger(size));
 
-    resolver->Set(urn, AFF4_IMAGE_COMPRESSION, new URN(
-                      CompressionMethodToURN(compression)));
+    resolver->Set(urn, AFF4_IMAGE_COMPRESSION, CompressionMethodToURN(compression));
 
     return STATUS_OK;
 }
@@ -925,7 +924,7 @@ AFF4Status AFF4Image::Flush() {
 
 std::string AFF4Image::_FixupBevyData(std::string* data){
     const uint32_t index_size = data->length() / sizeof(uint32_t);
-    std::unique_ptr<BevyIndex[]> bevy_index_array(new BevyIndex[index_size]);
+    auto bevy_index_array = absl::make_unique<BevyIndex[]>(index_size);
     uint32_t* bevy_index_data = reinterpret_cast<uint32_t*>(&(*data)[0]);
 
     uint64_t cOffset = 0;

@@ -30,6 +30,8 @@ specific language governing permissions and limitations under the License.
 #include "aff4/aff4_utils.h"
 #include "aff4/rdf.h"
 
+#include <absl/memory/memory.h>
+
 // A constant for various buffers used by the AFF4 library.
 #define AFF4_BUFF_SIZE (32 * 1024)
 
@@ -200,7 +202,7 @@ class StringIO: public AFF4Stream {
 
     // Convenience constructors.
     static std::unique_ptr<StringIO> NewStringIO() {
-        return std::unique_ptr<StringIO>(new StringIO());
+        return absl::make_unique<StringIO>();
     }
 
     std::string Read(size_t length) override;

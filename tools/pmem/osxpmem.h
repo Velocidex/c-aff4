@@ -98,21 +98,21 @@ class OSXPmemImager: public PmemImager {
   void fix_path(const std::string& path, mode_t mode);
 
   virtual AFF4Status RegisterArgs() {
-    AddArg(new TCLAP::SwitchArg(
-        "L", "load-driver", "Load the driver and exit", false));
+    AddArg<TCLAP::SwitchArg>(
+        "L", "load-driver", "Load the driver and exit", false);
 
-    AddArg(new TCLAP::SwitchArg(
-        "U", "unload-driver", "Unload the driver and exit", false));
+    AddArg<TCLAP::SwitchArg>(
+        "U", "unload-driver", "Unload the driver and exit", false);
 
-    AddArg(new TCLAP::ValueArg<std::string>(
+    AddArg<TCLAP::ValueArg<std::string>>(
         "", "driver", "Path to driver to load. "
         "This is usually set to the driver included in the package.",
-        false, "MacPmem.kext", "Path to driver."));
+        false, "MacPmem.kext", "Path to driver.");
 
-    AddArg(new TCLAP::ValueArg<std::string>(
+    AddArg<TCLAP::ValueArg<std::string>>(
         "", "device", "Path to device to image. "
         "Note the device name depends on the specific driver.",
-        false, "pmem", "Path to device."));
+        false, "pmem", "Path to device.");
 
     return PmemImager::RegisterArgs();
   }

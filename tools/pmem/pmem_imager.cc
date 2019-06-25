@@ -127,7 +127,7 @@ AFF4Status PmemImager::handle_compression() {
 AFF4Status PmemImager::WriteElfFormat_(const URN &output_urn) {
     resolver.logger->info("Will write in ELF format.");
 
-    AFF4Flusher<AFF4Stream> header(new StringIO(&resolver));
+    auto header = make_flusher<StringIO>(&resolver);
 
     // Create a temporary map for WriteStream() API.
     AFF4Map memory_layout(&resolver);
@@ -245,8 +245,8 @@ AFF4Status PmemImager::WriteMapObject_(const URN &map_urn) {
     RETURN_IF_ERROR(CreateMap_(&temp_stream, &total_length));
 
     // Set the user's preferred compression method.
-    resolver.Set(map_urn.Append("data"), AFF4_IMAGE_COMPRESSION, new URN(
-                     CompressionMethodToURN(compression)));
+    resolver.Set(map_urn.Append("data"), AFF4_IMAGE_COMPRESSION,
+                 CompressionMethodToURN(compression));
 
     // Create the map object.
     AFF4Volume *volume;

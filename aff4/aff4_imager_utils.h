@@ -131,8 +131,10 @@ class BasicImager {
     // We use a list here to preserve insertion order.
     std::list<std::unique_ptr<TCLAP::Arg>> args;
 
-    void AddArg(TCLAP::Arg* arg) {
-        args.push_back(std::unique_ptr<TCLAP::Arg>(arg));
+    template <typename T, typename ...Args>
+    auto AddArg(Args && ...arg) 
+        -> absl::enable_if_t<std::is_base_of<TCLAP::Arg, T>::value, void> {
+        args.emplace_back(absl::make_unique<T>(std::forward<Args>(arg)...));
     }
 
     TCLAP::Arg* Get(std::string name) {
@@ -174,22 +176,22 @@ class BasicImager {
     virtual AFF4Status Initialize();
 
     virtual AFF4Status RegisterArgs() {
-        AddArg(new TCLAP::SwitchArg("V", "view", "View AFF4 metadata", false));
-        AddArg(new TCLAP::SwitchArg("l", "list", "List all image streams in the volume.", false));
-        AddArg(new TCLAP::MultiSwitchArg(
-                   "d", "debug", "Display debugging logging (repeat for more info)",
-                   false));
+        AddArg<TCLAP::SwitchArg>("V", "view", "View AFF4 metadata", false);
 
-        AddArg(new TCLAP::SwitchArg(
-                   "v", "verbose", "Display more verbose information", false));
+        AddArg<TCLAP::SwitchArg>("l", "list", "List all image streams in the volume.", false);
 
-        AddArg(new TCLAP::SwitchArg(
+        AddArg<TCLAP::MultiSwitchArg>("d", "debug", 
+                "Display debugging logging (repeat for more info)", false);
+
+        AddArg<TCLAP::SwitchArg>("v", "verbose", "Display more verbose information", false);
+
+        AddArg<TCLAP::SwitchArg>(
                    "t", "truncate", "Truncate the output file. Normally volumes and "
                    "images are appended to existing files, but this flag forces the "
                    "output file to be truncated first.",
-                   false));
+                   false);
 
-        AddArg(new TCLAP::MultiArgToNextFlag(
+        AddArg<TCLAP::MultiArgToNextFlag>(
                    "i", "input", "File to image. If specified we copy these file to the "
                    "output volume located at --output. If there is no AFF4 volume on "
                    "--output yet, we create a new volume on it. A filename of @ means "
@@ -197,14 +199,14 @@ class BasicImager {
                    "occur). \n"
                    "This can be specified multiple times with shell expansion. e.g.:\n"
                    "-i /bin/*",
-                   false, "/path/to/file/or/device"));
+                   false, "/path/to/file/or/device");
 
-        AddArg(new TCLAP::SwitchArg(
+        AddArg<TCLAP::SwitchArg>(
                    "", "relative", "If specified all files will be written relative to "
                    "the current directory. By default we write all files' absolute paths",
-                   false));
+                   false);
 
-        AddArg(new TCLAP::ValueArg<std::string>(
+        AddArg<TCLAP::ValueArg<std::string>>(
                    "e", "export", "Name of the streams to export. If specified we try "
                    "to open this stream and write it to the export directory. Note that "
                    "you will also need to specify an AFF4 volume path to load so we know "
@@ -212,43 +214,43 @@ class BasicImager {
                    "implies a stream residing in a loaded volume. E.g.\n"
 
                    " -e /dev/sda -D /tmp/ my_volume.aff4",
-                   false, "", "string"));
+                   false, "", "string");
 
-        AddArg(new TCLAP::ValueArg<std::string>(
+        AddArg<TCLAP::ValueArg<std::string>>(
                    "", "logfile", "Specify a file to store log messages to",
-                   false, "", "string"));
+                   false, "", "string");
 
-        AddArg(new TCLAP::ValueArg<std::string>(
+        AddArg<TCLAP::ValueArg<std::string>>(
                    "D", "export_dir", "Directory to export to (Defaults to current "
                    "directory)",
-                   false, ".", "path to directory"));
+                   false, ".", "path to directory");
 
-        AddArg(new TCLAP::ValueArg<std::string>(
+        AddArg<TCLAP::ValueArg<std::string>>(
                    "o", "output", "Output file to write to. If the file does not "
                    "exist we create it. NOTE: If output is a directory we write an "
                    "AFF4 Directory volume when imaging. If the output is '-' we write "
                    "to stdout.", false, "",
-                   "/path/to/file"));
+                   "/path/to/file");
 
-        AddArg(new TCLAP::SizeArg(
+        AddArg<TCLAP::SizeArg>(
                    "s", "split", "Split output volumes at this size.", false, 0,
-                   "Size (E.g. 100Mb)"));
+                   "Size (E.g. 100Mb)");
 
-        AddArg(new TCLAP::ValueArg<std::string>(
+        AddArg<TCLAP::ValueArg<std::string>>(
                    "c", "compression", "Type of compression to use (default deflate).",
-                   false, "", "deflate, snappy, lz4, none"));
+                   false, "", "deflate, snappy, lz4, none");
 
-        AddArg(new TCLAP::ValueArg<int>(
+        AddArg<TCLAP::ValueArg<int>>(
                    "", "threads", "Total number of threads to use.",
-                   false, 2, "(default 2)"));
+                   false, 2, "(default 2)");
 
-        AddArg(new TCLAP::UnlabeledMultiArg<std::string>(
+        AddArg<TCLAP::UnlabeledMultiArg<std::string>>(
                    "aff4_volumes",
                    "These AFF4 Volumes will be loaded and their metadata will "
                    "be parsed before the program runs.\n"
                    "Note that this is necessary before you can extract streams with the "
                    "--export flag.",
-                   false, "/path/to/aff4/volume"));
+                   false, "/path/to/aff4/volume");
 
         return STATUS_OK;
     }

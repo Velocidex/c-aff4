@@ -35,6 +35,8 @@ specific language governing permissions and limitations under the License.
 #include <iostream>
 #include <iomanip>
 
+#include <absl/memory/memory.h>
+
 namespace aff4 {
 
 // Flip to true to immediately stop operations.
@@ -279,7 +281,7 @@ std::string aff4_sprintf(std::string fmt, ...) {
     int size = fmt.size() * 2 + 50;
 
     while (1) {
-        std::unique_ptr<char[]> buffer(new char[size + 1]);
+        auto buffer = absl::make_unique<char[]>(size + 1);
 
         // Null terminate the buffer (important on MSVC which does not always
         // terminate).
@@ -307,22 +309,21 @@ int AFF4Stream::sprintf(std::string fmt, ...) {
     int size = fmt.size() * 2 + 50;
 
     while (1) {
-        char* buffer = new char[size + 1];
+        auto buffer = absl::make_unique<char[]>(size + 1);
 
         // Null terminate the buffer (important on MSVC which does not always
         // terminate).
         buffer[size] = 0;
 
         va_start(ap, fmt);
-        int n = vsnprintf(buffer, size, fmt.c_str(), ap);
+        int n = vsnprintf(buffer.get(), size, fmt.c_str(), ap);
         va_end(ap);
 
         if (n > -1 && n < size) {  // Everything worked
-            Write(buffer, n);
-            delete[] buffer;
+            Write(buffer.get(), n);
             return n;
         }
-        delete[] buffer;
+
         if (n > -1) { // Needed size returned
             size = n + 1;    // For null char
         } else {
@@ -371,12 +372,6 @@ void StringIO::reserve(size_t size) {
 
 aff4_off_t AFF4Volume::Size() const {
     return 0;
-}
-
-
-ClassFactory<AFF4Object>* GetAFF4ClassFactory() {
-    static auto* factory = new ClassFactory<AFF4Object>();
-    return factory;
 }
 
 

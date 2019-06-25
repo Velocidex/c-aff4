@@ -14,6 +14,7 @@ specific language governing permissions and limitations under the License.
 */
 
 #include "aff4/aff4_base.h"
+#include "aff4/attributes.h"
 #include "aff4/lexicon.h"
 #include "aff4/rdf.h"
 #include <limits.h>
@@ -23,6 +24,8 @@ specific language governing permissions and limitations under the License.
 #include <cerrno>
 #include <spdlog/fmt/ostr.h>
 #include <uriparser/Uri.h>
+
+#include <absl/memory/memory.h>
 
 #ifdef _WIN32
 #include <shlwapi.h>
@@ -259,11 +262,6 @@ std::string URN::Domain() const {
     return "";
 }
 
-URN::URN(const char* data): URN() {
-    value = std::string(data);
-}
-
-
 raptor_term* URN::GetRaptorTerm(raptor_world* world) const {
     std::string value_string(SerializeToString());
 
@@ -279,8 +277,7 @@ URN URN::Append(const std::string& component) const {
         i--;
     }
 
-    const std::string urn = value.substr(0, i+1) + _NormalizePath(component);
-    return URN(urn);
+    return {value.substr(0, i+1) + _NormalizePath(component)};
 }
 
 
@@ -349,7 +346,7 @@ static std::string abspath(std::string path) {
     // The windows version of this function is somewhat simpler.
     DWORD buffer_len = GetFullPathName(path.c_str(), 0, NULL, NULL);
     if (buffer_len > 0) {
-        auto buffer = std::unique_ptr<TCHAR>(new TCHAR[buffer_len]);
+        auto buffer = absl::make_unique<TCHAR[]>(buffer_len);
         GetFullPathName(path.c_str(), buffer_len, buffer.get(), NULL);
         return std::string(buffer.get());
     }
@@ -370,7 +367,7 @@ std::string URN::ToFilename() const {
     }
 
     const int bytesNeeded = std::max(value.size() + 1, (size_t)MAX_PATH);
-    auto path = std::unique_ptr<char>(new char[bytesNeeded]);
+    auto path = absl::make_unique<char[]>(bytesNeeded);
     DWORD path_length = bytesNeeded;
     HRESULT res;
 
@@ -409,7 +406,7 @@ static std::string abspath(std::string path) {
     // Prepend the CWD to the path.
     int path_len = PATH_MAX;
     while (1) {
-        std::unique_ptr<char[]> cwd (new char[path_len]);
+        auto cwd = absl::make_unique<char[]>(path_len);
 
         // Try again with a bigger size.
         if (nullptr==getcwd(cwd.get(), path_len) && errno == ERANGE) {
@@ -426,7 +423,7 @@ static std::string abspath(std::string path) {
 // Unix version to ToFilename().
 std::string URN::ToFilename() const {
     const int bytesNeeded = value.size() + 1;
-    std::unique_ptr<char[]>  path (new char[bytesNeeded]);
+    auto path = absl::make_unique<char[]>(bytesNeeded);
 
     if (uriUriStringToUnixFilenameA(value.c_str(), path.get()) != URI_SUCCESS) {
         return "";
@@ -445,7 +442,7 @@ URN URN::NewURNFromOSFilename(std::string filename, bool windows_filename,
         filename = abspath(filename);
     }
 
-    char* tmp = new char[filename.size() * 3 + 8 + 1];
+    auto tmp = absl::make_unique<char[]>(filename.size() * 3 + 8 + 1);
 
     /* Windows filename -> URL handling is pretty complex. The urlparser library
      * does a reasonable job but misses some important edge cases. Microsoft
@@ -470,17 +467,17 @@ URN URN::NewURNFromOSFilename(std::string filename, bool windows_filename,
 #endif
         {
             if (uriWindowsFilenameToUriStringA(
-                        filename.c_str(), tmp) == URI_SUCCESS) {
-                result.value = std::string(tmp);
+                        filename.c_str(), tmp.get()) == URI_SUCCESS) {
+                result.value = std::string(tmp.get());
             }
         };
 
         // Unix filename
-    } else if (uriUnixFilenameToUriStringA(filename.c_str(), tmp) ==
+    } else if (uriUnixFilenameToUriStringA(filename.c_str(), tmp.get()) ==
                URI_SUCCESS) {
-        result.value = std::string(tmp);
+        result.value = std::string(tmp.get());
     }
-    delete[] tmp;
+    
     return result;
 }
 
@@ -580,11 +577,19 @@ raptor_term* XSDBoolean::GetRaptorTerm(raptor_world* world) const {
     return result;
 }
 
-
 // A Global Registry for RDFValue. This factory will provide the correct
 // RDFValue instance based on the turtle type URN. For example xsd:integer ->
 // XSDInteger().
-ClassFactory<RDFValue> RDFValueRegistry;
+AttributeFactory AttributeRegistry{};
+
+template<typename T, 
+         typename = absl::enable_if_t<AttributeValue::is_valid_type<T>::value>>
+class RDFValueRegistrar {
+  public:
+    RDFValueRegistrar(std::string && name) {
+        AttributeRegistry.Register<T>(std::forward<std::string>(name));
+    }
+};
 
 
 static RDFValueRegistrar<RDFBytes> r1(RDFBytesType);

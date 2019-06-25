@@ -24,6 +24,8 @@
 #include "aff4/libaff4.h"
 #include "aff4/libaff4-c.h"
 
+#include <absl/memory/memory.h>
+
 
 class LogHandler {
 public:
@@ -122,12 +124,11 @@ struct AFF4_Handle {
 
         // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
 
-        const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
-        auto images = resolver.Query(aff4::AFF4_TYPE, &type);
+        auto images = resolver.Query(aff4::AFF4_TYPE, aff4::URN(aff4::AFF4_IMAGE_TYPE));
 
         if (images.empty()) {
             const aff4::URN legacy_type(aff4::AFF4_LEGACY_IMAGE_TYPE);
-            images = resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
+            images = resolver.Query(aff4::URN(aff4::AFF4_TYPE), aff4::URN(aff4::AFF4_LEGACY_IMAGE_TYPE));
             if (images.empty()) {
                 return false;
             }
@@ -163,7 +164,7 @@ class HandlePool {
             return it->release();
         }
 
-        std::unique_ptr<AFF4_Handle> h(new AFF4_Handle(filename));
+        auto h = absl::make_unique<AFF4_Handle>(filename);
 
         if (h->open()) {
             return h.release();

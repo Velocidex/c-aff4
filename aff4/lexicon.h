@@ -69,7 +69,7 @@ URN CompressionMethodToURN(AFF4_IMAGE_COMPRESSION_ENUM method);
  * @param name
  * @param type
  */
-class Attribute {
+class SchemaAttribute {
   protected:
     std::string name;
     std::string type;
@@ -80,9 +80,9 @@ class Attribute {
     std::unordered_map<std::string, std::string> allowed_values;
 
   public:
-    Attribute() {}
+    SchemaAttribute() {}
 
-    Attribute(std::string name, std::string type, std::string description):
+    SchemaAttribute(std::string name, std::string type, std::string description):
         name(name), type(type), description(description) {}
 
     void AllowedValue(std::string alias, std::string value) {
@@ -98,7 +98,7 @@ class Attribute {
  */
 class Schema {
   protected:
-    std::unordered_map<std::string, Attribute> attributes;
+    std::unordered_map<std::string, SchemaAttribute> attributes;
     std::string object_type;
 
     /// This schema inherits from these parents.
@@ -111,7 +111,7 @@ class Schema {
 
     Schema(std::string object_type): object_type(object_type) {}
 
-    void AddAttribute(std::string alias, Attribute attribute) {
+    void AddAttribute(std::string alias, SchemaAttribute attribute) {
         attributes[alias] = attribute;
     }
 

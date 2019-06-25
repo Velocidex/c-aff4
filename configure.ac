@@ -67,6 +67,16 @@ AC_CHECK_LIB([pthread], [pthread_create], [], [AC_MSG_ERROR([pthread library not
 #Check for cpp header only libs
 PKG_CHECK_MODULES([TCLAP], [tclap], [], [AC_MSG_ERROR([The TCLAP flag parsing library (libtclap-dev) is not found])])
 
+# Check for abseil libraries
+ABSEIL_LIBS=" -labsl_bad_variant_access "
+LDFLAGS="$LDFLAGS $ABSEIL_LIBS"
+AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([#include <absl/types/variant.h>], [absl::variant<int> dummy;])],
+  [HAVE_ABSEIL=1], 
+  [AC_MSG_ERROR([abseil library not found.])]
+)
+
+
 # configure options.
 AC_ARG_WITH([yaml], [AS_HELP_STRING([--with-yaml], [Enable YAML support (default is no)])], [WITH_YAML=$withval], [WITH_YAML=no])
 AC_ARG_ENABLE([static-binaries],

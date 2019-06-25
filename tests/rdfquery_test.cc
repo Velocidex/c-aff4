@@ -40,8 +40,7 @@ TEST_F(AFF4ImageRDFQuery, Sample1URN) {
     EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
     // Query the resolver.
-    const URN type(AFF4_IMAGE_TYPE);
-    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);
+    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), URN(AFF4_IMAGE_TYPE));
 
     ASSERT_EQ(1, images.size());
     for(URN u : images){
@@ -61,8 +60,7 @@ TEST_F(AFF4ImageRDFQuery, Sample2URN) {
     EXPECT_OK(NewFileBackedObject(&resolver, filename, "read", file));
     EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
-    const URN type(AFF4_IMAGE_TYPE);
-    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);
+    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), URN(AFF4_IMAGE_TYPE));
     ASSERT_EQ(1, images.size());
     for(URN u : images){
         ASSERT_EQ("aff4://8fcced2b-989f-4f51-bfa2-38d4a4d818fe",
@@ -80,8 +78,7 @@ TEST_F(AFF4ImageRDFQuery, Sample3URN) {
     EXPECT_OK(NewFileBackedObject(&resolver, filename, "read", file));
     EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
-    const URN type(AFF4_IMAGE_TYPE);
-    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), &type);
+    std::unordered_set<URN> images = resolver.Query(URN(AFF4_TYPE), URN(AFF4_IMAGE_TYPE));
     ASSERT_EQ(1, images.size());
     for(URN u : images){
         ASSERT_EQ("aff4://3a873665-7bf6-47b5-a12a-d6632a58ddf9",

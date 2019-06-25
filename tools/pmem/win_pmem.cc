@@ -327,9 +327,9 @@ AFF4Status WinPmemImager::ImagePageFile() {
     AFF4Flusher<AFF4Stream> pagefile;
     RETURN_IF_ERROR(GetWritableStream_(pagefile_urn, pagefile));
 
-    resolver.Set(pagefile->urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PAGEFILE));
+    resolver.Set(pagefile->urn, AFF4_CATEGORY, URN(AFF4_MEMORY_PAGEFILE));
     resolver.Set(pagefile->urn, AFF4_MEMORY_PAGEFILE_NUM,
-                 new XSDInteger(pagefile_number));
+                 XSDInteger(pagefile_number));
 
 
     VolumeManager progress(&resolver, this);
@@ -381,8 +381,8 @@ AFF4Status WinPmemImager::WriteMapObject_(const URN &map_urn) {
                           data_stream.get(), map_stream));
 
   // Set the user's preferred compression method on the data stream.
-  resolver.Set(data_stream->urn, AFF4_IMAGE_COMPRESSION, new URN(
-                   CompressionMethodToURN(compression)));
+  resolver.Set(data_stream->urn, AFF4_IMAGE_COMPRESSION,
+               CompressionMethodToURN(compression));
 
   // Get the ranges from the memory device.
   PmemMemoryInfo info;
@@ -434,9 +434,8 @@ AFF4Status WinPmemImager::WriteMapObject_(const URN &map_urn) {
             // This will happen when windows is running in VSM mode -
             // some of the physical pages are not actually accessible.
 
-            AFF4Flusher<AFF4Stream> unreadable(
-                new AFF4SymbolicStream(&resolver, AFF4_IMAGESTREAM_UNREADABLE,
-                                       "UNREADABLEDATA"));
+            auto unreadable = make_flusher<AFF4SymbolicStream>(&resolver, 
+                AFF4_IMAGESTREAM_UNREADABLE, "UNREADABLEDATA");
 
             // One of the pages in the range is unreadable - repeat
             // the read for each page.
@@ -540,7 +539,7 @@ AFF4Status WinPmemImager::ImagePhysicalMemory() {
   }
 
   // This is a physical memory image.
-  resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
+  resolver.Set(map_urn, AFF4_CATEGORY, URN(AFF4_MEMORY_PHYSICAL));
 
   actions_run.insert("memory");
 
@@ -569,7 +568,7 @@ AFF4Status WinPmemImager::ExtractFile_(
     std::string output_file) {
 
     private_resolver.Set(output_file, AFF4_STREAM_WRITE_MODE,
-                         new XSDString("truncate"));
+                         XSDString("truncate"));
 
     AFF4Flusher<FileBackedObject> output;
     RETURN_IF_ERROR(NewFileBackedObject(

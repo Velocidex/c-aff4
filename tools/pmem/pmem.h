@@ -74,35 +74,35 @@ class PmemImager: public BasicImager {
     virtual AFF4Status Initialize();
 
     virtual AFF4Status RegisterArgs() {
-        AddArg(new TCLAP::ValueArg<std::string>(
+        AddArg<TCLAP::ValueArg<std::string>>(
                    "", "format", "Specify the output format of memory streams:\n"
                    "  map: An AFF4Map object (Supports compression and sparse).\n"
                    "  elf: An ELF stream. (Supports sparse image).\n"
                    "  raw: A raw padded stream. (Padded with no compression).\n"
                    "If this option is used together with the --export option it "
                    "specifies the output format of the exported stream.",
-                   false, "map", "map, elf, raw"));
+                   false, "map", "map, elf, raw");
 
-        AddArg(new TCLAP::ValueArg<std::string>(
+        AddArg<TCLAP::ValueArg<std::string>>(
                    "", "volume_format", "Specify the output format type:\n"
                    "  aff4: The output will be an AFF4 volume\n"
                    "  raw: The output will be a raw file. NOTE: Only one "
                    "stream can be written in this case.\n",
-                   false, "aff4", "aff4, raw"));
+                   false, "aff4", "aff4, raw");
 
-        AddArg(new TCLAP::SwitchArg(
+        AddArg<TCLAP::SwitchArg>(
                    "m", "acquire-memory", "Normally pmem will only acquire memory if "
                    "the user has not asked for something else (like acquiring files, "
                    "exporting etc). This option forces memory to be acquired. It is only "
                    "required when the program is invoked with the --input, --export or "
-                   "other actionable flags.\n", false));
+                   "other actionable flags.\n", false);
 
-        AddArg(new TCLAP::MultiArgToNextFlag(
+        AddArg<TCLAP::MultiArgToNextFlag>(
                    "p", "pagefile", "Also capture the pagefile. Note that you must "
                    "provide this option rather than e.g. '--input c:\\pagefile.sys' "
                    "because we cannot normally read the pagefile directly. This "
                    "option will use the sleuthkit to read the pagefile.",
-                   false, "/path/to/pagefile"));
+                   false, "/path/to/pagefile");
 
         return BasicImager::RegisterArgs();
     }

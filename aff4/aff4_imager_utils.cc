@@ -122,7 +122,7 @@ AFF4Status BasicImager::ParseArgs() {
     if (Get("threads")->isSet()) {
         int threads = GetArg<TCLAP::ValueArg<int>>("threads")->getValue();
         resolver.logger->info("Will use {} threads.", threads);
-        resolver.pool.reset(new ThreadPool(threads));
+        resolver.pool = absl::make_unique<ThreadPool>(threads);
     }
 
     // Check for incompatible commands.
@@ -257,9 +257,7 @@ AFF4Status BasicImager::handle_aff4_volumes() {
 }
 
 AFF4Status BasicImager::handle_list() {
-    URN image_type(AFF4_IMAGE_TYPE);
-    for (const auto& subject: resolver.Query(
-             URN(AFF4_TYPE), &image_type)) {
+    for (const URN& subject: resolver.Query(AFF4_TYPE, URN(AFF4_IMAGE_TYPE))) {
         std::cout << subject.SerializeToString() << "\n";
     }
 
@@ -327,8 +325,7 @@ AFF4Status BasicImager::process_input() {
                 image_urn.Set(volume->urn.Append(input_stream->urn.Path()));
 
                 // Store the original filename.
-                resolver.Set(image_urn, AFF4_STREAM_ORIGINAL_FILENAME,
-                             new XSDString(input));
+                resolver.Set(image_urn, AFF4_STREAM_ORIGINAL_FILENAME, XSDString(input));
             }
 
             // For very small streams, it is more efficient to just store them without
@@ -353,7 +350,7 @@ AFF4Status BasicImager::process_input() {
 
                 // Make this stream as an Image (Should we have
                 // another type for a LogicalImage?
-                resolver.Set(segment->urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+                resolver.Set(segment->urn, AFF4_TYPE, URN(AFF4_IMAGE_TYPE),
                              /* replace = */ false);
 
                 // We need to explicitly check the abort status here.
@@ -379,7 +376,7 @@ AFF4Status BasicImager::process_input() {
 
                 // Make this stream as an Image (Should we have
                 // another type for a LogicalImage?
-                resolver.Set(image_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+                resolver.Set(image_urn, AFF4_TYPE, URN(AFF4_IMAGE_TYPE),
                              /* replace = */ false);
             }
         }
@@ -414,11 +411,8 @@ AFF4Status BasicImager::handle_export() {
         }
     } else {
         // These are all acceptable stream types.
-        for (const URN image_type : std::vector<URN>{
-                URN(AFF4_IMAGE_TYPE),
-                    URN(AFF4_MAP_TYPE)
-                    }) {
-            for (const URN& image: resolver.Query(AFF4_TYPE, &image_type)) {
+        for (const URN &image_type : std::vector<URN>{ URN(AFF4_IMAGE_TYPE), URN(AFF4_MAP_TYPE)}) {
+            for (const URN& image: resolver.Query(AFF4_TYPE, image_type)) {
                 if (aff4::fnmatch(
                         export_pattern.c_str(),
                         image.SerializeToString().c_str()) == 0) {
@@ -561,10 +555,10 @@ AFF4Status BasicImager::GetOutputVolumeURN(URN* volume_urn) {
         resolver.logger->warn("Output file {} will be truncated.",
                               output_volume_backing_urn);
         resolver.Set(output_volume_backing_urn,
-                     AFF4_STREAM_WRITE_MODE, new XSDString("truncate"));
+                     AFF4_STREAM_WRITE_MODE, XSDString("truncate"));
     } else {
         resolver.Set(output_volume_backing_urn,
-                     AFF4_STREAM_WRITE_MODE, new XSDString("append"));
+                     AFF4_STREAM_WRITE_MODE, XSDString("append"));
     }
 
     // The output is a directory volume.

@@ -67,13 +67,13 @@ class AFF4MapTest: public ::testing::Test {
         image_urn_streamed = image_urn.Append("streamed");
 
         // First create a stream and add some data in it.
-        AFF4Flusher<AFF4Stream> source(new StringIO(&resolver));
+        auto source = make_flusher<StringIO>(&resolver);
 
         // Fill it with data.
         source->Write("AAAABBBBCCCCDDDDEEEEFFFFGGGGHHHH");
 
         // Make a temporary map that defines our plan.
-        AFF4Flusher<AFF4Map> helper_map(new AFF4Map(&resolver));
+        auto helper_map = make_flusher<AFF4Map>(&resolver);
 
         helper_map->AddRange(4, 0, 4, source.get());    // 0000AAAA
         helper_map->AddRange(0, 12, 4, source.get());   // DDDDAAAA
@@ -102,10 +102,10 @@ TEST_F(AFF4MapTest, TestAddRange) {
   EXPECT_OK(NewFileBackedObject(&resolver, filename, "read", file));
   EXPECT_OK(ZipFile::OpenZipFile(&resolver, std::move(file), zip));
 
-  AFF4Flusher<AFF4Stream> a(new StringIO(&resolver));
-  AFF4Flusher<AFF4Stream> b(new StringIO(&resolver));
+  auto a = make_flusher<StringIO>(&resolver);
+  auto b = make_flusher<StringIO>(&resolver);
 
-  AFF4Flusher<AFF4Stream> devnul(new StringIO(&resolver));
+  auto devnul = make_flusher<StringIO>(&resolver);
 
   AFF4Flusher<AFF4Map> map;
   EXPECT_OK(AFF4Map::NewAFF4Map(

@@ -37,14 +37,14 @@ Schema Schema::GetSchema(std::string object_type) {
         // Define all the Schema and attributes.
         Schema AFF4_OBJECT_SCHEMA("object");
         AFF4_OBJECT_SCHEMA.AddAttribute(
-            "type", Attribute(
+            "type", SchemaAttribute(
                 AFF4_TYPE, URNType, "The type of this object."));
 
         Schema AFF4_STREAM_SCHEMA("generic_stream");
         AFF4_STREAM_SCHEMA.AddParent(AFF4_OBJECT_SCHEMA);
 
         AFF4_STREAM_SCHEMA.AddAttribute(
-            "size", Attribute(
+            "size", SchemaAttribute(
                 AFF4_STREAM_SIZE, XSDIntegerType,
                 "How large the object is in bytes."));
 

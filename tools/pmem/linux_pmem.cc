@@ -188,7 +188,7 @@ AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
   URN map_urn = output_volume->urn.Append("proc/kcore");
 
   // This is a physical memory image.
-  resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
+  resolver.Set(map_urn, AFF4_CATEGORY, URN(AFF4_MEMORY_PHYSICAL));
 
   if (format == "map") {
       RETURN_IF_ERROR(WriteMapObject_(map_urn));
@@ -198,7 +198,7 @@ AFF4Status LinuxPmemImager::ImagePhysicalMemory() {
       RETURN_IF_ERROR(WriteElfFormat_(map_urn));
   }
 
-  resolver.Set(map_urn, AFF4_TYPE, new URN(AFF4_IMAGE_TYPE),
+  resolver.Set(map_urn, AFF4_TYPE, URN(AFF4_IMAGE_TYPE),
                /* replace = */ false);
 
   actions_run.insert("memory");
