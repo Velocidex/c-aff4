@@ -501,7 +501,7 @@ AFF4Status AFF4Image::NewAFF4Image(
         resolver->Set(image_urn, AFF4_STREAM_SIZE, new XSDInteger((uint64_t)0));
     }
 
-    new_obj = std::move(result);
+    result = std::move(new_obj);
 
     return STATUS_OK;
 }
