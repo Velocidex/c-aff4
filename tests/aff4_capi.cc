@@ -40,7 +40,7 @@ protected:
 TEST_F(AFF4CAPI, Sample1URN) {
     std::string filename = reference_images + "AFF4Std/Base-Linear.aff4";
 
-    AFF4_set_verbosity(0);
+    AFF4_set_verbosity(AFF4_LOG_LEVEL_TRACE);
 
     AFF4_Handle* handle = AFF4_open(filename.c_str(), nullptr);
     ASSERT_TRUE(handle);
