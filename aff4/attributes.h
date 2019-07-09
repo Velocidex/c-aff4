@@ -70,9 +70,10 @@ class AttributeValue {
      * Types must inherit from RDFValue and also need to be added
      * to the type enum below (in order).
      */
-    using storage = absl::variant<invalid, RDFBytes,  
-        XSDString, MD5Hash, SHA1Hash, SHA256Hash, SHA512Hash,
-        Blake2BHash, XSDInteger, XSDBoolean, URN>;
+    using storage = absl::variant<invalid, aff4::RDFBytes,
+        aff4::XSDString, aff4::MD5Hash, aff4::SHA1Hash, aff4::SHA256Hash,
+        aff4::SHA512Hash, aff4::Blake2BHash, aff4::XSDInteger,
+        aff4::XSDBoolean, aff4::URN>;
     static_assert(validate_base<RDFValue, storage>::value, 
         "storage types must all inherit from RDFValue");
 
