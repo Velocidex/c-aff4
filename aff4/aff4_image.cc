@@ -57,8 +57,6 @@ AFF4Status DeCompressZlib_(const std::string &input, std::string* output) {
 
 
 AFF4Status CompressDeflate_(const std::string &input, std::string* output) {
-    constexpr size_t chunk_size = 16 * 1024;
-
     z_stream zs{};
     if (deflateInit(&zs, Z_DEFAULT_COMPRESSION) != Z_OK) {
         return MEMORY_ERROR;
@@ -69,20 +67,22 @@ AFF4Status CompressDeflate_(const std::string &input, std::string* output) {
     zs.next_in = (Bytef *) input.c_str();
     zs.avail_in = input.length();
 
-    while (ret == Z_OK) {
-        // Allocate space for another chunk of output
-        output->resize(output->size() + chunk_size);
+    auto size = deflateBound(&zs, input.length());
 
-        zs.avail_out = chunk_size;
-        zs.next_out = (Bytef*) &output->back() - (chunk_size - 1);
+    // Allocate space for another chunk of output
+    output->resize(size);
 
-        ret = deflate(&zs, Z_SYNC_FLUSH);
+    zs.avail_out = size;
+    zs.next_out = (Bytef*) &output->back() - (size - 1);
+
+    ret = deflate(&zs, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        return IO_ERROR;
     }
 
-    output->resize(zs.total_out);
     deflateEnd(&zs);
 
-    return (ret == Z_STREAM_END) ? STATUS_OK : IO_ERROR;
+    return STATUS_OK;
 }
 
 

@@ -15,7 +15,7 @@ function do_configure() {
 }
 
 function do_build() {
-    make -j14 install
+    make -j4 install
 }
 
 
