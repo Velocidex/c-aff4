@@ -361,13 +361,13 @@ int AFF4_get_string_property(AFF4_Handle* handle, const char * property, char** 
 
   get_log_handler().use(msg);
 
-  aff4::XSDString value;
+  aff4::AttributeValue value;
   if (handle->resolver.Get(handle->urn, aff4::URN(property), value) != aff4::STATUS_OK) {
       errno = ENOENT;
       return -1;
   }
 
-  const std::string & res = value.value;
+  const std::string res = value->SerializeToString();
 
   *result = (char *) malloc(res.length() + 1);
   if (*result == nullptr) {
