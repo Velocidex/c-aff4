@@ -629,6 +629,9 @@ std::shared_ptr<spdlog::logger> get_logger() {
     auto logger = spdlog::get(aff4::LOGGER);
 
     if (!logger) {
+        if (!spdlog::details::os::in_terminal(stderr)) {
+            return spdlog::stderr_logger_mt(aff4::LOGGER);
+        }
         return spdlog::stderr_color_mt(aff4::LOGGER);
     }
 

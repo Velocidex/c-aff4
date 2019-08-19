@@ -2,10 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([AFF4], [1.0], [aff4-users@googlegroups.com], [],
+AC_INIT([AFF4], [2.0 pre-release], [aff4-users@googlegroups.com], [],
                 [http://www.aff4.org/])
 
-SO_VERSION=1:0:0
+SO_VERSION=2:0:0
 
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([config])

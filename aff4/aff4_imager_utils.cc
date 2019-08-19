@@ -612,6 +612,8 @@ AFF4Status BasicImager::handle_compression() {
 
     if (compression_setting == "deflate") {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_DEFLATE;
+    } else if (compression_setting == "zlib") {
+        compression = AFF4_IMAGE_COMPRESSION_ENUM_ZLIB;
     } else if (compression_setting == "snappy") {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_SNAPPY;
     } else if (compression_setting == "lz4") {
@@ -619,7 +621,7 @@ AFF4Status BasicImager::handle_compression() {
     } else if (compression_setting == "none") {
         compression = AFF4_IMAGE_COMPRESSION_ENUM_STORED;
     } else {
-        resolver.logger->error("Unknown compression scheme {}", compression);
+        resolver.logger->error("Unknown compression scheme {}", compression_setting);
         return INVALID_INPUT;
     }
 
