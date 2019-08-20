@@ -1,6 +1,6 @@
 # This makefile fetches and builds all of the dependencies for aff4.
 
-CONCURRENCY=14
+CONCURRENCY=4
 ZLIB_VERSION=1.2.11.dfsg
 ZLIB_SRC_PATH=zlib-${ZLIB_VERSION}
 RAPTOR_VERSION=2.0.14

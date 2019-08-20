@@ -50,6 +50,8 @@ class FileBackedObject: public AFF4Stream {
     explicit FileBackedObject(DataStore* resolver): AFF4Stream(resolver), fd(0){}
     virtual ~FileBackedObject();
 
+
+
     AFF4Status ReadBuffer(char* data, size_t *length) override;
     AFF4Status Write(const char* data, size_t length) override;
 
@@ -63,8 +65,8 @@ class FileBackedObject: public AFF4Stream {
     int fd;
 #endif
 
-    static constexpr size_t cache_block_size = 2 * 1024 * 1024; // 2 MiB
-    static constexpr size_t cache_block_limit = 32; // 32 MiB total
+    size_t cache_block_size;
+    size_t cache_block_limit;
 
   private:
     // Read buffer, bypassing cache

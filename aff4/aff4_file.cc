@@ -206,6 +206,10 @@ AFF4Status FileBackedObject::ReadBuffer(char * data, size_t * length) {
         FILE_ATTRIBUTE_NORMAL,
         nullptr);
 
+    // Set defaults for file cache.
+    new_object->cache_block_size = 2*1024*1024;  // 2 MiB
+    new_object->cache_block_limit = 32;  // 32 MiB total
+
     if (new_object->fd == INVALID_HANDLE_VALUE) {
         resolver->logger->error(
             "Cannot open file {} : {}", filename,
