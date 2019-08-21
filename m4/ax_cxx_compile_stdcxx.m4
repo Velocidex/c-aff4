@@ -25,6 +25,10 @@
 #   regardless, after defining HAVE_CXX${VERSION} if and only if a
 #   supporting mode is found.
 #
+#   The forth argument, if specified 'shallow' skips the feature tests and
+#   only checks to see if the compiler supports the C++ standard flag being
+#   tested for.
+#
 # LICENSE
 #
 #   Copyright (c) 2008 Benjamin Kosnik <bkoz@redhat.com>
@@ -35,6 +39,7 @@
 #   Copyright (c) 2015 Moritz Klammler <moritz@klammler.eu>
 #   Copyright (c) 2016, 2018 Krzesimir Nowak <qdlacz@gmail.com>
 #   Copyright (c) 2019 Enji Cooper <yaneurabeya@gmail.com>
+#   Copyright (c) 2019 Joe Sylve <joe.sylve@gmail.com>
 #
 #   Copying and distribution of this file, with or without modification, are
 #   permitted in any medium without royalty provided the copyright notice
@@ -59,6 +64,9 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX], [dnl
         [$3], [mandatory], [ax_cxx_compile_cxx$1_required=true],
         [$3], [optional], [ax_cxx_compile_cxx$1_required=false],
         [m4_fatal([invalid third argument `$3' to AX_CXX_COMPILE_STDCXX])])
+  m4_if([$4], [], [ax_cxx_compile_cxx_test_string="features"],
+        [$4], [shallow], [ax_cxx_compile_cxx_test_string="compiling"],
+        [m4_fatal([invalid third argument `$4' to AX_CXX_COMPILE_STDCXX])])
   AC_LANG_PUSH([C++])dnl
   ac_success=no
 
@@ -67,11 +75,11 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX], [dnl
     for alternative in ${ax_cxx_compile_alternatives}; do
       switch="-std=gnu++${alternative}"
       cachevar=AS_TR_SH([ax_cv_cxx_compile_cxx$1_$switch])
-      AC_CACHE_CHECK(whether $CXX supports C++$1 features with $switch,
+      AC_CACHE_CHECK(whether $CXX supports C++$1 $ax_cxx_compile_cxx_test_string with $switch,
                      $cachevar,
         [ac_save_CXX="$CXX"
          CXX="$CXX $switch"
-         AC_COMPILE_IFELSE([AC_LANG_SOURCE([_AX_CXX_COMPILE_STDCXX_testbody_$1])],
+         AC_COMPILE_IFELSE([AC_LANG_SOURCE([_AX_CXX_COMPILE_STDCXX_$4testbody_$1])],
           [eval $cachevar=yes],
           [eval $cachevar=no])
          CXX="$ac_save_CXX"])
@@ -94,11 +102,11 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX], [dnl
     for alternative in ${ax_cxx_compile_alternatives}; do
       for switch in -std=c++${alternative} +std=c++${alternative} "-h std=c++${alternative}"; do
         cachevar=AS_TR_SH([ax_cv_cxx_compile_cxx$1_$switch])
-        AC_CACHE_CHECK(whether $CXX supports C++$1 features with $switch,
+        AC_CACHE_CHECK(whether $CXX supports C++$1 $ax_cxx_compile_cxx_test_string with $switch,
                        $cachevar,
           [ac_save_CXX="$CXX"
            CXX="$CXX $switch"
-           AC_COMPILE_IFELSE([AC_LANG_SOURCE([_AX_CXX_COMPILE_STDCXX_testbody_$1])],
+           AC_COMPILE_IFELSE([AC_LANG_SOURCE([_AX_CXX_COMPILE_STDCXX_$4testbody_$1])],
             [eval $cachevar=yes],
             [eval $cachevar=no])
            CXX="$ac_save_CXX"])
@@ -133,6 +141,31 @@ AC_DEFUN([AX_CXX_COMPILE_STDCXX], [dnl
   AC_SUBST(HAVE_CXX$1)
 ])
 
+dnl   Shallow test body for checking std flag compatability
+
+m4_define([_AX_CXX_COMPILE_STDCXX_shallowtestbody_11],
+  _AX_CXX_COMPILE_STDCXX_shallowtestbody
+)
+
+m4_define([_AX_CXX_COMPILE_STDCXX_shallowtestbody_14],
+  _AX_CXX_COMPILE_STDCXX_shallowtestbody
+)
+
+m4_define([_AX_CXX_COMPILE_STDCXX_shallowtestbody_17],
+  _AX_CXX_COMPILE_STDCXX_shallowtestbody
+)
+
+
+m4_define([_AX_CXX_COMPILE_STDCXX_shallowtestbody], [[
+  // Shallow tests just verify that we have a C++ compiler
+  // that understands the flags we pass it
+
+  #ifndef __cplusplus
+
+  #error "This is not a C++ compiler"
+
+  #endif
+]])
 
 dnl  Test body for checking C++11 support
 

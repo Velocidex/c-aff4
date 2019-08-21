@@ -32,9 +32,9 @@ AC_ARG_WITH([c++-standard],
 if test $CPP_STD == "11"; then
   AX_CXX_COMPILE_STDCXX_11([noext],[mandatory])
 else if test $CPP_STD == "14"; then
-  AX_CXX_COMPILE_STDCXX_14([noext],[mandatory])
+  AX_CXX_COMPILE_STDCXX_14([noext],[mandatory], [shallow])
 else if test $CPP_STD == "17"; then
-  AX_CXX_COMPILE_STDCXX_17([noext],[mandatory])
+  AX_CXX_COMPILE_STDCXX_17([noext],[mandatory], [shallow])
 else
   AC_MSG_ERROR([invalid C++ standard selected])
 fi fi fi
