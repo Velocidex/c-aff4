@@ -160,6 +160,10 @@ AFF4Status WinPmemImager::GetMemoryInfo(PmemMemoryInfo *info) {
           resolver.logger->error("Cannot open device {}", device_path);
           return IO_ERROR;
       }
+
+      // We do not want to cache anything here since we implement
+      // paged reading to work around VSM IO Errors.
+      device->cache_block_size = 0;
   }
 
   // Set the acquisition mode.
@@ -498,6 +502,13 @@ AFF4Status WinPmemImager::WriteMapObject_(const URN &map_urn) {
 AFF4Status WinPmemImager::ImagePhysicalMemory() {
   AFF4Status res;
   std::string format = GetArg<TCLAP::ValueArg<std::string>>("format")->getValue();
+
+  std::string volume_format = GetArg<TCLAP::ValueArg<std::string>>(
+      "volume_format")->getValue();
+
+  if (volume_format == "raw" && format == "map") {
+      format = "raw";
+  }
 
   // First ensure that the driver is loaded.
   res = InstallDriver();
