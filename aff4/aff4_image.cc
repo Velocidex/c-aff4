@@ -56,61 +56,45 @@ AFF4Status DeCompressZlib_(const std::string &input, std::string* output) {
 }
 
 
-AFF4Status CompressDeflate_(const std::string &input, std::string* output) {
-    z_stream zs{};
-    if (deflateInit(&zs, Z_DEFAULT_COMPRESSION) != Z_OK) {
+AFF4Status CompressDeflate_(const std::string& input, std::string* output) {
+    z_stream zs;
+    memset(&zs, 0, sizeof(zs));
+    if (deflateInit2(&zs, Z_DEFAULT_COMPRESSION, Z_DEFLATED, -15, 8,
+                     Z_DEFAULT_STRATEGY) != Z_OK) {
         return MEMORY_ERROR;
     }
 
-    int ret = Z_OK;
-
-    zs.next_in = (Bytef *) input.c_str();
-    zs.avail_in = input.length();
-
-    auto size = deflateBound(&zs, input.length());
-
-    // Allocate space for another chunk of output
+    const auto size = deflateBound(&zs, input.length());
     output->resize(size);
 
+    zs.next_in = (Bytef*)input.c_str();
+    zs.avail_in = input.length();
     zs.avail_out = size;
-    zs.next_out = (Bytef*) &output->back() - (size - 1);
-
-    ret = deflate(&zs, Z_FINISH);
-    if (ret != Z_STREAM_END) {
-        return IO_ERROR;
-    }
-
+    zs.next_out = (Bytef*)output->c_str();
+    const auto ret = deflate(&zs, Z_FINISH);
     deflateEnd(&zs);
+    output->resize(zs.total_out);
 
-    return STATUS_OK;
+    return (ret == Z_STREAM_END) ? STATUS_OK : IO_ERROR;
 }
 
 
-AFF4Status DeCompressDeflate_(const std::string &input, std::string* output) {
-    constexpr size_t chunk_size = 16 * 1024;
-
-    z_stream zs{};
-    if (inflateInit(&zs) != Z_OK) {
-        return MEMORY_ERROR;
+AFF4Status DeCompressDeflate_(const std::string& input, std::string* output) {
+    z_stream zs;
+    memset(&zs, 0, sizeof(zs));
+    if (inflateInit2(&zs, -15) != Z_OK) {
+      return MEMORY_ERROR;
     }
 
-    int ret = Z_OK;
-
-    zs.next_in = (Bytef *) input.c_str();
+    zs.next_in = (Bytef*)input.c_str();
     zs.avail_in = input.length();
+    zs.next_out = (Bytef*)output->c_str();
+    zs.avail_out = output->size();
 
-    while (ret == Z_OK) {
-        // Allocate space for another chunk of output
-        output->resize(output->size() + chunk_size);
+    const auto ret = inflate(&zs, Z_FINISH);
 
-        zs.avail_out = chunk_size;
-        zs.next_out = (Bytef*) &output->back() - (chunk_size - 1);
-
-        ret = inflate(&zs, Z_SYNC_FLUSH);
-    }
-
-    output->resize(zs.total_out);
     inflateEnd(&zs);
+    output->resize(zs.total_out);
 
     return (ret == Z_STREAM_END) ? STATUS_OK : IO_ERROR;
 }
