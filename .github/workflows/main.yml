@@ -9,7 +9,7 @@ jobs:
     runs-on: windows-2019
     steps:
       - name: Run on windows 2019
-        run:
+        run: |
          curl -OL https://github.com/Velocidex/c-aff4/releases/download/v3.3.rc3/winpmem_v3.3.rc3.exe
          ./winpmem_v3.3.rc3.exe --output memdump.raw --format raw --volume_format raw
          dir
@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Run on windows 2022
-        run:
+        run: |
          curl -OL https://github.com/Velocidex/c-aff4/releases/download/v3.3.rc3/winpmem_v3.3.rc3.exe
          ./winpmem_v3.3.rc3.exe --output memdump.raw --format raw --volume_format raw
          dir
