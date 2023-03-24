@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  #manually trigger runs
+  workflow_dispatch:
+
+jobs:
+   build_2019:
+    runs-on: windows-2019
+    steps:
+      - name: Run on windows 2019
+        run: |
+         curl -OL https://github.com/Velocidex/c-aff4/releases/download/v3.3.rc3/winpmem_v3.3.rc3.exe
+         ./winpmem_v3.3.rc3.exe --output memdump.raw --format raw --volume_format raw
+         dir
+         
+   build_2022:
+    runs-on: windows-2022
+    steps:
+      - name: Run on windows 2022
+        run: |
+         curl -OL https://github.com/Velocidex/c-aff4/releases/download/v3.3.rc3/winpmem_v3.3.rc3.exe
+         ./winpmem_v3.3.rc3.exe --output memdump.raw --format raw --volume_format raw
+         dir
