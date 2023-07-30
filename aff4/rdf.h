@@ -23,7 +23,6 @@ specific language governing permissions and limitations under the License.
 
 // #include "aff4/config.h"
 #include "aff4/aff4_errors.h"
-#include "aff4/aff4_registry.h"
 #include "aff4/aff4_utils.h"
 
 namespace aff4 {
@@ -49,12 +48,15 @@ class URN;
  *
  */
 class RDFValue {
-  protected:
-    DataStore* resolver;
-
   public:
-    explicit RDFValue(DataStore* resolver): resolver(resolver) {}
-    RDFValue(): resolver(nullptr) {}
+    RDFValue() = default;
+
+    RDFValue(const RDFValue&) = default;
+    RDFValue & operator=(const RDFValue&) = default;
+    
+    RDFValue(RDFValue&&) = default;
+    RDFValue & operator=(RDFValue&&) = default;
+
     virtual ~RDFValue() {}
 
     virtual raptor_term* GetRaptorTerm(raptor_world* world) const {
@@ -63,9 +65,7 @@ class RDFValue {
     }
 
     // RDFValues must provide methods for serializing and unserializing.
-    virtual std::string SerializeToString() const {
-        return "";
-    }
+    virtual std::string SerializeToString() const = 0;
 
     virtual AFF4Status UnSerializeFromString(const char* data, int length) {
         UNUSED(data);
@@ -86,25 +86,6 @@ class RDFValue {
 // Support direct logging of RDFValues (like URNs etc.)
 std::ostream& operator<<(std::ostream& os, const RDFValue& c);
 
-// A Global Registry for RDFValue. This factory will provide the correct
-// RDFValue instance based on the turtle type URN. For example xsd:integer ->
-// XSDInteger().
-extern ClassFactory<RDFValue> RDFValueRegistry;
-
-template<class T>
-class RDFValueRegistrar {
-  public:
-    explicit RDFValueRegistrar(std::string name) {
-        // register the class factory function
-        RDFValueRegistry.RegisterFactoryFunction(
-            name,
-        [](DataStore *resolver, const URN *urn) -> RDFValue * {
-            UNUSED(urn);
-            return new T(resolver);
-        });
-    }
-};
-
 
 static const char* const lut = "0123456789ABCDEF";
 
@@ -115,17 +96,17 @@ static const char* const lut = "0123456789ABCDEF";
  */
 class RDFBytes: public RDFValue {
   public:
-    std::string value;
+    std::string value{};
 
-    explicit RDFBytes(std::string data):
-        RDFValue(), value(data) {}
+    RDFBytes(const std::string & data) : value(data) {}
 
-    RDFBytes(const char* data, unsigned int length):
-        RDFValue(), value(data, length) {}
+    RDFBytes(std::string && data) 
+        : value(std::forward<std::string>(data)) {}
 
-    explicit RDFBytes(DataStore* resolver): RDFValue(resolver) {}
+    RDFBytes(const char* data, unsigned int length)
+        : value(data, length) {}
 
-    RDFBytes() {}
+    RDFBytes() = default;
 
     std::string SerializeToString() const;
     AFF4Status UnSerializeFromString(const char* data, int length);
@@ -146,15 +127,13 @@ class RDFBytes: public RDFValue {
  */
 class XSDString: public RDFBytes {
   public:
-    XSDString(std::string data):
-        RDFBytes(data.c_str(), data.size()) {}
+    using RDFBytes::RDFBytes;
 
-    XSDString(const char* data):
-        RDFBytes(data, strlen(data)) {}
+    XSDString(const char * const value) 
+        : RDFBytes(value, std::strlen(value)) {}
 
-    explicit XSDString(DataStore* resolver): RDFBytes(resolver) {}
-
-    XSDString() {}
+    template<size_t N>
+    XSDString(const char (&value)[N]) : RDFBytes(value, N) {}
 
     std::string SerializeToString() const;
     AFF4Status UnSerializeFromString(const char* data, int length);
@@ -201,21 +180,25 @@ class Blake2BHash : public XSDString {
  */
 class XSDInteger: public RDFValue {
   public:
-    uint64_t value;
+    uint64_t value{};
 
-    explicit XSDInteger(uint64_t data):
-        RDFValue(nullptr), value(data) {}
+    explicit XSDInteger(uint64_t data) : value(data) {}
 
-    explicit XSDInteger(DataStore* resolver):
-        RDFValue(resolver), value(0) {}
-
-    XSDInteger() : value(0){}
+    XSDInteger() = default;
 
     std::string SerializeToString() const;
 
     AFF4Status UnSerializeFromString(const char* data, int length);
 
     raptor_term* GetRaptorTerm(raptor_world* world) const;
+
+    bool operator==(const XSDInteger& other) const {
+        return (value == other.value);
+    }
+
+    bool operator==(uint64_t other) const {
+        return (value == other);
+    }
 };
 
 
@@ -225,21 +208,25 @@ class XSDInteger: public RDFValue {
  */
 class XSDBoolean: public RDFValue {
   public:
-    bool value;
+    bool value{};
 
-    explicit XSDBoolean(bool data):
-        RDFValue(nullptr), value(data) {}
+    explicit XSDBoolean(bool data) : value(data) {}
 
-    explicit XSDBoolean(DataStore* resolver):
-        RDFValue(resolver), value(false) {}
-
-    XSDBoolean() : value(false){}
+    XSDBoolean() = default;
 
     std::string SerializeToString() const;
 
     AFF4Status UnSerializeFromString(const char* data, int length);
 
     raptor_term* GetRaptorTerm(raptor_world* world) const;
+
+    bool operator==(const XSDBoolean& other) const {
+        return (value == other.value);
+    }
+
+    bool operator==(bool other) const {
+        return (value == other);
+    }
 };
 
 /**
@@ -247,10 +234,9 @@ class XSDBoolean: public RDFValue {
  *
  */
 class URN: public XSDString {
-  protected:
-    //std::string original_filename;
-
   public:
+    using XSDString::XSDString;
+
     /**
      * Create a new URN from a filename.
      *
@@ -283,13 +269,6 @@ class URN: public XSDString {
      * @return If this is a file:// URN, returns the filename, else "".
      */
     std::string ToFilename() const;
-
-    URN(const char* data);
-    URN(const std::string& data): URN(data.c_str()) {};
-    explicit URN(DataStore* resolver): URN() {
-        UNUSED(resolver);
-    };
-    URN() {};
 
     URN Append(const std::string& component) const;
 

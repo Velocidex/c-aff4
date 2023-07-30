@@ -96,6 +96,17 @@ typedef struct AFF4_Handle AFF4_Handle;
 AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg);
 
 /**
+ * Open the given filename, and access the first aff4:Image in the container.
+ * @param filename The filename to open.
+ * @param urn The URN of the stream to open.
+ * @param msg A pointer to log messages.
+ * @return Object handle, or NULL on error. See errno
+ */
+AFF4_Handle* AFF4_open_stream(const char* filename,
+                              const char* urn,
+                              AFF4_Message** msg);
+
+/**
  * Get the size of the AFF4 Object that was opened.
  */
 uint64_t AFF4_object_size(AFF4_Handle* handle, AFF4_Message** msg);
@@ -162,6 +173,41 @@ typedef struct {
  * @return 0 on success or non-zero on error
  */
 int AFF4_get_binary_property(AFF4_Handle* handle, const char * property, AFF4_Binary_Result* result, AFF4_Message** msg);
+
+typedef enum {
+    INVALID,
+    RDFBytes,
+    XSDString,
+    MD5Hash,
+    SHA1Hash,
+    SHA256Hash,
+    SHA512Hash,
+    Blake2BHash,
+    XSDInteger,
+    XSDBoolean,
+    URN
+} AFF4_Property_Type;
+
+typedef struct _AFF4_Property {
+    AFF4_Property_Type type;
+    char * value;
+    struct _AFF4_Property * next;
+} AFF4_Property;
+
+/**
+ * Free AFF4_Property memory
+ */
+void AFF4_free_properties(AFF4_Property * properties);
+
+/**
+ * @param handle The Object handle.
+ * @param property The property key
+ * @param result Pointer to store the results (must be freed by AFF4_free_properties)
+ * @param msg A pointer to log messages.
+ * @return 0 on success or non-zero on error
+ */
+int AFF4_get_properties(AFF4_Handle* handle, const char * property, AFF4_Property** result, AFF4_Message** msg);
+
 
 #ifdef __cplusplus
 }

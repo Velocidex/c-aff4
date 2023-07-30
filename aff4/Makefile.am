@@ -48,7 +48,6 @@ libaff4_include_HEADERS = \
     rdf.h\
 	aff4_errors.h \
 	aff4_init.h \
-	aff4_registry.h \
 	aff4_utils.h \
 	data_store.h \
 	libaff4.h \
@@ -61,7 +60,8 @@ libaff4_include_HEADERS = \
 	aff4_symstream.h \
 	libaff4-c.h \
 	volume_group.h \
-	threadpool.h
+	threadpool.h \
+	attributes.h
 
 libaff4_la_SOURCES = \
 	aff4_image.cc \

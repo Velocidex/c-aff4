@@ -36,7 +36,7 @@ LEXICON_DEFINE(XSDIntegerTypeInt, "http://www.w3.org/2001/XMLSchema#int");
 LEXICON_DEFINE(XSDIntegerTypeLong, "http://www.w3.org/2001/XMLSchema#long");
 LEXICON_DEFINE(XSDBooleanType, "http://www.w3.org/2001/XMLSchema#boolean");
 
-/// Attribute names for different AFF4 objects.
+/// SchemaAttribute names for different AFF4 objects.
 
 /// Base AFF4Object
 LEXICON_DEFINE(AFF4_TYPE, "http://www.w3.org/1999/02/22-rdf-syntax-ns#type");

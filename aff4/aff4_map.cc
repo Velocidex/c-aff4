@@ -19,6 +19,7 @@ specific language governing permissions and limitations under the License.
 #include "aff4/volume_group.h"
 
 #include <memory>
+#include <absl/memory/memory.h>
 
 #define BUFF_SIZE 1024*1024
 
@@ -64,9 +65,9 @@ AFF4Status AFF4Map::NewAFF4Map(
     new_object->last_target = data_stream;
     new_object->targets.push_back(data_stream);
 
-    resolver->Set(object_urn, AFF4_TYPE, new URN(AFF4_MAP_TYPE),
+    resolver->Set(object_urn, AFF4_TYPE, URN(AFF4_MAP_TYPE),
                   /* replace= */ false);
-    resolver->Set(object_urn, AFF4_STORED, new URN(volume->urn));
+    resolver->Set(object_urn, AFF4_STORED, URN(volume->urn));
     new_object->current_volume = volume;
 
     result = std::move(new_object);
@@ -115,7 +116,7 @@ AFF4Status AFF4Map::OpenAFF4Map(
     // Ensure the Range type hasn't added any extra data members
     static_assert(sizeof(BinaryRange) == sizeof(Range), 
                   "Range has been extended and must be converted here");
-    auto buffer = std::unique_ptr<Range[]>{new Range[n]};
+    auto buffer = absl::make_unique<Range[]>(n);
 
     map_stream->ReadIntoBuffer(buffer.get(), n * sizeof(BinaryRange));
 
@@ -514,7 +515,7 @@ AFF4Status AFF4Map::Flush() {
         }
 
         // Add the stream size property to the map
-        resolver->Set(urn, AFF4_STREAM_SIZE, new XSDInteger(size));
+        resolver->Set(urn, AFF4_STREAM_SIZE, XSDInteger(size));
     }
 
     return AFF4Stream::Flush();

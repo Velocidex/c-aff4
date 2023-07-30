@@ -141,8 +141,8 @@ AFF4Status OSXPmemImager::ImagePhysicalMemory() {
           output_volume_backing_urn = URN("builtin://stdout");
       }
 
-      resolver.Set(output_volume_backing_urn, AFF4_STREAM_WRITE_MODE,
-                   new XSDString("truncate"));
+      resolver.Set(output_volume_backing_urn, AFF4_STREAM_WRITE_MODE, 
+                   XSDString("truncate"));
 
       if (format == "elf") {
           return WriteElfFormat_(output_volume_backing_urn, output_volume_backing_urn);
@@ -162,7 +162,7 @@ AFF4Status OSXPmemImager::ImagePhysicalMemory() {
       output_volume_urn);
 
   // This is a physical memory image.
-  resolver.Set(map_urn, AFF4_CATEGORY, new URN(AFF4_MEMORY_PHYSICAL));
+  resolver.Set(map_urn, AFF4_CATEGORY, URN(AFF4_MEMORY_PHYSICAL));
 
   if (format == "map") {
     res = WriteMapObject_(map_urn, output_volume_urn);

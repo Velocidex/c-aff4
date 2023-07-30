@@ -16,13 +16,11 @@ void VolumeGroup::AddVolume(AFF4Flusher<AFF4Volume> &&volume) {
 // Construct the appropriate stream and return it.
 AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &result) {
     // Get all the type attrbutes of the URN.
-    std::vector<std::shared_ptr<RDFValue>> types;
+    std::vector<AttributeValue> types;
     if (STATUS_OK == resolver->Get(stream_urn, AFF4_TYPE, types)) {
-        for (auto &type : types) {
-            std::string type_str(type->SerializeToString());
-
-            if (type_str == AFF4_IMAGESTREAM_TYPE ||
-                type_str == AFF4_LEGACY_IMAGESTREAM_TYPE) {
+        for (const URN &type : types) {
+            if (type == AFF4_IMAGESTREAM_TYPE ||
+                type == AFF4_LEGACY_IMAGESTREAM_TYPE) {
                 AFF4Flusher<AFF4Image> image_stream;
                 RETURN_IF_ERROR(
                     AFF4Image::OpenAFF4Image(
@@ -31,7 +29,7 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
                 result = std::move(image_stream);
 
                 resolver->logger->debug("Openning {} as type {}",
-                                        stream_urn, type_str);
+                                        stream_urn, type.value);
                 return STATUS_OK;
             }
 
@@ -44,21 +42,21 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
             // regular stream with NewAFF4Image or NewAFF4Map and then set
             // the aff4:dataStream of a new object to a concerete Map or
             // ImageStream.
-            if (type_str == AFF4_IMAGE_TYPE ||
-                type_str == AFF4_DISK_IMAGE_TYPE ||
-                type_str == AFF4_VOLUME_IMAGE_TYPE ||
-                type_str == AFF4_MEMORY_IMAGE_TYPE ||
-                type_str == AFF4_CONTIGUOUS_IMAGE_TYPE ||
-                type_str == AFF4_DISCONTIGUOUS_IMAGE_TYPE) {
+            if (type == AFF4_IMAGE_TYPE ||
+                type == AFF4_DISK_IMAGE_TYPE ||
+                type == AFF4_VOLUME_IMAGE_TYPE ||
+                type == AFF4_MEMORY_IMAGE_TYPE ||
+                type == AFF4_CONTIGUOUS_IMAGE_TYPE ||
+                type == AFF4_DISCONTIGUOUS_IMAGE_TYPE) {
+                
                 URN delegate;
-
                 if (STATUS_OK == resolver->Get(stream_urn, AFF4_DATASTREAM, delegate)) {
                     // TODO: This can get recursive. Protect against abuse.
                     return GetStream(delegate, result);
                 }
             }
 
-            if (type_str == AFF4_MAP_TYPE) {
+            if (type == AFF4_MAP_TYPE) {
                 AFF4Flusher<AFF4Map> map_stream;
                 RETURN_IF_ERROR(
                     AFF4Map::OpenAFF4Map(
@@ -66,7 +64,7 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
 
                 result = std::move(map_stream);
                 resolver->logger->debug("Openning {} as type {}",
-                                        stream_urn, type_str);
+                                        stream_urn, type.value);
 
                 return STATUS_OK;
             }
@@ -74,12 +72,12 @@ AFF4Status VolumeGroup::GetStream(URN stream_urn, AFF4Flusher<AFF4Stream> &resul
             // Zip segments are stored directly in each volume. We use
             // the resolver to figure out which volume has each
             // segment.
-            if (type_str == AFF4_ZIP_SEGMENT_TYPE ||
-                type_str == AFF4_FILE_TYPE) {
+            if (type == AFF4_ZIP_SEGMENT_TYPE ||
+                type == AFF4_FILE_TYPE) {
                 URN owner;
                 RETURN_IF_ERROR(resolver->Get(stream_urn, AFF4_STORED, owner));
 
-                resolver->logger->debug("Openning {} as type {}", stream_urn, type_str);
+                resolver->logger->debug("Opening {} as type {}", stream_urn, type.value);
                 auto it = volume_objs.find(owner);
                 if (it != volume_objs.end()) {
                     return (it->second->OpenMemberStream(stream_urn, result));

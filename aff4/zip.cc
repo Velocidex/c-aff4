@@ -30,6 +30,8 @@
 #include "aff4/lexicon.h"
 #include "aff4/libaff4.h"
 
+#include <absl/memory/memory.h>
+
 
 namespace aff4 {
 
@@ -62,9 +64,9 @@ AFF4Status ZipFile::NewZipFile(
 
     self->backing_stream = std::move(backing_stream);
 
-    resolver->Set(self->urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE),
+    resolver->Set(self->urn, AFF4_TYPE, URN(AFF4_ZIP_TYPE),
                   /* replace = */ false);
-    resolver->Set(self->urn, AFF4_STORED, new URN(self->backing_stream->urn));
+    resolver->Set(self->urn, AFF4_STORED, self->backing_stream->urn);
 
     // Mark the container with its URN. Some AFF4 implementations
     // rely on this being the first segment in the volume.
@@ -107,8 +109,8 @@ AFF4Status ZipFile::LoadTurtleMetadata() {
 
     // Ensure the correct backing store URN overrides the one stored in the
     // turtle file since it is more current.
-    resolver->Set(urn, AFF4_STORED, new URN(backing_stream->urn));
-    resolver->Set(backing_stream->urn, AFF4_CONTAINS, new URN(urn));
+    resolver->Set(urn, AFF4_STORED, backing_stream->urn);
+    resolver->Set(backing_stream->urn, AFF4_CONTAINS, URN(urn));
 
     return STATUS_OK;
 }
@@ -213,10 +215,10 @@ AFF4Status ZipFile::parse_cd() {
             urn.Set(urn_string);
 
             // Set these triples so we know how to open the zip file again.
-            resolver->Set(urn, AFF4_TYPE, new URN(AFF4_ZIP_TYPE),
+            resolver->Set(urn, AFF4_TYPE, URN(AFF4_ZIP_TYPE),
                           /*replace =*/ false);
-            resolver->Set(urn, AFF4_STORED, new URN(backing_stream->urn));
-            resolver->Set(backing_stream->urn, AFF4_CONTAINS, new URN(urn));
+            resolver->Set(urn, AFF4_STORED, backing_stream->urn);
+            resolver->Set(backing_stream->urn, AFF4_CONTAINS, urn);
         }
     }
 
@@ -298,7 +300,7 @@ AFF4Status ZipFile::parse_cd() {
             return PARSING_ERROR;
         }
 
-        std::unique_ptr<ZipInfo> zip_info(new ZipInfo());
+        auto zip_info = absl::make_unique<ZipInfo>();
 
         zip_info->filename = backing_stream->Read(entry.file_name_length).c_str();
         zip_info->local_header_offset = entry.relative_offset_local_header;
@@ -352,7 +354,7 @@ AFF4Status ZipFile::parse_cd() {
             // Store this information in the resolver. Ths allows segments to be
             // directly opened by URN.
             URN member_urn = urn_from_member_name(zip_info->filename, urn);
-            resolver->Set(member_urn, AFF4_STORED, new URN(urn));
+            resolver->Set(member_urn, AFF4_STORED, urn);
 
             members[zip_info->filename] = std::move(zip_info);
         }
@@ -468,7 +470,7 @@ AFF4Status ZipFile::CreateMemberStream(
     URN segment_urn,
     AFF4Flusher<AFF4Stream> &result) {
 
-    resolver->Set(segment_urn, AFF4_STORED, new URN(urn));
+    resolver->Set(segment_urn, AFF4_STORED, urn);
 
     auto new_obj = make_flusher<ZipFileSegment>(resolver);
     new_obj->urn = segment_urn;
@@ -556,7 +558,7 @@ AFF4Status ZipFileSegment::OpenZipFileSegment(
         // If the file is deflated we have no choice but to read it all into memory.
         case ZIP_DEFLATE: {
             unsigned int buffer_size = zip_info->file_size;
-            std::unique_ptr<char[]> decomp_buffer(new char[buffer_size]);
+            auto decomp_buffer = absl::make_unique<char[]>(buffer_size);
 
             std::string c_buffer = backing_store->Read(zip_info->compress_size);
 
@@ -654,7 +656,7 @@ std::string ZipFileSegment::CompressBuffer(
 
     // Get an upper bound on the size of the compressed buffer.
     int buffer_size = deflateBound(&strm, buffer.size() + 10);
-    std::unique_ptr<char[]> c_buffer(new char[buffer_size]);
+    auto c_buffer = absl::make_unique<char[]>(buffer_size);
 
     strm.next_out = reinterpret_cast<Bytef*>(c_buffer.get());
     strm.avail_out = buffer_size;
@@ -701,7 +703,7 @@ AFF4Status ZipFileSegment::Flush() {
         // Borrow a reference to the backing stream.
         auto backing_store = owner->backing_stream.get();
         resolver->logger->debug("Writing member {}", urn);
-        std::unique_ptr<ZipInfo> zip_info(new ZipInfo());
+        auto zip_info = absl::make_unique<ZipInfo>();
 
         // Append member at the end of the file.
         if (backing_store->properties.seekable) {
@@ -909,7 +911,7 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
 
     // zip_info offsets are relative to the start of the zip file (take
     // global_offset into account).
-    std::unique_ptr<ZipInfo> zip_info(new ZipInfo());
+    auto zip_info = absl::make_unique<ZipInfo>();
     zip_info->filename = member_name_for_urn(member_urn, urn, true);
     zip_info->local_header_offset = backing_stream->Tell() - global_offset;
 
@@ -926,7 +928,7 @@ AFF4Status ZipFile::StreamAddMember(URN member_urn, AFF4Stream& stream,
         memset(&strm, 0, sizeof(strm));
 
         // Make some room for output buffer.
-        std::unique_ptr<char[]> c_buffer(new char[AFF4_BUFF_SIZE]);
+        auto c_buffer = absl::make_unique<char[]>(AFF4_BUFF_SIZE);
 
         strm.next_out = reinterpret_cast<Bytef*>(c_buffer.get());
         strm.avail_out = AFF4_BUFF_SIZE;

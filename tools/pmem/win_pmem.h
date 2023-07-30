@@ -145,25 +145,25 @@ class WinPmemImager: public PmemImager {
   AFF4Status UninstallDriver();
 
   AFF4Status RegisterArgs() override {
-    AddArg(new TCLAP::SwitchArg(
-        "L", "load-driver", "Load the driver and exit", false));
+    AddArg<TCLAP::SwitchArg>(
+        "L", "load-driver", "Load the driver and exit", false);
 
-    AddArg(new TCLAP::SwitchArg(
-        "U", "unload-driver", "Unload the driver and exit", false));
+    AddArg<TCLAP::SwitchArg>(
+        "U", "unload-driver", "Unload the driver and exit", false);
 
-    AddArg(new TCLAP::SwitchArg(
+    AddArg<TCLAP::SwitchArg>(
         "", "write-mode", "Enable write mode. You must have the "
         "driver compiled with write support and be on a system with "
-        "test signing enabled.", false));
+        "test signing enabled.", false);
 
-    AddArg(new TCLAP::ValueArg<std::string>(
+    AddArg<TCLAP::ValueArg<std::string>>(
         "", "mode", "Select the acquisition mode. Default is PTERemapping.",
-        false, "", "MmMapIoSpace, PhysicalMemory, PTERemapping"));
+        false, "", "MmMapIoSpace, PhysicalMemory, PTERemapping");
 
-    AddArg(new TCLAP::ValueArg<std::string>(
+    AddArg<TCLAP::ValueArg<std::string>>(
         "", "driver", "Use this driver instead of the included one. "
         "This option is rarely used.",
-        false, "", "Path to driver."));
+        false, "", "Path to driver.");
 
     return PmemImager::RegisterArgs();
   }

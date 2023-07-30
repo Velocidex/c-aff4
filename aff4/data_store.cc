@@ -18,11 +18,14 @@
 #include "aff4/lexicon.h"
 #include "aff4/data_store.h"
 #include "aff4/libaff4.h"
+#include "aff4/attributes.h"
 #include <raptor2/raptor2.h>
 #include <spdlog/spdlog.h>
 #include <iostream>
 #include <mutex>
 #include "aff4/aff4_symstream.h"
+
+#include <absl/memory/memory.h>
 
 namespace aff4 {
 
@@ -65,7 +68,7 @@ bool DataStore::ShouldSuppress(const URN& subject,
 
 DataStore::DataStore(DataStoreOptions options)
     : logger(options.logger),
-      pool(std::unique_ptr<ThreadPool>(new ThreadPool(options.threadpool_size))) {
+      pool(absl::make_unique<ThreadPool>(options.threadpool_size)) {
 
     // Add these default namespace.
     namespaces.push_back(std::pair<std::string, std::string>("aff4", AFF4_NAMESPACE));
@@ -118,7 +121,7 @@ public:
     static std::unique_ptr<RaptorSerializer> NewRaptorSerializer(
         URN base,
         const std::vector<std::pair<std::string, std::string>>& namespaces) {
-        std::unique_ptr<RaptorSerializer> result(new RaptorSerializer());
+        std::unique_ptr<RaptorSerializer> result {new RaptorSerializer()}; // "new" needed here due to protected constructor
         raptor_uri* uri;
 
         result->world = raptor_world_pool.get();
@@ -140,7 +143,7 @@ public:
     }
 
     AFF4Status AddStatement(const URN& subject, const URN& predicate,
-                            const RDFValue* value) {
+                            const AttributeValue& value) {
         raptor_statement* triple = raptor_new_statement(world);
         triple->subject = raptor_new_term_from_uri_string(
             world,
@@ -177,49 +180,42 @@ public:
     }
 };
 
-static std::unique_ptr<RDFValue> RDFValueFromRaptorTerm(DataStore* resolver, raptor_term* term) {
+static AttributeValue RDFValueFromRaptorTerm(raptor_term* term) {
     if (term->type == RAPTOR_TERM_TYPE_URI) {
         char* uri = reinterpret_cast<char*>(raptor_uri_to_string(term->value.uri));
-        std::unique_ptr<RDFValue> result(new URN(uri));
+        AttributeValue result = URN(uri);
         raptor_free_memory(uri);
         return result;
     }
+
+    const std::string value_string(reinterpret_cast<char*>(term->value.literal.string),
+                term->value.literal.string_len);
 
     if (term->type == RAPTOR_TERM_TYPE_LITERAL) {
         // Does it have a special data type?
         if (term->value.literal.datatype) {
             char* uri = reinterpret_cast<char*>(raptor_uri_to_string(term->value.literal.datatype));
 
-            std::unique_ptr<RDFValue> result =
-                RDFValueRegistry.CreateInstance(uri, resolver);
-            // If we do not know how to handle this type we skip it.
-            if (!result) {
-                raptor_free_memory(uri);
-                return nullptr;
-            }
-
+            AttributeValue result = AttributeRegistry.CreateInstance(uri);
             raptor_free_memory(uri);
 
-            std::string value_string(
-                reinterpret_cast<char*>(term->value.literal.string),
-                term->value.literal.string_len);
+            // If we do not know how to handle this type we skip it.
+            if (!result) {
+                return {};
+            }
 
             if (result->UnSerializeFromString(value_string) != STATUS_OK) {
-                return nullptr;
+                return {};
             }
 
             return result;
-
-            // No special type - this is just a string.
-        } else {
-            std::string value_string(
-                reinterpret_cast<char*>(term->value.literal.string),
-                term->value.literal.string_len);
-
-            return std::unique_ptr<RDFValue>(new XSDString(value_string));
         }
+
+        // No special type - this is just a string.
+        return XSDString(value_string);
     }
-    return nullptr;
+
+    return {};
 }
 
 static void statement_handler(void* user_data, raptor_statement* statement) {
@@ -233,10 +229,8 @@ static void statement_handler(void* user_data, raptor_statement* statement) {
         char* predicate = reinterpret_cast<char*>(
             raptor_uri_to_string(statement->predicate->value.uri));
 
-        std::unique_ptr<RDFValue> object(
-            RDFValueFromRaptorTerm(resolver, statement->object));
-
-        if (object.get()) {
+        AttributeValue object = RDFValueFromRaptorTerm(statement->object);
+        if (object) {
             resolver->Set(URN(subject), URN(predicate), std::move(object),
                           /* replace = */ false);
         }
@@ -258,7 +252,7 @@ protected:
 
 public:
     static std::unique_ptr<RaptorParser> NewRaptorParser(DataStore* resolver) {
-        std::unique_ptr<RaptorParser> result(new RaptorParser(resolver));
+        std::unique_ptr<RaptorParser> result {new RaptorParser(resolver)}; // "new" needed here due to protected constructor
 
         result->world = raptor_world_pool.get();
 
@@ -316,11 +310,13 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream& output_stream, URN base, bo
         return MEMORY_ERROR;
     }
 
-    for (const auto& it : store) {
-        URN subject = it.first;
+    for (const auto it : store) {
+        const URN & subject = it.first;
+        const AttributeSet & attributes = it.second;
 
-        for (const auto& attr_it : it.second) {
-            URN predicate = attr_it.first;
+        for (const auto attr_it : attributes) {
+            const URN & predicate = attr_it.first;
+            const std::vector<AttributeValue> & values = attr_it.second;
 
             // Volatile predicates are suppressed.
             if (!verbose) {
@@ -333,13 +329,12 @@ AFF4Status MemoryDataStore::DumpToTurtle(AFF4Stream& output_stream, URN base, bo
             }
 
             // Load all attributes.
-            for (const auto& a: attr_it.second) {
-                const RDFValue* value = a.get();
-
+            for (const auto& value: values) {
                 // Skip this URN if it is in the suppressed_rdftypes set.
-                if (ShouldSuppress(
-                        subject, predicate, value->SerializeToString()))
+                if (ShouldSuppress(subject, predicate, 
+                    value->SerializeToString())) {
                     continue;
+                }
 
                 serializer->AddStatement(subject, predicate, value);
             }
@@ -372,198 +367,153 @@ AFF4Status MemoryDataStore::LoadFromTurtle(AFF4Stream& stream) {
     return STATUS_OK;
 }
 
-void MemoryDataStore::Set(const URN& urn, const URN& attribute, RDFValue* value,
+void MemoryDataStore::Set(const URN& urn, const URN& attribute, AttributeValue && value,
                           bool replace) {
-    if (value == nullptr) abort();
-    std::shared_ptr<RDFValue> unique_value(value);
-    Set(urn, attribute, unique_value, replace);
-}
+    std::vector<AttributeValue> & values = store[urn][attribute];
 
-void MemoryDataStore::Set(const URN& urn, const URN& attribute,
-                          std::shared_ptr<RDFValue> value, bool replace) {
-    // Automatically create needed keys.
-    std::vector<std::shared_ptr<RDFValue>> values = store[urn.SerializeToString()][
-        attribute.SerializeToString()];
+    if (replace) {
+        values.clear();
+    }
 
-    if (replace) values.clear();
-
-    values.push_back(std::move(value));
-
-    store[urn.SerializeToString()][attribute.SerializeToString()] = values;
+    values.emplace_back(std::forward<AttributeValue>(value));
 }
 
 AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute,
-                                RDFValue& value) {
-    auto urn_it = store.find(urn.SerializeToString());
-
+                                AttributeValue& value) const {
+    const auto urn_it = store.find(urn);
     if (urn_it == store.end()) {
         return NOT_FOUND;
     }
 
-    auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
-    if (attribute_itr == urn_it->second.end()) {
+    const auto & attributes = urn_it->second;
+
+    const auto attr_it = attributes.find(attribute);
+    if (attr_it == attributes.end()) {
         // Since the majority of AFF4 objects in practice are zip segments,
         // as an optimization we don't store type attributes for these
         // objects.  Instead, objects without type attriutes are assumed to
         // be zip segments.
         if (attribute == AFF4_TYPE) {
-            value.UnSerializeFromString(AFF4_ZIP_SEGMENT_TYPE);
+            value = URN(AFF4_ZIP_SEGMENT_TYPE);
             return STATUS_OK;
         }
 
         return NOT_FOUND;
     }
 
-    std::vector<std::shared_ptr<RDFValue>> values = (attribute_itr->second);
-    AFF4Status res = NOT_FOUND;
-    for (const auto &fetched_value: values) {
-        // Only collect compatible types.
-        const RDFValue& fetched_value_ref = *fetched_value;
-        if (typeid(value) == typeid(fetched_value_ref)) {
-            res = value.UnSerializeFromString(
-                fetched_value->SerializeToString());
-        }
-    }
+    const auto & values = attr_it->second;
+    value = values.front();
 
-    return res;
-}
-
-AFF4Status MemoryDataStore::Get(const URN& urn,
-                                const URN& attribute,
-                                std::vector<std::shared_ptr<RDFValue>>& values) {
-    auto urn_it = store.find(urn.SerializeToString());
-
-    if (urn_it == store.end()) {
-        return NOT_FOUND;
-    }
-
-    auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
-    if (attribute_itr == urn_it->second.end()) {
-        // Since the majority of AFF4 objects in practice are zip segments,
-        // as an optimization we don't store type attributes for these
-        // objects.  Instead, objects without type attriutes are assumed to
-        // be zip segments.
-        if (attribute == AFF4_TYPE) {
-            values.emplace_back(new URN(AFF4_ZIP_SEGMENT_TYPE));
-            return STATUS_OK;
-        }
-        return NOT_FOUND;
-    }
-
-    std::vector<std::shared_ptr<RDFValue>> ivalues = (attribute_itr->second);
-    if (ivalues.empty()) {
-        return NOT_FOUND;
-    }
-    // Load up our keys.
-    for(std::vector<std::shared_ptr<RDFValue>>::iterator it = ivalues.begin(); it != ivalues.end(); it++){
-        std::shared_ptr<RDFValue> v = *it;
-        values.push_back(v);
-    }
     return STATUS_OK;
 }
 
-bool MemoryDataStore::HasURN(const URN& urn) {
-    auto urn_it = store.find(urn.SerializeToString());
-
+AFF4Status MemoryDataStore::Get(const URN& urn, const URN& attribute,
+                std::vector<AttributeValue>& values) const {
+    const auto urn_it = store.find(urn);
     if (urn_it == store.end()) {
-        return false;
-    }
-    return true;
-}
-
-bool MemoryDataStore::HasURNWithAttribute(const URN& urn, const URN& attribute) {
-    auto urn_it = store.find(urn.SerializeToString());
-
-    if (urn_it == store.end()) {
-        return false;
+        return NOT_FOUND;
     }
 
-    auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
-    if (attribute_itr == urn_it->second.end()) {
-        return false;
-    }
+    const auto & attributes = urn_it->second;
 
-    std::vector<std::shared_ptr<RDFValue>> values = (attribute_itr->second);
-    if (values.empty()) {
-        return false;
-    }
-    return true;
-}
+    const auto attr_it = attributes.find(attribute);
 
-bool MemoryDataStore::HasURNWithAttributeAndValue(
-    const URN& urn, const URN& attribute, const RDFValue& value) {
-    auto urn_it = store.find(urn.SerializeToString());
-    std::string serialized_value = value.SerializeToString();
-
-    if (urn_it == store.end()) {
-        return false;
-    }
-
-    auto attribute_itr = urn_it->second.find(attribute.SerializeToString());
-    if (attribute_itr == urn_it->second.end()) {
-        return false;
-    }
-
-    std::vector<std::shared_ptr<RDFValue>> values = (attribute_itr->second);
-    if (values.empty()) {
-        return false;
-    }
-
-    // iterator over all values looking for a RDFValue that matches the attribute requested.
-    for (const auto& v: values) {
-        if (serialized_value == v->SerializeToString()) {
-            return true;
+    if (attr_it == attributes.end()) {
+        // Since the majority of AFF4 objects in practice are zip segments,
+        // as an optimization we don't store type attributes for these
+        // objects.  Instead, objects without type attriutes are assumed to
+        // be zip segments.
+        if (attribute == AFF4_TYPE) {
+            values.emplace_back(URN(AFF4_ZIP_SEGMENT_TYPE));
+            return STATUS_OK;
         }
+        return NOT_FOUND;
     }
 
-    return false;
+    values = attr_it->second;
+
+    return STATUS_OK;
 }
 
-std::unordered_set<URN> MemoryDataStore::Query(
-    const URN& attribute, const RDFValue* value) {
-    std::unordered_set<URN> results;
-    std::string serialized_value;
-    std::string serialized_attribute = attribute.SerializeToString();
+bool MemoryDataStore::HasURN(const URN& urn) const {
+    return (store.find(urn) != store.end());
+}
 
-    if (value) {
-        serialized_value = value->SerializeToString();
+bool MemoryDataStore::HasURNWithAttribute(const URN& urn, const URN& attribute) const {
+    const auto urn_it = store.find(urn);
+    if (urn_it == store.end()) {
+        return false;
     }
 
-    for (const auto &it: store) {
-        URN subject = it.first;
-        AFF4_Attributes attr = it.second;
+    const AttributeSet & attributes = urn_it->second;
 
-        for (const auto &it: attr) {
-            URN stored_attribute = it.first;
-            if (stored_attribute.SerializeToString() != serialized_attribute)
-                continue;
+    return (attributes.find(attribute) != attributes.end());
+}
 
-            const auto& value_array = it.second;
+bool MemoryDataStore::HasURNWithAttributeAndValue(const URN& urn, const URN& attribute, 
+                                                  const AttributeValue& value) const {
+    const auto urn_it = store.find(urn);
+    if (urn_it == store.end()) {
+        return false;
+    }
 
-            for (const auto &stored_value: value_array) {
-                if (value == nullptr ||
-                    serialized_value == stored_value->SerializeToString()) {
-                    results.insert(subject);
-                }
-            }
+    const AttributeSet & attributes = urn_it->second;
+
+    const auto attr_it = attributes.find(attribute);
+    if (attr_it == attributes.end()) {
+        return false;
+    }
+
+    const std::vector<AttributeValue> & values = attr_it->second;
+
+    return (std::find(values.begin(), values.end(), value) != values.end());
+}
+
+std::unordered_set<URN> MemoryDataStore::Query(const URN& attribute, 
+                                               const AttributeValue & value) const {
+    std::unordered_set<URN> results{};
+    
+    for (const auto it: store) {
+        const URN & subject = it.first;
+
+        const AttributeSet & attributes = it.second;
+
+        const auto attr_it = attributes.find(attribute);
+        if (attr_it == attributes.end()) {
+            // No candidate attribute found.  Go to next subject
+            continue;
+        }
+
+        if (!value.IsValid()) {
+            // We're not looking for a specific value, so add the subject
+            // to the result set
+            results.insert(subject);
+            continue;
+        }
+
+        const std::vector<AttributeValue> & values = attr_it->second;
+
+        const auto val_it = std::find(values.begin(), values.end(), value);
+        if (val_it != values.end()) {
+            // We've got a matching pair
+            results.insert(subject);
         }
     }
 
     return results;
 }
 
-AFF4_Attributes MemoryDataStore::GetAttributes(const URN& urn) {
-    AFF4_Attributes attr;
-    if(!HasURN(urn)){
-        return attr;
+AttributeSet MemoryDataStore::GetAttributes(const URN& urn) const {
+    const auto urn_it = store.find(urn);
+    if (urn_it == store.end()) {
+        return {};
     }
-    auto urn_it = store.find(urn.SerializeToString());
-    attr = urn_it->second;
-    return attr;
+
+    return urn_it->second;
 }
 
 AFF4Status MemoryDataStore::DeleteSubject(const URN& urn) {
-    store.erase(urn.SerializeToString());
+    store.erase(urn);
 
     return STATUS_OK;
 }

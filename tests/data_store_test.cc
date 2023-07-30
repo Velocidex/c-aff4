@@ -13,7 +13,7 @@ class MemoryDataStoreTest: public ::testing::Test {
 TEST_F(MemoryDataStoreTest, IncompatibleGet) {
   RDFBytes result;
 
-  store.Set(URN("hello"), URN("World"), new XSDString("foo"));
+  store.Set(URN("hello"), URN("World"), XSDString("foo"));
 
   // This should fail since the value is the wrong type.
   EXPECT_EQ(NOT_FOUND,
@@ -24,14 +24,14 @@ TEST_F(MemoryDataStoreTest, IncompatibleGet) {
 TEST_F(MemoryDataStoreTest, StorageTest) {
   XSDString result;
 
-  store.Set(URN("hello"), URN("World"), new XSDString("foo"));
+  store.Set(URN("hello"), URN("World"), XSDString("foo"));
 
   EXPECT_EQ(STATUS_OK,
             store.Get(URN("hello"), URN("World"), result));
 
   EXPECT_STREQ(result.SerializeToString().c_str(), "foo");
 
-  store.Set(URN("hello"), URN("World"), new XSDString("bar"));
+  store.Set(URN("hello"), URN("World"), XSDString("bar"));
 
   // In the current implementation a second Set() overwrites the previous value.
   EXPECT_EQ(STATUS_OK,
@@ -42,7 +42,7 @@ TEST_F(MemoryDataStoreTest, StorageTest) {
 
 
 TEST_F(MemoryDataStoreTest, TurtleSerializationTest) {
-  store.Set(URN("hello"), URN("World"), new XSDString("foo"));
+  store.Set(URN("hello"), URN("World"), XSDString("foo"));
 
   MemoryDataStore new_store;
   std::unique_ptr<AFF4Stream> output = StringIO::NewStringIO();

@@ -24,6 +24,8 @@
 #include "aff4/libaff4.h"
 #include "aff4/libaff4-c.h"
 
+#include <absl/memory/memory.h>
+
 
 class LogHandler {
 public:
@@ -92,20 +94,17 @@ static std::shared_ptr<spdlog::logger> get_c_api_logger() {
 }
 
 struct AFF4_Handle {
-    aff4::MemoryDataStore resolver;
-    aff4::URN urn;
-    aff4::VolumeGroup volumes;
-    aff4::AFF4Flusher<aff4::AFF4Stream> stream;
-    std::string filename;
+    aff4::MemoryDataStore resolver{aff4::DataStoreOptions(get_c_api_logger(), 1)};
+    aff4::VolumeGroup volumes{&resolver};
+    aff4::AFF4Flusher<aff4::AFF4Stream> stream{};
+    std::string filename{};
+    aff4::URN urn{};
+    bool autoload{}; 
 
-    AFF4_Handle(const std::string & filename):
-        resolver(aff4::DataStoreOptions(get_c_api_logger(), 1)),
-        volumes(&resolver),
-        filename(filename)
-    {}
+    AFF4_Handle(const std::string & filename) : filename(filename) {}
 
   protected:
-    bool open() {
+    bool open(const aff4::URN& stream_urn = {}) {
         aff4::AFF4Flusher<aff4::FileBackedObject> file;
         if (aff4::STATUS_OK != aff4::NewFileBackedObject(
                 &resolver, filename, "read", file)) {
@@ -120,14 +119,29 @@ struct AFF4_Handle {
 
         volumes.AddVolume(std::move(zip));
 
-        // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
+        if (stream_urn.value.empty()) {
+            if (!load_default_urn()) {
+                return false;
+            }
+        } else {
+            urn = stream_urn;
+        }
 
-        const aff4::URN type(aff4::AFF4_IMAGE_TYPE);
-        auto images = resolver.Query(aff4::AFF4_TYPE, &type);
+        if (aff4::STATUS_OK != volumes.GetStream(urn, stream)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    // Finds the first aff4:Image in the volume and selects it for loading
+    bool load_default_urn() {
+        // Attempt AFF4 Standard, and if not, fallback to AFF4 Evimetry Legacy format.
+        auto images = resolver.Query(aff4::AFF4_TYPE, aff4::URN(aff4::AFF4_IMAGE_TYPE));
 
         if (images.empty()) {
             const aff4::URN legacy_type(aff4::AFF4_LEGACY_IMAGE_TYPE);
-            images = resolver.Query(aff4::URN(aff4::AFF4_TYPE), &legacy_type);
+            images = resolver.Query(aff4::URN(aff4::AFF4_TYPE), aff4::URN(aff4::AFF4_LEGACY_IMAGE_TYPE));
             if (images.empty()) {
                 return false;
             }
@@ -136,9 +150,7 @@ struct AFF4_Handle {
         // For determinism, get the "first" sorted urn in the set
         urn = *std::min_element(images.begin(), images.end());
 
-        if (aff4::STATUS_OK != volumes.GetStream(urn, stream)) {
-            return false;
-        }
+        autoload = true;
 
         return true;
     }
@@ -151,21 +163,36 @@ class HandlePool {
 
   public:
 
-    AFF4_Handle * get(const std::string & filename) {
+    AFF4_Handle * get(const std::string & filename, 
+                      const aff4::URN & urn = {}) {
         std::lock_guard<std::mutex> lock{pool_lock};
 
         const auto it = std::find_if(pool.begin(), pool.end(),
-            [&filename](const std::unique_ptr<AFF4_Handle> & el) {
-                return (el != nullptr && el->filename == filename);
+            [&](const std::unique_ptr<AFF4_Handle> & el) {
+                if (el == nullptr || el->filename != filename) {
+                    return false;
+                }
+
+                if (urn.value.empty()) {
+                    if (el->autoload == false) {
+                        return false;
+                    }
+                } else {
+                    if (urn != el->urn) {
+                        return false;
+                    }
+                }
+
+                return true;
             });
 
         if (it != pool.end()) {
             return it->release();
         }
 
-        std::unique_ptr<AFF4_Handle> h(new AFF4_Handle(filename));
+        auto h = absl::make_unique<AFF4_Handle>(filename);
 
-        if (h->open()) {
+        if (h->open(urn)) {
             return h.release();
         }
 
@@ -273,6 +300,20 @@ AFF4_Handle* AFF4_open(const char* filename, AFF4_Message** msg) {
     return h;
 }
 
+AFF4_Handle* AFF4_open_stream(const char* filename,
+                              const char* urn,
+                              AFF4_Message** msg) {
+    get_log_handler().use(msg);
+
+    AFF4_Handle * h = handle_pool().get(filename, urn);
+
+    if (h == nullptr) {
+        errno = ENOENT;
+    }
+
+    return h;
+}
+
 uint64_t AFF4_object_size(AFF4_Handle* handle, AFF4_Message** msg) {
     get_log_handler().use(msg);
 
@@ -356,26 +397,28 @@ int AFF4_get_string_property(AFF4_Handle* handle, const char * property, char** 
     return -1;
   }
 
-  *result = nullptr;
+  auto & resultPtr = *result;
+
+  resultPtr = nullptr;
 
   get_log_handler().use(msg);
 
-  aff4::XSDString value;
+  aff4::AttributeValue value;
   if (handle->resolver.Get(handle->urn, aff4::URN(property), value) != aff4::STATUS_OK) {
       errno = ENOENT;
       return -1;
   }
 
-  const std::string & res = value.value;
+  const std::string res = value->SerializeToString();
 
-  *result = (char *) malloc(res.length() + 1);
-  if (*result == nullptr) {
+  resultPtr = (char *) malloc(res.length() + 1);
+  if (resultPtr == nullptr) {
       errno = ENOMEM;
       return -1;
   }
 
-  res.copy(*result, res.length());
-  *result[res.length()] = 0; // null terminate string
+  res.copy(resultPtr, res.length());
+  resultPtr[res.length()] = 0; // null terminate string
 
   return 0;
 }
@@ -408,6 +451,64 @@ int AFF4_get_binary_property(AFF4_Handle* handle, const char * property, AFF4_Bi
   res.copy(static_cast<char *>(result->data), res.length());
 
   return 0;
+}
+
+void AFF4_free_properties(AFF4_Property * properties) {
+    if (properties == nullptr) {
+        return;
+    }
+
+    AFF4_Property * property = properties;
+    do {
+        if (property->value) {
+            delete [] property->value;
+        }
+
+        property = property->next;
+    } while(property != nullptr);
+
+    delete [] properties;
+}
+
+int AFF4_get_properties(AFF4_Handle* handle, const char * property, AFF4_Property** result, AFF4_Message** msg) {
+    if (!handle || !property || !result) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    get_log_handler().use(msg);
+
+    auto & resultPtr = *result;
+
+    resultPtr = nullptr;
+
+    std::vector<aff4::AttributeValue> values;
+    if (handle->resolver.Get(handle->urn, aff4::URN(property), values) != aff4::STATUS_OK) {
+        errno = ENOENT;
+        return -1;
+    }
+
+    resultPtr = new AFF4_Property[values.size()]();
+
+    for(size_t i = 0; i < values.size(); i++) {
+        auto & property = resultPtr[i];
+        const auto & attribute = values[i];
+
+        if (i != values.size() - 1) {
+            property.next = &resultPtr[i+1];
+        }
+
+        property.type = static_cast<AFF4_Property_Type>(attribute.Type());
+
+        std::string value = attribute->SerializeToString();
+
+        property.value = new char[value.length() + 1]();
+
+        value.copy(property.value, value.length());
+
+    }
+
+    return 0;
 }
 
 }
