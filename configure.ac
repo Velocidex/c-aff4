@@ -23,7 +23,21 @@ AM_PROG_AR
 LT_INIT
 AC_PROG_LIBTOOL
 AC_LANG(C++)
-AX_CXX_COMPILE_STDCXX_11([noext],[mandatory])
+
+# Allow for configuration of C++ standard
+AC_ARG_WITH([c++-standard],
+            [AS_HELP_STRING([--with-c++-standard],
+            [Use C++ standard 11, 14, or 17 (default is 11)])], [CPP_STD=$withval], [CPP_STD="11"])
+
+if test $CPP_STD == "11"; then
+  AX_CXX_COMPILE_STDCXX_11([noext],[mandatory])
+else if test $CPP_STD == "14"; then
+  AX_CXX_COMPILE_STDCXX_14([noext],[mandatory], [shallow])
+else if test $CPP_STD == "17"; then
+  AX_CXX_COMPILE_STDCXX_17([noext],[mandatory], [shallow])
+else
+  AC_MSG_ERROR([invalid C++ standard selected])
+fi fi fi
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDC
